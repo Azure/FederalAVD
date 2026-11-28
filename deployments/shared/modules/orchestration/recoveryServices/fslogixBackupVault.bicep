@@ -1,8 +1,11 @@
 metadata name = 'FSLogix Azure Files backup vault'
 metadata description = 'Creates or adopts a Recovery Services vault and optionally manages a daily Azure Files snapshot policy.'
 
-// New vaults can receive diagnostics and a conditional private endpoint.
-// Storage registration and protection are managed separately.
+// Composes vault, Azure Files snapshot policy, and private-endpoint resource modules.
+// The caller owns the deployment resource group, subnet, DNS zones, and diagnostic workspace.
+// Public access and private-endpoint enablement are independent caller choices.
+// Existing vault networking is never changed; manageBackupPolicy controls policy ownership.
+// Storage registration and protection are managed separately by FSLogix orchestration.
 
 targetScope = 'subscription'
 
@@ -27,6 +30,13 @@ param location string
 @description('Optional. Resource ID of the Log Analytics workspace for vault diagnostics.')
 param logAnalyticsWorkspaceResourceId string = ''
 
+@description('Required. Public access for a newly created vault: Enabled or Disabled, independent of privateEndpoint. Existing vault networking is owner-managed. Recovery Services vaults do not expose IP or service-endpoint subnet allowlists.')
+@allowed([
+  'Enabled'
+  'Disabled'
+])
+param publicNetworkAccess string
+
 @description('Required. Whether to deploy a private endpoint for the vault.')
 param privateEndpoint bool
 
@@ -34,13 +44,13 @@ param privateEndpoint bool
 param privateEndpointSubnetResourceId string = ''
 
 @description('Optional. Resource ID of the Azure Backup private DNS zone.')
-param azureBackupPrivateDnsZoneResourceId string = ''
+param backupPrivateDnsZoneResourceId string = ''
 
 @description('Optional. Resource ID of the Azure Blob private DNS zone required by the backup private endpoint.')
-param azureBlobPrivateDnsZoneResourceId string = ''
+param blobPrivateDnsZoneResourceId string = ''
 
 @description('Optional. Resource ID of the Azure Queue private DNS zone required by the backup private endpoint.')
-param azureQueuePrivateDnsZoneResourceId string = ''
+param queuePrivateDnsZoneResourceId string = ''
 
 @description('Required. Name convention for private endpoints.')
 param privateEndpointNameConv string
@@ -63,9 +73,9 @@ param fileSharePolicyName string = 'filesharepolicy'
 param backupRetentionDays int = 30
 
 var backupPrivateDnsZoneResourceIds = filter([
-  azureBackupPrivateDnsZoneResourceId
-  azureBlobPrivateDnsZoneResourceId
-  azureQueuePrivateDnsZoneResourceId
+  backupPrivateDnsZoneResourceId
+  blobPrivateDnsZoneResourceId
+  queuePrivateDnsZoneResourceId
 ], zoneResourceId => !empty(zoneResourceId))
 
 var effectiveVaultSubscriptionId = createVault
@@ -87,13 +97,13 @@ resource privateEndpointVirtualNetwork 'Microsoft.Network/virtualNetworks@2024-0
 }
 
 // Azure Files snapshots remain in the storage account, so the vault stores backup metadata only.
-module recoveryServicesVault 'vaults/deploy.bicep' = if (createVault) {
+module recoveryServicesVault '../../resourceModules/recoveryServices/vaults/deploy.bicep' = if (createVault) {
   scope: resourceGroup(resourceGroupOperations)
   params: {
     name: vaultName
     location: location
     diagnosticSettings: !empty(logAnalyticsWorkspaceResourceId) ? { workspaceId: logAnalyticsWorkspaceResourceId } : null
-    publicNetworkAccess: privateEndpoint ? 'Disabled' : 'Enabled'
+    publicNetworkAccess: publicNetworkAccess
     storageType: 'LocallyRedundant'
     tags: tags[?'Microsoft.RecoveryServices/vaults'] ?? {}
     cmkKeyUri: ''
@@ -102,7 +112,7 @@ module recoveryServicesVault 'vaults/deploy.bicep' = if (createVault) {
   }
 }
 
-module fileShareBackupPolicy 'vaults/backupPolicies/deploy.bicep' = if (manageBackupPolicy) {
+module fileShareBackupPolicy '../../resourceModules/recoveryServices/vaults/backupPolicies/deploy.bicep' = if (manageBackupPolicy) {
   scope: resourceGroup(effectiveVaultSubscriptionId, effectiveVaultResourceGroupName)
   params: {
     recoveryServicesVaultName: effectiveVaultName
@@ -132,7 +142,7 @@ module fileShareBackupPolicy 'vaults/backupPolicies/deploy.bicep' = if (manageBa
   dependsOn: [recoveryServicesVault]
 }
 
-module vaultPrivateEndpoint '../network/privateEndpoints/deploy.bicep' = if (createVault && privateEndpoint && !empty(privateEndpointSubnetResourceId) && !empty(azureBackupPrivateDnsZoneResourceId)) {
+module vaultPrivateEndpoint '../../resourceModules/network/privateEndpoints/deploy.bicep' = if (createVault && privateEndpoint && !empty(privateEndpointSubnetResourceId) && !empty(backupPrivateDnsZoneResourceId)) {
   scope: resourceGroup(resourceGroupOperations)
   params: {
     name: replace(

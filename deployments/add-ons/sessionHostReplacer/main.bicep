@@ -3,7 +3,7 @@
 
 targetScope = 'subscription'
 
-import { publicNetworkAccessMode } from '../../shared/modules/orchestration/networking/functions.bicep'
+import { functionAppPaasNetworkingType, sharedPrivateEndpointSubnetResourceIdsType, sessionHostReplacerPrivateDnsZoneResourceIdsType, resolveFunctionAppNetworking, requirePrivateEndpointSubnet } from '../../shared/modules/orchestration/networking/scenarios.bicep'
 import { artifactCustomizationType } from '../../shared/modules/orchestration/customizations/types.bicep'
 import { functionAppNames, resourceNameForType, namingConventionConfig } from '../../shared/modules/orchestration/naming/naming.bicep'
 import { namingPolicy, namePattern, scopeIdUnique } from '../../shared/modules/orchestration/naming/internal.bicep'
@@ -145,25 +145,21 @@ param appServicePlanSku string = 'PremiumV3_P0v3'
 @description('Optional. Whether to deploy the App Service Plan with zone redundancy. Only applies if existingAppServicePlanResourceId is not provided. Default is false.')
 param zoneRedundant bool = false
 
-@description('Optional. Enable private endpoints for function app and storage. Default is false.')
-param privateEndpoint bool = false
 
-@description('Optional. Array of permitted IP addresses or CIDR blocks for the function app storage account firewall. Use when managing from a trusted workstation outside the Azure network boundary.')
-param permittedIPs array = []
 
-@description('Optional. Shared public-access mode for the Function App and runtime storage. Auto preserves legacy private-endpoint/IP inference; existing service exceptions remain configured.')
-param paasPublicNetworkAccess publicNetworkAccessMode = 'Auto'
 
-@description('Optional. The subnet resource ID for private endpoints. Required if privateEndpoint is true.')
-param privateEndpointSubnetResourceId string = ''
 
-@description('Optional. The subnet resource ID for the function app VNet integration. Required if privateEndpoint is true.')
+@description('Conditional. Existing delegated subnet for outbound VNet integration. Required for private runtime Storage; independent of inbound private endpoints and firewall allowlists.')
 param functionAppDelegatedSubnetResourceId string = ''
 
-@description('Optional. Private DNS Zone resource IDs. Required if privateEndpoint is true.')
-param azureBlobPrivateDnsZoneResourceId string = ''
-param azureFunctionAppPrivateDnsZoneResourceId string = ''
-param azureTablePrivateDnsZoneResourceId string = ''
+@description('Optional. Runtime Storage and Function App inbound networking. Omitted fields use private endpoints and disabled public access. Each family has independent IP and service-endpoint subnet lists.')
+param paasNetworking functionAppPaasNetworkingType = {}
+
+@description('Conditional. One existing sharedResources subnet for all selected private endpoints; separate from delegated outbound integration.')
+param privateEndpointSubnetResourceIds sharedPrivateEndpointSubnetResourceIdsType = {}
+
+@description('Optional. Blob, Table and websites private DNS zone IDs. Empty values require approved external DNS; Queue is not used by this timer-only add-on.')
+param privateDnsZoneResourceIds sessionHostReplacerPrivateDnsZoneResourceIdsType = {}
 
 @description('Optional. The resource ID of the Key Vault for encryption. Required if keyManagementStorageAccounts is set to Customer.')
 param encryptionKeyVaultResourceId string = ''
@@ -582,6 +578,25 @@ param sessionHostCustomizations artifactCustomizationType[] = []
 // Variables  //
 // ========== //
 
+var resolvedNetworking = resolveFunctionAppNetworking(paasNetworking)
+var storagePublicNetworkAccess = resolvedNetworking.storage.publicNetworkAccess
+var storagePermittedIPs = resolvedNetworking.storage.permittedIPs
+var storageServiceEndpointSubnetResourceIds = resolvedNetworking.storage.serviceEndpointSubnetResourceIds
+var storagePrivateEndpoint = resolvedNetworking.storage.privateEndpoint
+var functionAppPublicNetworkAccess = resolvedNetworking.functionApp.publicNetworkAccess
+var functionAppPermittedIPs = resolvedNetworking.functionApp.permittedIPs
+var functionAppServiceEndpointSubnetResourceIds = resolvedNetworking.functionApp.serviceEndpointSubnetResourceIds
+var functionAppPrivateEndpoint = resolvedNetworking.functionApp.privateEndpoint
+var sharedPrivateEndpointSubnetResourceId = requirePrivateEndpointSubnet(privateEndpointSubnetResourceIds.?sharedResources ?? '', storagePrivateEndpoint || functionAppPrivateEndpoint, 'sharedResources')
+var storagePrivateEndpointSubnetResourceId = storagePrivateEndpoint ? sharedPrivateEndpointSubnetResourceId : ''
+var functionAppPrivateEndpointSubnetResourceId = functionAppPrivateEndpoint ? sharedPrivateEndpointSubnetResourceId : ''
+var blobPrivateDnsZoneResourceId = privateDnsZoneResourceIds.?blob ?? ''
+var tablePrivateDnsZoneResourceId = privateDnsZoneResourceIds.?table ?? ''
+var websitesPrivateDnsZoneResourceId = privateDnsZoneResourceIds.?websites ?? ''
+var functionAppOutboundSubnetResourceId = storagePrivateEndpoint && empty(trim(functionAppDelegatedSubnetResourceId))
+  ? fail('functionAppDelegatedSubnetResourceId is required to reach private runtime Storage. Private endpoint placement does not configure outbound VNet integration.')
+  : functionAppDelegatedSubnetResourceId
+
 var aspResourceGroupName = empty(appServicePlanResourceGroupName) ? functionAppResourceGroupName : appServicePlanResourceGroupName
 var hostPoolName = last(split(hostPoolResourceId, '/'))
 var hostPoolResourceGroupName = split(hostPoolResourceId, '/')[4]
@@ -950,9 +965,9 @@ module functionApp '../../shared/modules/orchestration/functionApp/functionApp.b
   params: {
     location: location
     applicationInsightsName: appInsightsName
-    azureBlobPrivateDnsZoneResourceId: azureBlobPrivateDnsZoneResourceId
-    azureFunctionAppPrivateDnsZoneResourceId: azureFunctionAppPrivateDnsZoneResourceId
-    azureTablePrivateDnsZoneResourceId: azureTablePrivateDnsZoneResourceId
+    blobPrivateDnsZoneResourceId: blobPrivateDnsZoneResourceId
+    websitesPrivateDnsZoneResourceId: websitesPrivateDnsZoneResourceId
+    tablePrivateDnsZoneResourceId: tablePrivateDnsZoneResourceId
     enableApplicationInsights: !empty(logAnalyticsWorkspaceResourceId)
     enableFunctionAppDiagnosticSettings: false
     enableQueueStorage: false
@@ -1181,16 +1196,18 @@ module functionApp '../../shared/modules/orchestration/functionApp/functionApp.b
         }
       ]
     )
-    functionAppDelegatedSubnetResourceId: functionAppDelegatedSubnetResourceId
+    functionAppDelegatedSubnetResourceId: functionAppOutboundSubnetResourceId
     functionAppName: functionAppName
     functionAppUserAssignedIdentityResourceId: sessionHostReplacerUserAssignedIdentityResourceId
     hostPoolResourceId: hostPoolResourceId
     keyManagementStorageAccounts: keyManagementStorageAccounts
     logAnalyticsWorkspaceResourceId: logAnalyticsWorkspaceResourceId
-    privateEndpoint: privateEndpoint
+    storagePrivateEndpoint: storagePrivateEndpoint
+    functionAppPrivateEndpoint: functionAppPrivateEndpoint
     privateEndpointNameConv: privateEndpointNameConv
     privateEndpointNICNameConv: privateEndpointNICNameConv
-    privateEndpointSubnetResourceId: privateEndpointSubnetResourceId
+    storagePrivateEndpointSubnetResourceId: storagePrivateEndpointSubnetResourceId
+    functionAppPrivateEndpointSubnetResourceId: functionAppPrivateEndpointSubnetResourceId
     privateLinkScopeResourceId: privateLinkScopeResourceId
     powerShellVersion: powerShellVersion
     serverFarmId: !empty(existingAppServicePlanResourceId) ? existingAppServicePlanResourceId : hostingPlan!.outputs.hostingPlanId
@@ -1199,8 +1216,12 @@ module functionApp '../../shared/modules/orchestration/functionApp/functionApp.b
       '0a9a7e1f-b9d0-4cc4-a60d-0319b160aaa3' // Storage Table Data Contributor (for deployment state management)
     ]
     storageEncryptionIdentityName: storageEncryptionIdentityName
-    permittedIPs: permittedIPs
-    paasPublicNetworkAccess: paasPublicNetworkAccess
+    storagePermittedIPs: storagePermittedIPs
+    functionAppPermittedIPs: functionAppPermittedIPs
+    storageServiceEndpointSubnetResourceIds: storageServiceEndpointSubnetResourceIds
+    functionAppServiceEndpointSubnetResourceIds: functionAppServiceEndpointSubnetResourceIds
+    storagePublicNetworkAccess: storagePublicNetworkAccess
+    functionAppPublicNetworkAccess: functionAppPublicNetworkAccess
     tags: tags
   }
   dependsOn: [storageCmk]

@@ -58,6 +58,10 @@
         "deployFSLogixStorage": {
             "value": true
         },
+        // Use EnabledWithRestrictions to allow the new PoC host subnet via service endpoints.
+        "storagePublicNetworkAccess": { "value": "Disabled" },
+        "storagePermittedIPs": { "value": [] },
+        "storageServiceEndpointSubnetResourceIds": { "value": [] },
         "fslogixConfigureSessionHosts": {
             "value": true
         },

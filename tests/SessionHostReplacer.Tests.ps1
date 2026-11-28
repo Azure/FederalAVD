@@ -31,12 +31,20 @@ Describe 'Session Host Replacer Portal initialization' {
             Should -Be ($policy.defaults | ConvertTo-Json -Compress)
     }
 
-    It 'keeps public access bound to the required selection instead of masking an uninitialized form' {
+    It 'keeps networking bound to the required scenario and independent custom selections' {
         $infrastructure = $form.view.properties.steps | Where-Object name -eq 'infrastructure'
-        $mode = $infrastructure.elements | Where-Object name -eq 'paasPublicNetworkAccess'
-        $mode.constraints.required | Should -Be $true
-        $form.view.outputs.parameters.paasPublicNetworkAccess |
-            Should -Be "[steps('infrastructure').paasPublicNetworkAccess]"
+        $scenario = ($infrastructure.elements | Where-Object name -eq paasConnectivity).elements |
+            Where-Object name -eq scenario
+        $scenario.constraints.required | Should -BeTrue
+        $scenario.defaultValue | Should -Be 'Private connectivity'
+        $form.view.outputs.parameters.PSObject.Properties.Name | Should -Not -Contain 'paasPublicNetworkAccess'
+        $form.view.outputs.parameters.paasNetworking | Should -Match 'paasConnectivity\.scenario'
+        foreach ($family in @('storage', 'functionApp')) {
+            $mode = ($infrastructure.elements | Where-Object name -eq "${family}PublicNetworking").elements |
+                Where-Object name -eq "${family}PublicNetworkAccess"
+            $mode.constraints.required | Should -BeTrue
+            $form.view.outputs.parameters.paasNetworking | Should -Match "${family}PublicNetworking\.${family}PublicNetworkAccess"
+        }
     }
 }
 

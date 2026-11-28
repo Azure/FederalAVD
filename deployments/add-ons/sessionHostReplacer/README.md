@@ -545,27 +545,60 @@ Microsoft documents that [PowerShell 7.6 requires .NET 10](https://learn.microso
 
 #### 4. Network Requirements for Zero Trust Networking
 
-`paasPublicNetworkAccess` independently selects `Disabled`, `EnabledWithRestrictions`, or `Enabled`
-for the Function App and runtime storage. `Auto` derives access from private endpoint selection
-and IP rules.
-The Portal offers the three explicit choices, initially Disabled when Zero Trust networking is
-selected and Enabled otherwise. Public IP rules remain configured when Disabled and do not enable
-access. Restricted mode denies unmatched traffic even with no IPs, but includes the
-`AzureCloud` allowance for app/SCM and `AzureServices` bypass for storage. Storage trusted-service
-exceptions can still apply when Disabled. This setting does not configure adopted Key Vaults or
-monitoring access.
-See the [shared access-mode contract](../../../docs/parameters.md#paas-public-network-access).
+Networking intent uses three sealed object parameters, each defaulting to `{}`:
 
-These resources are required only when Zero Trust networking (`privateEndpoint: true`) is enabled:
+- `paasNetworking`: common `publicNetworkAccess` and `privateEndpoint` defaults, with
+  independent `storage` and `functionApp` overrides. Each family supports its own
+  `permittedIPs` and `serviceEndpointSubnetResourceIds`; lists are never merged.
+- `privateEndpointSubnetResourceIds.sharedResources`: one existing nondelegated subnet
+  for all selected runtime Storage and app private endpoints.
+- `privateDnsZoneResourceIds`: only `blob`, `table`, and `websites` are supported. Queue
+  storage is disabled. Empty DNS IDs require approved external DNS, not public fallback.
 
-1. **Function App outbound subnet**
-   - Dedicated to Function App virtual network integration
-   - Delegated to `Microsoft.Web/serverFarms`
-2. **Private endpoint subnet**
-   - Must not have any subnet delegations
-   - Must be different from the Function App outbound subnet
-3. **Private DNS zones**
-   - Required for the Function App and storage private endpoints to resolve correctly
+The Portal provides three scenarios:
+
+| Scenario | Runtime Storage | Function App and SCM |
+| --- | --- | --- |
+| Private connectivity (default) | Public disabled, private endpoints | Public disabled, private endpoint |
+| Restricted public connectivity | Public restricted, no private endpoints; explicit runtime sources | Public restricted, no private endpoint; explicit operator sources |
+| Custom configuration | Independent public mode, PE switch, and source lists | Independent public mode, PE switch, and source lists |
+
+Omitted backend defaults are public access `Disabled` and private endpoints `true`.
+Restricted access without a private endpoint requires at least one usable IP/CIDR or
+service-endpoint subnet per family. Storage retains `AzureServices` bypass, and app/SCM
+retains the existing `AzureCloud` allowance; these service exceptions mean the explicit
+operator list is not the sole possible network source. Authentication remains required.
+Consumed credentials/encryption Key Vaults and monitoring are not reconfigured.
+
+Outbound integration remains the separate `functionAppDelegatedSubnetResourceId` input.
+It is required when runtime Storage has private endpoints, with a subnet delegated to
+`Microsoft.Web/serverFarms`; private endpoint placement does not configure that route.
+For Storage service endpoints, explicitly authorize the integration subnet in the
+Storage source list and enable the required endpoint before deployment. No PE,
+session-host, or integration subnet is implicitly added to an allowlist.
+
+**Operator access:** timer triggers do not require inbound requests, but SCM/Kudu,
+code/file editing, and runtime-backed Portal operations still need a reachable app/SCM
+path. In the Restricted scenario, allow the operator browser's public egress IP/CIDR
+or an eligible operator subnet with `Microsoft.Web`. Portal sign-in/RBAC alone does
+not grant network access. Main app and SCM restrictions are shared, not separately
+configurable. With private access, the operator needs private routing and DNS for both
+app and SCM hostnames. Azure Private DNS zone groups create both records; external DNS
+must provide both. See [Microsoft's SCM DNS guidance](https://learn.microsoft.com/azure/app-service/overview-private-endpoint#kuduscm-endpoint).
+ARM-backed configuration may load without data-plane access; that does not guarantee
+code editing or every Integration operation works. Validate these paths in the target
+cloud. Custom `functionApp: { publicNetworkAccess: 'Disabled', privateEndpoint: false }`
+is a headless choice for a new app: it provides no direct inbound app/SCM path,
+while timer execution remains separate. A false PE flag does not delete an existing
+private endpoint during incremental redeployment; cleanup is an explicit operator action.
+
+**Breaking migration:** the former ten Storage/Function App scalar policy, allowlist,
+and placement inputs and three DNS inputs are removed (118 to 108 root parameters).
+Move policy and source fields into their family objects, choose one shared placement
+subnet, and move DNS IDs into the namespace object. Explicitly retain former false PE
+defaults if needed; an omitted value now means true. Regenerate Portal exports or
+migrate a copy of customer parameters; no customer files are automatically changed.
+The shared Function App composer keeps its existing native interface.
 
 The session host VM subnet is also required for replacement hosts, but it does not require the
 `Microsoft.Web/serverFarms` delegation.

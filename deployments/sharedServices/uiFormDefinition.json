@@ -331,7 +331,7 @@
               "type": "Microsoft.Common.InfoBox",
               "options": {
                 "style": "Info",
-                "text": "The Encryption Key Vault (Premium SKU) stores RSA-4096 keys for Customer-Managed Key (CMK) encryption of VM disks, FSLogix storage, image management storage, image build storage, and function app storage. Required when any AVD solution uses CMK. The deploying identity requires the 'Key Vault Crypto Officer' role on this vault at deployment time to create encryption keys."
+                "text": "The Encryption Key Vault (Premium SKU) can hold RSA-4096 or RSA-HSM keys for AVD customer-managed encryption. Select CMK and HSM protection according to applicable key-control, authorization, and policy requirements. Consuming deployments can use this vault or an existing compatible vault; creating a new Shared Services vault is not universally required. Key creation requires permissions such as the 'Key Vault Crypto Officer' role."
               }
             },
             {
@@ -346,6 +346,60 @@
               "visible": "[steps('operations').resources.deployEncryptionKeyVault]"
             },
             {
+              "name": "paasConnectivity",
+              "type": "Microsoft.Common.Section",
+              "label": "Deployment-owned PaaS connectivity",
+              "visible": "[or(or(steps('operations').resources.deploySecretsKeyVault, steps('operations').resources.deployEncryptionKeyVault), steps('operations').resources.deployFSLogixBackupVault)]",
+              "elements": [
+                {
+                  "name": "scenario",
+                  "type": "Microsoft.Common.DropDown",
+                  "label": "Connectivity scenario",
+                  "defaultValue": "Private connectivity",
+                  "constraints": {
+                    "required": true,
+                    "allowedValues": [
+                      {
+                        "label": "Private connectivity",
+                        "value": "Private"
+                      },
+                      {
+                        "label": "Restricted public connectivity",
+                        "value": "Restricted"
+                      },
+                      {
+                        "label": "Custom configuration (advanced)",
+                        "value": "Custom"
+                      }
+                    ]
+                  }
+                },
+                {
+                  "name": "ownershipInfo",
+                  "type": "Microsoft.Common.TextBlock",
+                  "options": {
+                    "text": "These settings govern newly created Key Vaults and Backup vaults. Existing resources remain owner-managed. AVD Private Link and AMPLS retain separate policies but share endpoint placement where selected."
+                  }
+                },
+                {
+                  "name": "privateInfo",
+                  "type": "Microsoft.Common.TextBlock",
+                  "visible": "[equals(steps('operations').paasConnectivity.scenario, 'Private')]",
+                  "options": {
+                    "text": "Create private endpoints and disable public access for applicable deployment-owned resources. Select the shared placement subnet and configure DNS below."
+                  }
+                },
+                {
+                  "name": "restrictedInfo",
+                  "type": "Microsoft.Common.TextBlock",
+                  "visible": "[equals(steps('operations').paasConnectivity.scenario, 'Restricted')]",
+                  "options": {
+                    "text": "Key Vault uses restricted public access without private endpoints. Specify IP/CIDR ranges, eligible service-endpoint subnets, or both. A new Backup vault requires an explicit choice because it cannot enforce these allowlists."
+                  }
+                }
+              ]
+            },
+            {
               "name": "networkingInfoBox",
               "type": "Microsoft.Common.InfoBox",
               "options": {
@@ -354,73 +408,389 @@
               }
             },
             {
-              "name": "permittedIPsSection",
+              "name": "backupNetworking",
               "type": "Microsoft.Common.Section",
-              "label": "Network Access",
+              "label": "Backup connectivity",
               "elements": [
                 {
-                  "name": "networkAccess",
+                  "name": "backupConnectivity",
                   "type": "Microsoft.Common.DropDown",
-                  "label": "Network Access",
-                  "defaultValue": "Public Endpoint",
-                  "toolTip": "Connectivity configuration for deployed Key Vaults and the optional FSLogix backup vault. Private Endpoint creates private endpoints in the selected subnet. Key Vault public access is selected separately below; backup vault private endpoints disable backup vault public access.",
+                  "label": "New Backup vault connectivity",
+                  "defaultValue": "Select Backup connectivity",
+                  "visible": "[and(steps('operations').resources.deployFSLogixBackupVault, equals(steps('operations').paasConnectivity.scenario, 'Restricted'))]",
                   "constraints": {
                     "required": true,
                     "allowedValues": [
                       {
-                        "label": "Public Endpoint",
-                        "value": "PublicEndpoint"
+                        "label": "Select Backup connectivity",
+                        "value": ""
                       },
                       {
-                        "label": "Private Endpoint",
-                        "value": "PrivateEndpoint"
+                        "label": "Private connectivity",
+                        "value": "Private"
+                      },
+                      {
+                        "label": "Public connectivity",
+                        "value": "Public"
                       }
                     ]
                   }
                 },
                 {
-                  "name": "paasPublicNetworkAccess",
-                  "type": "Microsoft.Common.DropDown",
-                  "label": "Key Vault public network access",
-                  "defaultValue": "[if(equals(steps('operations').permittedIPsSection.networkAccess, 'PrivateEndpoint'), 'Disabled', 'Enabled')]",
-                  "toolTip": "Applies to newly deployed Key Vaults independently of private endpoints. Existing vaults and backup/monitoring access are unchanged.",
+                  "name": "backupChoicePrerequisite",
+                  "type": "Microsoft.Common.TextBox",
+                  "label": "Backup connectivity prerequisite",
+                  "defaultValue": "Choose the new Backup vault connectivity explicitly before continuing.",
+                  "readOnly": true,
+                  "visible": "[and(steps('operations').resources.deployFSLogixBackupVault, equals(steps('operations').paasConnectivity.scenario, 'Restricted'))]",
                   "constraints": {
                     "required": true,
-                    "allowedValues": [
-                      { "label": "Disabled", "value": "Disabled" },
-                      { "label": "Enabled with restrictions", "value": "EnabledWithRestrictions" },
-                      { "label": "Enabled", "value": "Enabled" }
+                    "validations": [
+                      {
+                        "isValid": "[or(equals(steps('operations').backupNetworking.backupConnectivity, 'Private'), equals(steps('operations').backupNetworking.backupConnectivity, 'Public'))]",
+                        "message": "Choose the new Backup vault connectivity explicitly before continuing."
+                      }
                     ]
                   }
                 },
                 {
-                  "name": "permittedIPsDisabledInfo",
+                  "name": "backupPublicNetworkAccess",
+                  "type": "Microsoft.Common.DropDown",
+                  "label": "Backup public network access",
+                  "defaultValue": "Disabled",
+                  "visible": "[and(steps('operations').resources.deployFSLogixBackupVault, equals(steps('operations').paasConnectivity.scenario, 'Custom'))]",
+                  "constraints": {
+                    "required": true,
+                    "allowedValues": [
+                      {
+                        "label": "Disabled",
+                        "value": "Disabled"
+                      },
+                      {
+                        "label": "Enabled",
+                        "value": "Enabled"
+                      }
+                    ]
+                  }
+                },
+                {
+                  "name": "backupPrivateEndpoint",
+                  "type": "Microsoft.Common.OptionsGroup",
+                  "label": "Deploy Backup private endpoint",
+                  "defaultValue": "Yes",
+                  "constraints": {
+                    "required": true,
+                    "allowedValues": [
+                      {
+                        "label": "Yes",
+                        "value": true
+                      },
+                      {
+                        "label": "No",
+                        "value": false
+                      }
+                    ]
+                  },
+                  "visible": "[and(steps('operations').resources.deployFSLogixBackupVault, equals(steps('operations').paasConnectivity.scenario, 'Custom'))]"
+                },
+                {
+                  "name": "backupPublicWarning",
+                  "type": "Microsoft.Common.InfoBox",
+                  "visible": "[and(steps('operations').resources.deployFSLogixBackupVault, equals(if(equals(steps('operations').paasConnectivity.scenario, 'Custom'), steps('operations').backupNetworking.backupPublicNetworkAccess, if(and(equals(steps('operations').paasConnectivity.scenario, 'Restricted'), equals(steps('operations').backupNetworking.backupConnectivity, 'Public')), 'Enabled', 'Disabled')), 'Enabled'))]",
+                  "options": {
+                    "style": "Warning",
+                    "text": "Backup public access is unrestricted by network ACLs. Recovery Services vaults cannot enforce IP/CIDR or service-endpoint subnet allowlists. Authentication is still required."
+                  }
+                }
+              ],
+              "visible": "[steps('operations').resources.deployFSLogixBackupVault]"
+            },
+            {
+              "name": "privateDnsSection",
+              "type": "Microsoft.Common.Section",
+              "label": "Backup: Private DNS zones",
+              "visible": "[and(steps('operations').resources.deployFSLogixBackupVault, if(equals(steps('operations').paasConnectivity.scenario, 'Custom'), steps('operations').backupNetworking.backupPrivateEndpoint, if(equals(steps('operations').paasConnectivity.scenario, 'Restricted'), equals(steps('operations').backupNetworking.backupConnectivity, 'Private'), true)))]",
+              "elements": [
+                {
+                  "name": "enablePrivateDNSIntegration",
+                  "type": "Microsoft.Common.CheckBox",
+                  "label": "Enable Private DNS Zone Integration",
+                  "defaultValue": true,
+                  "toolTip": "Register the Backup private endpoint with existing Azure Backup, Blob and Queue Private DNS zones. An Azure Backup zone is required for this private-endpoint workflow."
+                },
+                {
+                  "name": "privateDNSZonesSubscription",
+                  "type": "Microsoft.Common.DropDown",
+                  "visible": "[steps('operations').privateDnsSection.enablePrivateDNSIntegration]",
+                  "label": "Private DNS Zone Subscription",
+                  "defaultValue": "[steps('basics').subscription.displayName]",
+                  "toolTip": "Select the subscription that contains your Private DNS Zones. In hub-and-spoke topologies this is typically the hub/connectivity subscription.",
+                  "constraints": {
+                    "required": "[steps('operations').privateDnsSection.enablePrivateDNSIntegration]",
+                    "allowedValues": "[map(steps('basics').subscriptionsApi.value, (sub) => parse(concat('{\"label\":\"', sub.displayName, '\",\"value\":{\"displayName\":\"', sub.displayName, '\",\"id\":\"', sub.id, '\"}}')))]"
+                  }
+                },
+                {
+                  "name": "privateDNSZonesApi",
+                  "type": "Microsoft.Solutions.ArmApiControl",
+                  "condition": "[and(if(equals(steps('operations').paasConnectivity.scenario, 'Custom'), steps('operations').backupNetworking.backupPrivateEndpoint, if(equals(steps('operations').paasConnectivity.scenario, 'Restricted'), equals(steps('operations').backupNetworking.backupConnectivity, 'Private'), true)), steps('operations').privateDnsSection.enablePrivateDNSIntegration, not(empty(steps('operations').privateDnsSection.privateDNSZonesSubscription)))]",
+                  "request": {
+                    "method": "GET",
+                    "path": "[concat(steps('operations').privateDnsSection.privateDNSZonesSubscription.id, '/providers/Microsoft.Network/privateDnsZones?api-version=2018-09-01')]"
+                  }
+                },
+                {
+                  "name": "backupPrivateDnsZone",
+                  "type": "Microsoft.Common.DropDown",
+                  "filter": true,
+                  "visible": "[and(steps('operations').privateDnsSection.enablePrivateDNSIntegration, steps('operations').resources.deployFSLogixBackupVault)]",
+                  "label": "Azure Backup Private DNS Zone",
+                  "multiLine": true,
+                  "defaultValue": "[if(empty(steps('operations').privateDnsSection.privateDNSZonesApi.value), 'Select a DNS subscription or check zone availability', if(empty(filter(steps('operations').privateDnsSection.privateDNSZonesApi.value, (zone) => contains(zone.name, '.backup.'))), 'No matching private DNS zones found', first(map(filter(steps('operations').privateDnsSection.privateDNSZonesApi.value, (zone) => contains(zone.name, '.backup.')), (zone) => zone.name))))]",
+                  "constraints": {
+                    "required": true,
+                    "allowedValues": "[if(empty(steps('operations').privateDnsSection.privateDNSZonesApi.value), parse('[{\"label\":\"Select a DNS subscription or check zone availability\",\"value\":\"\"}]'), if(empty(filter(steps('operations').privateDnsSection.privateDNSZonesApi.value, (zone) => contains(zone.name, '.backup.'))), parse('[{\"label\":\"No matching private DNS zones found\",\"value\":\"\"}]'), map(filter(steps('operations').privateDnsSection.privateDNSZonesApi.value, (zone) => contains(zone.name, '.backup.')), (zone) => parse(concat('{\"label\":\"', zone.name, '\",\"description\":\"Resource Group: ', first(skip(split(zone.id, '/'), 4)), '\",\"value\":\"', zone.id, '\"}')))))]"
+                  }
+                },
+                {
+                  "name": "blobPrivateDnsZone",
+                  "type": "Microsoft.Common.DropDown",
+                  "filter": true,
+                  "visible": "[and(steps('operations').privateDnsSection.enablePrivateDNSIntegration, steps('operations').resources.deployFSLogixBackupVault)]",
+                  "label": "Azure Blob Private DNS Zone",
+                  "multiLine": true,
+                  "defaultValue": "[if(empty(steps('operations').privateDnsSection.privateDNSZonesApi.value), 'Select a DNS subscription or check zone availability', if(empty(filter(steps('operations').privateDnsSection.privateDNSZonesApi.value, (zone) => contains(zone.name, 'privatelink.blob.'))), 'No matching private DNS zones found', first(map(filter(steps('operations').privateDnsSection.privateDNSZonesApi.value, (zone) => contains(zone.name, 'privatelink.blob.')), (zone) => zone.name))))]",
+                  "constraints": {
+                    "required": true,
+                    "allowedValues": "[if(empty(steps('operations').privateDnsSection.privateDNSZonesApi.value), parse('[{\"label\":\"Select a DNS subscription or check zone availability\",\"value\":\"\"}]'), if(empty(filter(steps('operations').privateDnsSection.privateDNSZonesApi.value, (zone) => contains(zone.name, 'privatelink.blob.'))), parse('[{\"label\":\"No matching private DNS zones found\",\"value\":\"\"}]'), map(filter(steps('operations').privateDnsSection.privateDNSZonesApi.value, (zone) => contains(zone.name, 'privatelink.blob.')), (zone) => parse(concat('{\"label\":\"', zone.name, '\",\"description\":\"Resource Group: ', first(skip(split(zone.id, '/'), 4)), '\",\"value\":\"', zone.id, '\"}')))))]"
+                  }
+                },
+                {
+                  "name": "queuePrivateDnsZone",
+                  "type": "Microsoft.Common.DropDown",
+                  "filter": true,
+                  "visible": "[and(steps('operations').privateDnsSection.enablePrivateDNSIntegration, steps('operations').resources.deployFSLogixBackupVault)]",
+                  "label": "Azure Queue Private DNS Zone",
+                  "multiLine": true,
+                  "defaultValue": "[if(empty(steps('operations').privateDnsSection.privateDNSZonesApi.value), 'Select a DNS subscription or check zone availability', if(empty(filter(steps('operations').privateDnsSection.privateDNSZonesApi.value, (zone) => contains(zone.name, 'privatelink.queue.'))), 'No matching private DNS zones found', first(map(filter(steps('operations').privateDnsSection.privateDNSZonesApi.value, (zone) => contains(zone.name, 'privatelink.queue.')), (zone) => zone.name))))]",
+                  "constraints": {
+                    "required": true,
+                    "allowedValues": "[if(empty(steps('operations').privateDnsSection.privateDNSZonesApi.value), parse('[{\"label\":\"Select a DNS subscription or check zone availability\",\"value\":\"\"}]'), if(empty(filter(steps('operations').privateDnsSection.privateDNSZonesApi.value, (zone) => contains(zone.name, 'privatelink.queue.'))), parse('[{\"label\":\"No matching private DNS zones found\",\"value\":\"\"}]'), map(filter(steps('operations').privateDnsSection.privateDNSZonesApi.value, (zone) => contains(zone.name, 'privatelink.queue.')), (zone) => parse(concat('{\"label\":\"', zone.name, '\",\"description\":\"Resource Group: ', first(skip(split(zone.id, '/'), 4)), '\",\"value\":\"', zone.id, '\"}')))))]"
+                  }
+                },
+                {
+                  "name": "backupDnsPrerequisite",
+                  "type": "Microsoft.Common.TextBox",
+                  "label": "Backup private endpoint DNS prerequisite",
+                  "defaultValue": "Enable DNS integration and select an existing Azure Backup Private DNS zone for the intended Backup private endpoint.",
+                  "readOnly": true,
+                  "visible": "[and(steps('operations').resources.deployFSLogixBackupVault, if(equals(steps('operations').paasConnectivity.scenario, 'Custom'), steps('operations').backupNetworking.backupPrivateEndpoint, if(equals(steps('operations').paasConnectivity.scenario, 'Restricted'), equals(steps('operations').backupNetworking.backupConnectivity, 'Private'), true)))]",
+                  "constraints": {
+                    "required": true,
+                    "validations": [
+                      {
+                        "isValid": "[and(steps('operations').privateDnsSection.enablePrivateDNSIntegration, not(empty(steps('operations').privateDnsSection.backupPrivateDnsZone)))]",
+                        "message": "Enable DNS integration and select an existing Azure Backup Private DNS zone for the intended Backup private endpoint."
+                      }
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "serviceEndpointVirtualNetworksApi",
+              "type": "Microsoft.Solutions.ArmApiControl",
+              "condition": "[not(empty(steps('basics').subscription.id))]",
+              "request": {
+                "method": "GET",
+                "path": "[if(empty(steps('basics').subscription.id), '', concat(steps('basics').subscription.id, '/providers/Microsoft.Network/virtualNetworks?api-version=2022-11-01'))]",
+                "transforms": {
+                  "loaded": "`true`",
+                  "vnets": "value",
+                  "subnets": "value[].properties.subnets[]",
+                  "nextLink": "nextLink"
+                }
+              }
+            },
+            {
+              "name": "keyVaultPrivateNetworking",
+              "type": "Microsoft.Common.Section",
+              "label": "Key Vault networking: Private endpoints",
+              "visible": "[or(steps('operations').resources.deploySecretsKeyVault, steps('operations').resources.deployEncryptionKeyVault)]",
+              "elements": [
+                {
+                  "name": "privateEndpointInfo",
+                  "type": "Microsoft.Common.InfoBox",
+                  "options": {
+                    "style": "Info",
+                    "text": "Applies to all credentials and encryption Key Vaults created by this deployment. Existing vaults are not reconfigured. Private endpoints and public endpoint access are independent. Configure DNS for the intended client path; public firewall rules do not restrict Private Link traffic."
+                  }
+                },
+                {
+                  "name": "keyVaultPrivateEndpoint",
+                  "type": "Microsoft.Common.OptionsGroup",
+                  "label": "Deploy Key Vault private endpoints",
+                  "defaultValue": "Yes",
+                  "constraints": {
+                    "required": true,
+                    "allowedValues": [
+                      {
+                        "label": "Yes",
+                        "value": true
+                      },
+                      {
+                        "label": "No",
+                        "value": false
+                      }
+                    ]
+                  },
+                  "visible": "[equals(steps('operations').paasConnectivity.scenario, 'Custom')]"
+                },
+                {
+                  "name": "enablePrivateDNSIntegration",
+                  "type": "Microsoft.Common.OptionsGroup",
+                  "label": "Integrate with Azure Private DNS",
+                  "defaultValue": "Yes",
+                  "constraints": {
+                    "required": true,
+                    "allowedValues": [
+                      {
+                        "label": "Yes",
+                        "value": true
+                      },
+                      {
+                        "label": "No",
+                        "value": false
+                      }
+                    ]
+                  },
+                  "visible": "[if(equals(steps('operations').paasConnectivity.scenario, 'Custom'), steps('operations').keyVaultPrivateNetworking.keyVaultPrivateEndpoint, equals(steps('operations').paasConnectivity.scenario, 'Private'))]"
+                },
+                {
+                  "name": "externalDnsInfo",
+                  "type": "Microsoft.Common.InfoBox",
+                  "options": {
+                    "style": "Warning",
+                    "text": "If Azure Private DNS integration is disabled, provide DNS records through your approved DNS or policy process. Private endpoints alone do not configure client name resolution."
+                  },
+                  "visible": "[and(if(equals(steps('operations').paasConnectivity.scenario, 'Custom'), steps('operations').keyVaultPrivateNetworking.keyVaultPrivateEndpoint, equals(steps('operations').paasConnectivity.scenario, 'Private')), not(steps('operations').keyVaultPrivateNetworking.enablePrivateDNSIntegration))]"
+                },
+                {
+                  "name": "privateDnsSubscription",
+                  "type": "Microsoft.Common.SubscriptionSelector",
+                  "resourceProviders": [
+                    "Microsoft.Network"
+                  ],
+                  "visible": "[and(if(equals(steps('operations').paasConnectivity.scenario, 'Custom'), steps('operations').keyVaultPrivateNetworking.keyVaultPrivateEndpoint, equals(steps('operations').paasConnectivity.scenario, 'Private')), steps('operations').keyVaultPrivateNetworking.enablePrivateDNSIntegration)]"
+                },
+                {
+                  "name": "privateDnsZonesApi",
+                  "type": "Microsoft.Solutions.ArmApiControl",
+                  "condition": "[and(or(steps('operations').resources.deploySecretsKeyVault, steps('operations').resources.deployEncryptionKeyVault), if(equals(steps('operations').paasConnectivity.scenario, 'Custom'), steps('operations').keyVaultPrivateNetworking.keyVaultPrivateEndpoint, equals(steps('operations').paasConnectivity.scenario, 'Private')), steps('operations').keyVaultPrivateNetworking.enablePrivateDNSIntegration, not(empty(steps('operations').keyVaultPrivateNetworking.privateDnsSubscription.subscriptionId)))]",
+                  "request": {
+                    "method": "GET",
+                    "path": "[concat('/subscriptions/', steps('operations').keyVaultPrivateNetworking.privateDnsSubscription.subscriptionId, '/providers/Microsoft.Network/privateDnsZones?api-version=2018-09-01')]"
+                  }
+                },
+                {
+                  "name": "vaultPrivateDnsZone",
+                  "type": "Microsoft.Common.DropDown",
+                  "filter": true,
+                  "label": "Key Vault private DNS zone",
+                  "defaultValue": "[if(empty(steps('operations').keyVaultPrivateNetworking.privateDnsZonesApi.value), 'Select a DNS subscription or check zone availability', if(empty(filter(steps('operations').keyVaultPrivateNetworking.privateDnsZonesApi.value, (zone) => contains(zone.name, 'privatelink.vaultcore.'))), 'Select a DNS subscription or check zone availability', first(map(filter(steps('operations').keyVaultPrivateNetworking.privateDnsZonesApi.value, (zone) => contains(zone.name, 'privatelink.vaultcore.')), (zone) => zone.name))))]",
+                  "multiLine": true,
+                  "visible": "[and(if(equals(steps('operations').paasConnectivity.scenario, 'Custom'), steps('operations').keyVaultPrivateNetworking.keyVaultPrivateEndpoint, equals(steps('operations').paasConnectivity.scenario, 'Private')), steps('operations').keyVaultPrivateNetworking.enablePrivateDNSIntegration)]",
+                  "constraints": {
+                    "required": true,
+                    "allowedValues": "[if(empty(steps('operations').keyVaultPrivateNetworking.privateDnsZonesApi.value), parse('[{\"label\":\"Select a DNS subscription or check zone availability\",\"value\":\"\"}]'), if(empty(filter(steps('operations').keyVaultPrivateNetworking.privateDnsZonesApi.value, (zone) => contains(zone.name, 'privatelink.vaultcore.'))), parse('[{\"label\":\"Select a DNS subscription or check zone availability\",\"value\":\"\"}]'), map(filter(steps('operations').keyVaultPrivateNetworking.privateDnsZonesApi.value, (zone) => contains(zone.name, 'privatelink.vaultcore.')), (zone) => parse(concat('{\"label\":\"', zone.name, '\",\"description\":\"Resource group: ', first(skip(split(zone.id, '/'), 4)), '\",\"value\":\"', zone.id, '\"}')))))]"
+                  }
+                }
+              ]
+            },
+            {
+              "name": "keyVaultPublicNetworking",
+              "type": "Microsoft.Common.Section",
+              "label": "Key Vault networking: Public endpoint access",
+              "visible": "[and(or(steps('operations').resources.deploySecretsKeyVault, steps('operations').resources.deployEncryptionKeyVault), equals(steps('operations').paasConnectivity.scenario, 'Custom'))]",
+              "elements": [
+                {
+                  "name": "keyVaultPublicNetworkAccess",
+                  "type": "Microsoft.Common.DropDown",
+                  "label": "Public network access",
+                  "defaultValue": "Disabled",
+                  "toolTip": "Applies to all credentials and encryption Key Vaults created by this deployment. Existing vaults are not reconfigured.",
+                  "constraints": {
+                    "required": true,
+                    "allowedValues": [
+                      {
+                        "label": "Disabled",
+                        "value": "Disabled"
+                      },
+                      {
+                        "label": "Enabled with restrictions",
+                        "value": "EnabledWithRestrictions"
+                      },
+                      {
+                        "label": "Enabled",
+                        "value": "Enabled"
+                      }
+                    ]
+                  }
+                },
+                {
+                  "name": "publicAccessDisabledInfo",
                   "type": "Microsoft.Common.TextBlock",
-                  "visible": "[equals(steps('operations').permittedIPsSection.paasPublicNetworkAccess, 'Disabled')]",
+                  "visible": "[equals(if(equals(steps('operations').paasConnectivity.scenario, 'Custom'), steps('operations').keyVaultPublicNetworking.keyVaultPublicNetworkAccess, if(equals(steps('operations').paasConnectivity.scenario, 'Restricted'), 'EnabledWithRestrictions', 'Disabled')), 'Disabled')]",
                   "options": {
                     "text": "Public network access is disabled. Ensure private connectivity is available. Existing trusted-service exceptions may still apply."
                   }
                 },
                 {
-                  "name": "permittedIPsRestrictedInfo",
+                  "name": "publicAccessEnabledWithRestrictionsInfo",
                   "type": "Microsoft.Common.TextBlock",
-                  "visible": "[equals(steps('operations').permittedIPsSection.paasPublicNetworkAccess, 'EnabledWithRestrictions')]",
+                  "visible": "[equals(if(equals(steps('operations').paasConnectivity.scenario, 'Custom'), steps('operations').keyVaultPublicNetworking.keyVaultPublicNetworkAccess, if(equals(steps('operations').paasConnectivity.scenario, 'Restricted'), 'EnabledWithRestrictions', 'Disabled')), 'EnabledWithRestrictions')]",
                   "options": {
-                    "text": "Allow the public IPv4 addresses or CIDR ranges below. Other public traffic is denied, subject to existing trusted-service exceptions."
+                    "text": "Allow IP addresses, service-endpoint subnets, or both. Other public traffic is denied, subject to existing service exceptions."
                   }
                 },
                 {
-                  "name": "permittedIPsEnabledInfo",
-                  "type": "Microsoft.Common.TextBlock",
-                  "visible": "[equals(steps('operations').permittedIPsSection.paasPublicNetworkAccess, 'Enabled')]",
+                  "name": "publicAccessEnabledInfo",
+                  "type": "Microsoft.Common.InfoBox",
+                  "visible": "[equals(if(equals(steps('operations').paasConnectivity.scenario, 'Custom'), steps('operations').keyVaultPublicNetworking.keyVaultPublicNetworkAccess, if(equals(steps('operations').paasConnectivity.scenario, 'Restricted'), 'EnabledWithRestrictions', 'Disabled')), 'Enabled')]",
                   "options": {
-                    "text": "Public network access is allowed from all networks. Authentication and authorization still apply."
+                    "text": "Public network access is unrestricted. Stored IP and subnet rules do not limit traffic. Authentication is still required.",
+                    "style": "Warning"
                   }
                 },
                 {
-                  "name": "permittedIPs",
+                  "name": "noPrivateConnectivityWarning",
+                  "type": "Microsoft.Common.InfoBox",
+                  "options": {
+                    "style": "Warning",
+                    "text": "Public access is disabled and this deployment is not creating private endpoints for this service. Provide an existing approved connectivity path before deploying."
+                  },
+                  "visible": "[and(equals(if(equals(steps('operations').paasConnectivity.scenario, 'Custom'), steps('operations').keyVaultPublicNetworking.keyVaultPublicNetworkAccess, if(equals(steps('operations').paasConnectivity.scenario, 'Restricted'), 'EnabledWithRestrictions', 'Disabled')), 'Disabled'), not(if(equals(steps('operations').paasConnectivity.scenario, 'Custom'), steps('operations').keyVaultPrivateNetworking.keyVaultPrivateEndpoint, equals(steps('operations').paasConnectivity.scenario, 'Private'))))]"
+                }
+              ]
+            },
+            {
+              "name": "keyVaultServiceEndpointAccess",
+              "type": "Microsoft.Common.Section",
+              "label": "Key Vault networking: Allowed public-endpoint sources",
+              "visible": "[and(or(steps('operations').resources.deploySecretsKeyVault, steps('operations').resources.deployEncryptionKeyVault), equals(if(equals(steps('operations').paasConnectivity.scenario, 'Custom'), steps('operations').keyVaultPublicNetworking.keyVaultPublicNetworkAccess, if(equals(steps('operations').paasConnectivity.scenario, 'Restricted'), 'EnabledWithRestrictions', 'Disabled')), 'EnabledWithRestrictions'))]",
+              "elements": [
+                {
+                  "name": "requirements",
+                  "type": "Microsoft.Common.InfoBox",
+                  "options": {
+                    "style": "Info",
+                    "text": "Applies to all credentials and encryption Key Vaults created by this deployment. Existing vaults are not reconfigured. Allow IP addresses, service-endpoint subnets, or both. This deployment never enables endpoints on existing subnets. Service endpoints use the public service endpoint, not a private IP."
+                  }
+                },
+                {
+                  "name": "keyVaultPermittedIPs",
                   "type": "Microsoft.Common.EditableGrid",
-                  "visible": "[equals(steps('operations').permittedIPsSection.paasPublicNetworkAccess, 'EnabledWithRestrictions')]",
+                  "visible": "[equals(if(equals(steps('operations').paasConnectivity.scenario, 'Custom'), steps('operations').keyVaultPublicNetworking.keyVaultPublicNetworkAccess, if(equals(steps('operations').paasConnectivity.scenario, 'Restricted'), 'EnabledWithRestrictions', 'Disabled')), 'EnabledWithRestrictions')]",
                   "ariaLabel": "Permitted IP Addresses or CIDR Ranges",
                   "label": "Permitted IP Addresses / CIDR Ranges",
                   "constraints": {
@@ -448,137 +818,65 @@
                       }
                     ]
                   }
-                }
-              ]
-            },
-            {
-              "name": "networkSection",
-              "type": "Microsoft.Common.Section",
-              "label": "Private Endpoint Network",
-              "visible": "[equals(steps('operations').permittedIPsSection.networkAccess, 'PrivateEndpoint')]",
-              "elements": [
+                },
                 {
-                  "name": "virtualNetworksApi",
-                  "type": "Microsoft.Solutions.ArmApiControl",
-                  "condition": "[and(equals(steps('operations').permittedIPsSection.networkAccess, 'PrivateEndpoint'), not(empty(steps('basics').subscription)))]",
-                  "request": {
-                    "method": "GET",
-                    "path": "[concat(steps('basics').subscription.id, '/providers/Microsoft.Network/virtualNetworks?api-version=2022-11-01')]"
+                  "name": "inventoryStatus",
+                  "type": "Microsoft.Common.InfoBox",
+                  "options": {
+                    "style": "Info",
+                    "text": "The subnet inventory has not loaded. If this persists, check the subscription and Microsoft.Network read permissions."
+                  },
+                  "visible": "[not(equals(steps('operations').serviceEndpointVirtualNetworksApi.transformed.loaded, true))]"
+                },
+                {
+                  "name": "inventoryPageWarning",
+                  "type": "Microsoft.Common.InfoBox",
+                  "options": {
+                    "style": "Warning",
+                    "text": "The VNet API returned a partial inventory. Use a parameter-file deployment for subnets on later pages."
+                  },
+                  "visible": "[not(empty(steps('operations').serviceEndpointVirtualNetworksApi.transformed.nextLink))]"
+                },
+                {
+                  "name": "keyVaultServiceEndpointSubnets",
+                  "type": "Microsoft.Common.DropDown",
+                  "label": "Key Vault access subnets",
+                  "multiselect": true,
+                  "selectAll": false,
+                  "filter": true,
+                  "multiLine": true,
+                  "defaultValue": "[parse('[]')]",
+                  "toolTip": "Microsoft.KeyVault must already be enabled on every selected subnet. Applies only to Key Vaults created by this deployment, not adopted vaults.",
+                  "visible": "[and(or(steps('operations').resources.deploySecretsKeyVault, steps('operations').resources.deployEncryptionKeyVault), equals(if(equals(steps('operations').paasConnectivity.scenario, 'Custom'), steps('operations').keyVaultPublicNetworking.keyVaultPublicNetworkAccess, if(equals(steps('operations').paasConnectivity.scenario, 'Restricted'), 'EnabledWithRestrictions', 'Disabled')), 'EnabledWithRestrictions'))]",
+                  "constraints": {
+                    "required": false,
+                    "allowedValues": "[if(not(equals(steps('operations').serviceEndpointVirtualNetworksApi.transformed.loaded, true)), parse('[{\"label\":\"Loading subnet inventory\",\"value\":\"\"}]'), if(or(empty(steps('operations').serviceEndpointVirtualNetworksApi.transformed.vnets), empty(steps('operations').serviceEndpointVirtualNetworksApi.transformed.subnets)), parse('[{\"label\":\"No eligible subnets found\",\"value\":\"\"}]'), if(empty(filter(steps('operations').serviceEndpointVirtualNetworksApi.transformed.subnets, (snet) => if(empty(snet.properties.serviceEndpoints), false, not(empty(filter(snet.properties.serviceEndpoints, (se) => equals(se.service, 'Microsoft.KeyVault'))))))), parse('[{\"label\":\"No eligible subnets found\",\"value\":\"\"}]'), map(filter(steps('operations').serviceEndpointVirtualNetworksApi.transformed.subnets, (snet) => if(empty(snet.properties.serviceEndpoints), false, not(empty(filter(snet.properties.serviceEndpoints, (se) => equals(se.service, 'Microsoft.KeyVault')))))), (snet) => parse(concat('{\"label\":\"', first(skip(split(snet.id, '/'), 8)), ' | ', snet.name, '\",\"description\":\"Resource Group: ', first(skip(split(snet.id, '/'), 4)), '\",\"value\":\"', snet.id, '\"}'))))))]"
                   }
                 },
                 {
-                  "name": "virtualNetwork",
-                  "type": "Microsoft.Common.DropDown",
-                  "label": "Virtual Network",
-                  "multiLine": true,
-                  "toolTip": "Select the virtual network containing the private endpoint subnet. Only virtual networks in the selected region are shown.",
+                  "name": "emptyAllowlistWarning",
+                  "type": "Microsoft.Common.InfoBox",
+                  "options": {
+                    "style": "Warning",
+                    "text": "No ordinary public sources are allowed. Private endpoints still work if reachable; existing service exceptions may apply. Add IP or subnet rules if clients need the public path."
+                  },
+                  "visible": "[and(empty(steps('operations').keyVaultServiceEndpointAccess.keyVaultPermittedIPs), empty(if(empty(steps('operations').keyVaultServiceEndpointAccess.keyVaultServiceEndpointSubnets), parse('[]'), filter(steps('operations').keyVaultServiceEndpointAccess.keyVaultServiceEndpointSubnets, (id) => not(empty(id))))))]"
+                },
+                {
+                  "name": "allowlistPrerequisite",
+                  "type": "Microsoft.Common.TextBox",
+                  "label": "Restricted connectivity prerequisite",
+                  "defaultValue": "Restricted public connectivity without a private endpoint requires an IP/CIDR or eligible service-endpoint subnet.",
+                  "readOnly": true,
+                  "visible": "[and(or(steps('operations').resources.deploySecretsKeyVault, steps('operations').resources.deployEncryptionKeyVault), equals(if(equals(steps('operations').paasConnectivity.scenario, 'Custom'), steps('operations').keyVaultPublicNetworking.keyVaultPublicNetworkAccess, if(equals(steps('operations').paasConnectivity.scenario, 'Restricted'), 'EnabledWithRestrictions', 'Disabled')), 'EnabledWithRestrictions'), not(if(equals(steps('operations').paasConnectivity.scenario, 'Custom'), steps('operations').keyVaultPrivateNetworking.keyVaultPrivateEndpoint, equals(steps('operations').paasConnectivity.scenario, 'Private'))))]",
                   "constraints": {
                     "required": true,
-                    "allowedValues": "[map(filter(steps('operations').networkSection.virtualNetworksApi.value, (vnet) => equals(vnet.location, steps('basics').location.name)), (vnet) => parse(concat('{\"label\":\"', vnet.name, '\",\"description\":\"Resource Group: ', first(skip(split(vnet.id, '/'), 4)), '\",\"value\":{\"name\":\"', vnet.name, '\",\"id\":\"', vnet.id, '\"}}')))]"
-                  }
-                },
-                {
-                  "name": "subnetsApi",
-                  "type": "Microsoft.Solutions.ArmApiControl",
-                  "condition": "[and(equals(steps('operations').permittedIPsSection.networkAccess, 'PrivateEndpoint'), not(empty(steps('operations').networkSection.virtualNetwork)))]",
-                  "request": {
-                    "method": "GET",
-                    "path": "[concat(steps('operations').networkSection.virtualNetwork.id, '/subnets?api-version=2022-05-01')]"
-                  }
-                },
-                {
-                  "name": "privateEndpointSubnet",
-                  "type": "Microsoft.Common.DropDown",
-                  "label": "Private Endpoint Subnet",
-                  "toolTip": "Select the subnet for Key Vault private endpoints. Must not have any service delegations.",
-                  "constraints": {
-                    "required": true,
-                    "allowedValues": "[map(filter(steps('operations').networkSection.subnetsApi.value, (snet) => empty(snet.properties.delegations)), (snet) => parse(concat('{\"label\":\"', snet.name, '\",\"value\":\"', snet.id, '\"}')))]"
-                  }
-                }
-              ]
-            },
-            {
-              "name": "privateDnsSection",
-              "type": "Microsoft.Common.Section",
-              "label": "Private DNS Zone",
-              "visible": "[equals(steps('operations').permittedIPsSection.networkAccess, 'PrivateEndpoint')]",
-              "elements": [
-                {
-                  "name": "enablePrivateDNSIntegration",
-                  "type": "Microsoft.Common.CheckBox",
-                  "label": "Enable Private DNS Zone Integration",
-                  "defaultValue": true,
-                  "toolTip": "Automatically register Key Vault private endpoints with an Azure Private DNS Zone for proper name resolution."
-                },
-                {
-                  "name": "privateDNSZonesSubscription",
-                  "type": "Microsoft.Common.DropDown",
-                  "visible": "[steps('operations').privateDnsSection.enablePrivateDNSIntegration]",
-                  "label": "Private DNS Zone Subscription",
-                  "defaultValue": "[steps('basics').subscription.displayName]",
-                  "toolTip": "Select the subscription that contains your Private DNS Zones. In hub-and-spoke topologies this is typically the hub/connectivity subscription.",
-                  "constraints": {
-                    "required": "[steps('operations').privateDnsSection.enablePrivateDNSIntegration]",
-                    "allowedValues": "[map(steps('basics').subscriptionsApi.value, (sub) => parse(concat('{\"label\":\"', sub.displayName, '\",\"value\":{\"displayName\":\"', sub.displayName, '\",\"id\":\"', sub.id, '\"}}')))]"
-                  }
-                },
-                {
-                  "name": "privateDNSZonesApi",
-                  "type": "Microsoft.Solutions.ArmApiControl",
-                  "condition": "[and(equals(steps('operations').permittedIPsSection.networkAccess, 'PrivateEndpoint'), steps('operations').privateDnsSection.enablePrivateDNSIntegration, not(empty(steps('operations').privateDnsSection.privateDNSZonesSubscription)))]",
-                  "request": {
-                    "method": "GET",
-                    "path": "[concat(steps('operations').privateDnsSection.privateDNSZonesSubscription.id, '/providers/Microsoft.Network/privateDnsZones?api-version=2018-09-01')]"
-                  }
-                },
-                {
-                  "name": "keyVaultPrivateDnsZone",
-                  "type": "Microsoft.Common.DropDown",
-                  "visible": "[and(steps('operations').privateDnsSection.enablePrivateDNSIntegration, or(steps('operations').resources.deploySecretsKeyVault, steps('operations').resources.deployEncryptionKeyVault))]",
-                  "label": "Key Vault Private DNS Zone",
-                  "multiLine": true,
-                  "defaultValue": "[first(map(filter(steps('operations').privateDnsSection.privateDNSZonesApi.value, (zone) => contains(zone.name, 'vaultcore')), (zone) => zone.name))]",
-                  "toolTip": "Select the Private DNS Zone for Key Vault (privatelink.vaultcore.azure.net or privatelink.vaultcore.usgovcloudapi.net for Azure Government).",
-                  "constraints": {
-                    "required": "[and(steps('operations').privateDnsSection.enablePrivateDNSIntegration, or(steps('operations').resources.deploySecretsKeyVault, steps('operations').resources.deployEncryptionKeyVault))]",
-                    "allowedValues": "[map(filter(steps('operations').privateDnsSection.privateDNSZonesApi.value, (zone) => contains(zone.name, 'vaultcore')), (zone) => parse(concat('{\"label\":\"', zone.name, '\",\"description\":\"Resource Group: ', first(skip(split(zone.id, '/'), 4)), '\",\"value\":\"', zone.id, '\"}')))]"
-                  }
-                },
-                {
-                  "name": "azureBackupPrivateDnsZone",
-                  "type": "Microsoft.Common.DropDown",
-                  "visible": "[and(steps('operations').privateDnsSection.enablePrivateDNSIntegration, steps('operations').resources.deployFSLogixBackupVault)]",
-                  "label": "Azure Backup Private DNS Zone",
-                  "multiLine": true,
-                  "defaultValue": "[first(map(filter(steps('operations').privateDnsSection.privateDNSZonesApi.value, (zone) => contains(zone.name, '.backup.')), (zone) => zone.name))]",
-                  "constraints": {
-                    "required": true,
-                    "allowedValues": "[map(filter(steps('operations').privateDnsSection.privateDNSZonesApi.value, (zone) => contains(zone.name, '.backup.')), (zone) => parse(concat('{\"label\":\"', zone.name, '\",\"description\":\"Resource Group: ', first(skip(split(zone.id, '/'), 4)), '\",\"value\":\"', zone.id, '\"}')))]"
-                  }
-                },
-                {
-                  "name": "azureBlobPrivateDnsZone",
-                  "type": "Microsoft.Common.DropDown",
-                  "visible": "[and(steps('operations').privateDnsSection.enablePrivateDNSIntegration, steps('operations').resources.deployFSLogixBackupVault)]",
-                  "label": "Azure Blob Private DNS Zone",
-                  "multiLine": true,
-                  "defaultValue": "[first(map(filter(steps('operations').privateDnsSection.privateDNSZonesApi.value, (zone) => contains(zone.name, 'privatelink.blob.')), (zone) => zone.name))]",
-                  "constraints": {
-                    "required": true,
-                    "allowedValues": "[map(filter(steps('operations').privateDnsSection.privateDNSZonesApi.value, (zone) => contains(zone.name, 'privatelink.blob.')), (zone) => parse(concat('{\"label\":\"', zone.name, '\",\"description\":\"Resource Group: ', first(skip(split(zone.id, '/'), 4)), '\",\"value\":\"', zone.id, '\"}')))]"
-                  }
-                },
-                {
-                  "name": "azureQueuePrivateDnsZone",
-                  "type": "Microsoft.Common.DropDown",
-                  "visible": "[and(steps('operations').privateDnsSection.enablePrivateDNSIntegration, steps('operations').resources.deployFSLogixBackupVault)]",
-                  "label": "Azure Queue Private DNS Zone",
-                  "multiLine": true,
-                  "defaultValue": "[first(map(filter(steps('operations').privateDnsSection.privateDNSZonesApi.value, (zone) => contains(zone.name, 'privatelink.queue.')), (zone) => zone.name))]",
-                  "constraints": {
-                    "required": true,
-                    "allowedValues": "[map(filter(steps('operations').privateDnsSection.privateDNSZonesApi.value, (zone) => contains(zone.name, 'privatelink.queue.')), (zone) => parse(concat('{\"label\":\"', zone.name, '\",\"description\":\"Resource Group: ', first(skip(split(zone.id, '/'), 4)), '\",\"value\":\"', zone.id, '\"}')))]"
+                    "validations": [
+                      {
+                        "isValid": "[or(not(empty(if(or(steps('operations').resources.deploySecretsKeyVault, steps('operations').resources.deployEncryptionKeyVault), if(empty(steps('operations').keyVaultServiceEndpointAccess.keyVaultPermittedIPs), parse('[]'), filter(map(steps('operations').keyVaultServiceEndpointAccess.keyVaultPermittedIPs, (item) => item.ipAddress), (ip) => not(empty(ip)))), parse('[]')))), not(empty(if(or(steps('operations').resources.deploySecretsKeyVault, steps('operations').resources.deployEncryptionKeyVault), if(empty(steps('operations').keyVaultServiceEndpointAccess.keyVaultServiceEndpointSubnets), parse('[]'), filter(steps('operations').keyVaultServiceEndpointAccess.keyVaultServiceEndpointSubnets, (id) => not(empty(id)))), parse('[]')))))]",
+                        "message": "Restricted public connectivity without a private endpoint requires an IP/CIDR or eligible service-endpoint subnet."
+                      }
+                    ]
                   }
                 }
               ]
@@ -857,56 +1155,6 @@
                     ]
                   },
                   "toolTip": "Disable public access only after confirming clients can resolve and reach the workspace feed private endpoint."
-                },
-                {
-                  "name": "feedNetworkSubscription",
-                  "type": "Microsoft.Common.DropDown",
-                  "label": "Workspace Feed Endpoint Network Subscription",
-                  "defaultValue": "[steps('basics').subscription.displayName]",
-                  "visible": "[and(steps('avdControlPlane').sharedWorkspace.manageWorkspace, steps('avdControlPlane').workspaceFeedEndpoint.manageFeedEndpoint)]",
-                  "constraints": {
-                    "required": true,
-                    "allowedValues": "[map(steps('basics').subscriptionsApi.value, (sub) => parse(concat('{\"label\":\"', sub.displayName, '\",\"value\":{\"displayName\":\"', sub.displayName, '\",\"id\":\"', sub.id, '\"}}')))]"
-                  }
-                },
-                {
-                  "name": "feedVirtualNetworksApi",
-                  "type": "Microsoft.Solutions.ArmApiControl",
-                  "condition": "[and(steps('avdControlPlane').sharedWorkspace.manageWorkspace, steps('avdControlPlane').workspaceFeedEndpoint.manageFeedEndpoint, not(empty(steps('avdControlPlane').workspaceFeedEndpoint.feedNetworkSubscription)))]",
-                  "request": {
-                    "method": "GET",
-                    "path": "[concat(steps('avdControlPlane').workspaceFeedEndpoint.feedNetworkSubscription.id, '/providers/Microsoft.Network/virtualNetworks?api-version=2024-05-01')]"
-                  }
-                },
-                {
-                  "name": "feedVirtualNetwork",
-                  "type": "Microsoft.Common.DropDown",
-                  "label": "Workspace Feed Endpoint Virtual Network",
-                  "multiLine": true,
-                  "visible": "[and(steps('avdControlPlane').sharedWorkspace.manageWorkspace, steps('avdControlPlane').workspaceFeedEndpoint.manageFeedEndpoint)]",
-                  "constraints": {
-                    "required": true,
-                    "allowedValues": "[map(steps('avdControlPlane').workspaceFeedEndpoint.feedVirtualNetworksApi.value, (vnet) => parse(concat('{\"label\":\"', vnet.name, '\",\"description\":\"Resource Group: ', first(skip(split(vnet.id, '/'), 4)), ' | Location: ', vnet.location, '\",\"value\":{\"id\":\"', vnet.id, '\",\"name\":\"', vnet.name, '\",\"location\":\"', vnet.location, '\"}}')))]"
-                  }
-                },
-                {
-                  "name": "feedSubnetsApi",
-                  "type": "Microsoft.Solutions.ArmApiControl",
-                  "condition": "[not(empty(steps('avdControlPlane').workspaceFeedEndpoint.feedVirtualNetwork))]",
-                  "request": {
-                    "method": "GET",
-                    "path": "[concat(steps('avdControlPlane').workspaceFeedEndpoint.feedVirtualNetwork.id, '/subnets?api-version=2024-05-01')]"
-                  }
-                },
-                {
-                  "name": "feedSubnet",
-                  "type": "Microsoft.Common.DropDown",
-                  "label": "Workspace Feed Endpoint Subnet",
-                  "visible": "[and(steps('avdControlPlane').sharedWorkspace.manageWorkspace, steps('avdControlPlane').workspaceFeedEndpoint.manageFeedEndpoint)]",
-                  "constraints": {
-                    "required": true,
-                    "allowedValues": "[map(filter(steps('avdControlPlane').workspaceFeedEndpoint.feedSubnetsApi.value, (subnet) => empty(subnet.properties.delegations)), (subnet) => parse(concat('{\"label\":\"', subnet.name, '\",\"value\":{\"id\":\"', subnet.id, '\",\"name\":\"', subnet.name, '\"}}')))]"
-                  }
                 }
               ]
             },
@@ -978,56 +1226,6 @@
                     "required": true,
                     "allowedValues": "[map(steps('avdControlPlane').globalFeed.globalWorkspacesApi.value, (workspace) => parse(concat('{\"label\":\"', workspace.name, '\",\"description\":\"Resource Group: ', first(skip(split(workspace.id, '/'), 4)), ' | Location: ', workspace.location, '\",\"value\":{\"id\":\"', workspace.id, '\",\"name\":\"', workspace.name, '\",\"location\":\"', workspace.location, '\"}}')))]"
                   }
-                },
-                {
-                  "name": "globalNetworkSubscription",
-                  "type": "Microsoft.Common.DropDown",
-                  "label": "Global-Feed Endpoint Network Subscription",
-                  "defaultValue": "[steps('basics').subscription.displayName]",
-                  "visible": "[steps('avdControlPlane').globalFeed.manageGlobalWorkspace]",
-                  "constraints": {
-                    "required": true,
-                    "allowedValues": "[map(steps('basics').subscriptionsApi.value, (sub) => parse(concat('{\"label\":\"', sub.displayName, '\",\"value\":{\"displayName\":\"', sub.displayName, '\",\"id\":\"', sub.id, '\"}}')))]"
-                  }
-                },
-                {
-                  "name": "globalVirtualNetworksApi",
-                  "type": "Microsoft.Solutions.ArmApiControl",
-                  "condition": "[and(steps('avdControlPlane').globalFeed.manageGlobalWorkspace, not(empty(steps('avdControlPlane').globalFeed.globalNetworkSubscription)))]",
-                  "request": {
-                    "method": "GET",
-                    "path": "[concat(steps('avdControlPlane').globalFeed.globalNetworkSubscription.id, '/providers/Microsoft.Network/virtualNetworks?api-version=2024-05-01')]"
-                  }
-                },
-                {
-                  "name": "globalVirtualNetwork",
-                  "type": "Microsoft.Common.DropDown",
-                  "label": "Global-Feed Endpoint Virtual Network",
-                  "multiLine": true,
-                  "visible": "[steps('avdControlPlane').globalFeed.manageGlobalWorkspace]",
-                  "constraints": {
-                    "required": true,
-                    "allowedValues": "[map(steps('avdControlPlane').globalFeed.globalVirtualNetworksApi.value, (vnet) => parse(concat('{\"label\":\"', vnet.name, '\",\"description\":\"Resource Group: ', first(skip(split(vnet.id, '/'), 4)), ' | Location: ', vnet.location, '\",\"value\":{\"id\":\"', vnet.id, '\",\"name\":\"', vnet.name, '\",\"location\":\"', vnet.location, '\"}}')))]"
-                  }
-                },
-                {
-                  "name": "globalSubnetsApi",
-                  "type": "Microsoft.Solutions.ArmApiControl",
-                  "condition": "[not(empty(steps('avdControlPlane').globalFeed.globalVirtualNetwork))]",
-                  "request": {
-                    "method": "GET",
-                    "path": "[concat(steps('avdControlPlane').globalFeed.globalVirtualNetwork.id, '/subnets?api-version=2024-05-01')]"
-                  }
-                },
-                {
-                  "name": "globalSubnet",
-                  "type": "Microsoft.Common.DropDown",
-                  "label": "Global-Feed Endpoint Subnet",
-                  "visible": "[steps('avdControlPlane').globalFeed.manageGlobalWorkspace]",
-                  "constraints": {
-                    "required": true,
-                    "allowedValues": "[map(filter(steps('avdControlPlane').globalFeed.globalSubnetsApi.value, (subnet) => empty(subnet.properties.delegations)), (subnet) => parse(concat('{\"label\":\"', subnet.name, '\",\"value\":{\"id\":\"', subnet.id, '\",\"name\":\"', subnet.name, '\"}}')))]"
-                  }
                 }
               ]
             },
@@ -1086,12 +1284,14 @@
                 {
                   "name": "feedPrivateDnsZone",
                   "type": "Microsoft.Common.DropDown",
+                  "filter": true,
+                  "defaultValue": "[if(empty(steps('avdControlPlane').privateDns.privateDnsZonesApi.value), 'Select a DNS subscription or check zone availability', if(empty(filter(steps('avdControlPlane').privateDns.privateDnsZonesApi.value, (zone) => contains(zone.name, 'privatelink.wvd.'))), 'No matching private DNS zones found', first(map(filter(steps('avdControlPlane').privateDns.privateDnsZonesApi.value, (zone) => contains(zone.name, 'privatelink.wvd.')), (zone) => zone.name))))]",
                   "label": "Workspace Feed Private DNS Zone",
                   "multiLine": true,
                   "visible": "[and(steps('avdControlPlane').privateDns.enablePrivateDNSIntegration, steps('avdControlPlane').workspaceFeedEndpoint.manageFeedEndpoint)]",
                   "constraints": {
                     "required": "[and(steps('avdControlPlane').privateDns.enablePrivateDNSIntegration, steps('avdControlPlane').workspaceFeedEndpoint.manageFeedEndpoint)]",
-                    "allowedValues": "[map(steps('avdControlPlane').privateDns.privateDnsZonesApi.value, (zone) => parse(concat('{\"label\":\"', zone.name, '\",\"description\":\"Resource Group: ', first(skip(split(zone.id, '/'), 4)), '\",\"value\":{\"id\":\"', zone.id, '\",\"name\":\"', zone.name, '\"}}')))]"
+                    "allowedValues": "[if(empty(steps('avdControlPlane').privateDns.privateDnsZonesApi.value), parse('[{\"label\":\"Select a DNS subscription or check zone availability\",\"value\":\"\"}]'), if(empty(filter(steps('avdControlPlane').privateDns.privateDnsZonesApi.value, (zone) => contains(zone.name, 'privatelink.wvd.'))), parse('[{\"label\":\"No matching private DNS zones found\",\"value\":\"\"}]'), map(filter(steps('avdControlPlane').privateDns.privateDnsZonesApi.value, (zone) => contains(zone.name, 'privatelink.wvd.')), (zone) => parse(concat('{\"label\":\"', zone.name, '\",\"description\":\"Resource Group: ', first(skip(split(zone.id, '/'), 4)), '\",\"value\":{\"id\":\"', zone.id, '\",\"name\":\"', zone.name, '\"}}')))))]"
                   },
                   "toolTip": "Select the private DNS zone used by the workspace feed endpoint."
                 },
@@ -1106,14 +1306,105 @@
                 {
                   "name": "globalPrivateDnsZone",
                   "type": "Microsoft.Common.DropDown",
+                  "filter": true,
+                  "defaultValue": "[if(empty(steps('avdControlPlane').privateDns.privateDnsZonesApi.value), 'Select a DNS subscription or check zone availability', if(empty(filter(steps('avdControlPlane').privateDns.privateDnsZonesApi.value, (zone) => contains(zone.name, 'privatelink-global.wvd.'))), 'No matching private DNS zones found', first(map(filter(steps('avdControlPlane').privateDns.privateDnsZonesApi.value, (zone) => contains(zone.name, 'privatelink-global.wvd.')), (zone) => zone.name))))]",
                   "label": "Global-Feed Private DNS Zone",
                   "multiLine": true,
                   "visible": "[and(steps('avdControlPlane').privateDns.enablePrivateDNSIntegration, steps('avdControlPlane').globalFeed.manageGlobalWorkspace, not(steps('avdControlPlane').privateDns.reuseFeedPrivateDnsZoneForGlobalFeed))]",
                   "constraints": {
                     "required": "[and(steps('avdControlPlane').privateDns.enablePrivateDNSIntegration, steps('avdControlPlane').globalFeed.manageGlobalWorkspace, not(steps('avdControlPlane').privateDns.reuseFeedPrivateDnsZoneForGlobalFeed))]",
-                    "allowedValues": "[map(steps('avdControlPlane').privateDns.privateDnsZonesApi.value, (zone) => parse(concat('{\"label\":\"', zone.name, '\",\"description\":\"Resource Group: ', first(skip(split(zone.id, '/'), 4)), '\",\"value\":{\"id\":\"', zone.id, '\",\"name\":\"', zone.name, '\"}}')))]"
+                    "allowedValues": "[if(empty(steps('avdControlPlane').privateDns.privateDnsZonesApi.value), parse('[{\"label\":\"Select a DNS subscription or check zone availability\",\"value\":\"\"}]'), if(empty(filter(steps('avdControlPlane').privateDns.privateDnsZonesApi.value, (zone) => contains(zone.name, 'privatelink-global.wvd.'))), parse('[{\"label\":\"No matching private DNS zones found\",\"value\":\"\"}]'), map(filter(steps('avdControlPlane').privateDns.privateDnsZonesApi.value, (zone) => contains(zone.name, 'privatelink-global.wvd.')), (zone) => parse(concat('{\"label\":\"', zone.name, '\",\"description\":\"Resource Group: ', first(skip(split(zone.id, '/'), 4)), '\",\"value\":{\"id\":\"', zone.id, '\",\"name\":\"', zone.name, '\"}}')))))]"
                   },
                   "toolTip": "Select the private DNS zone used by the global feed discovery endpoint."
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "privateNetworking",
+          "label": "Private Endpoint Networking",
+          "elements": [
+            {
+              "name": "info",
+              "type": "Microsoft.Common.TextBlock",
+              "options": {
+                "text": "All private endpoints managed by Shared Services use one shared-resource subnet: Key Vaults, FSLogix Backup, workspace feed, and global feed. Select the endpoints and their DNS settings on the preceding steps. Public-access policies and firewall allowlists remain independent. Existing Azure Monitor Private Link Scope connectivity remains platform-managed."
+              }
+            },
+            {
+              "name": "privateEndpointSubnets",
+              "type": "Microsoft.Common.Section",
+              "label": "Shared-resource private endpoint subnet",
+              "visible": "[or(and(or(steps('operations').resources.deploySecretsKeyVault, steps('operations').resources.deployEncryptionKeyVault), if(equals(steps('operations').paasConnectivity.scenario, 'Custom'), steps('operations').keyVaultPrivateNetworking.keyVaultPrivateEndpoint, equals(steps('operations').paasConnectivity.scenario, 'Private'))), and(steps('operations').resources.deployFSLogixBackupVault, if(equals(steps('operations').paasConnectivity.scenario, 'Custom'), steps('operations').backupNetworking.backupPrivateEndpoint, if(equals(steps('operations').paasConnectivity.scenario, 'Restricted'), equals(steps('operations').backupNetworking.backupConnectivity, 'Private'), true))), and(steps('avdControlPlane').sharedWorkspace.manageWorkspace, steps('avdControlPlane').workspaceFeedEndpoint.manageFeedEndpoint), steps('avdControlPlane').globalFeed.manageGlobalWorkspace)]",
+              "elements": [
+                {
+                  "name": "networkSubscription",
+                  "type": "Microsoft.Common.DropDown",
+                  "label": "Shared-resource endpoint network subscription",
+                  "defaultValue": "[steps('basics').subscription.displayName]",
+                  "constraints": {
+                    "required": true,
+                    "allowedValues": "[map(steps('basics').subscriptionsApi.value, (sub) => parse(concat('{\"label\":\"', sub.displayName, '\",\"value\":{\"displayName\":\"', sub.displayName, '\",\"id\":\"', sub.id, '\"}}')))]"
+                  }
+                },
+                {
+                  "name": "virtualNetworksApi",
+                  "type": "Microsoft.Solutions.ArmApiControl",
+                  "condition": "[and(or(and(or(steps('operations').resources.deploySecretsKeyVault, steps('operations').resources.deployEncryptionKeyVault), if(equals(steps('operations').paasConnectivity.scenario, 'Custom'), steps('operations').keyVaultPrivateNetworking.keyVaultPrivateEndpoint, equals(steps('operations').paasConnectivity.scenario, 'Private'))), and(steps('operations').resources.deployFSLogixBackupVault, if(equals(steps('operations').paasConnectivity.scenario, 'Custom'), steps('operations').backupNetworking.backupPrivateEndpoint, if(equals(steps('operations').paasConnectivity.scenario, 'Restricted'), equals(steps('operations').backupNetworking.backupConnectivity, 'Private'), true))), and(steps('avdControlPlane').sharedWorkspace.manageWorkspace, steps('avdControlPlane').workspaceFeedEndpoint.manageFeedEndpoint), steps('avdControlPlane').globalFeed.manageGlobalWorkspace), not(empty(steps('privateNetworking').privateEndpointSubnets.networkSubscription.id)))]",
+                  "request": {
+                    "method": "GET",
+                    "path": "[concat(steps('privateNetworking').privateEndpointSubnets.networkSubscription.id, '/providers/Microsoft.Network/virtualNetworks?api-version=2024-05-01')]"
+                  }
+                },
+                {
+                  "name": "virtualNetwork",
+                  "type": "Microsoft.Common.DropDown",
+                  "label": "Shared-resource endpoint virtual network",
+                  "defaultValue": "",
+                  "multiLine": true,
+                  "toolTip": "Select the existing VNet containing the one subnet used by every selected Shared Services private endpoint. Endpoint locations are taken from this VNet.",
+                  "constraints": {
+                    "required": true,
+                    "allowedValues": "[if(empty(steps('privateNetworking').privateEndpointSubnets.virtualNetworksApi.value), parse('[{\"label\":\"Select a subscription or check VNet read permissions\",\"value\":\"\"}]'), map(steps('privateNetworking').privateEndpointSubnets.virtualNetworksApi.value, (vnet) => parse(concat('{\"label\":\"', vnet.name, '\",\"description\":\"Resource Group: ', first(skip(split(vnet.id, '/'), 4)), ' | Location: ', vnet.location, '\",\"value\":{\"id\":\"', vnet.id, '\",\"name\":\"', vnet.name, '\"}}'))))]"
+                  }
+                },
+                {
+                  "name": "subnetsApi",
+                  "type": "Microsoft.Solutions.ArmApiControl",
+                  "condition": "[and(or(and(or(steps('operations').resources.deploySecretsKeyVault, steps('operations').resources.deployEncryptionKeyVault), if(equals(steps('operations').paasConnectivity.scenario, 'Custom'), steps('operations').keyVaultPrivateNetworking.keyVaultPrivateEndpoint, equals(steps('operations').paasConnectivity.scenario, 'Private'))), and(steps('operations').resources.deployFSLogixBackupVault, if(equals(steps('operations').paasConnectivity.scenario, 'Custom'), steps('operations').backupNetworking.backupPrivateEndpoint, if(equals(steps('operations').paasConnectivity.scenario, 'Restricted'), equals(steps('operations').backupNetworking.backupConnectivity, 'Private'), true))), and(steps('avdControlPlane').sharedWorkspace.manageWorkspace, steps('avdControlPlane').workspaceFeedEndpoint.manageFeedEndpoint), steps('avdControlPlane').globalFeed.manageGlobalWorkspace), not(empty(steps('privateNetworking').privateEndpointSubnets.virtualNetwork.id)))]",
+                  "request": {
+                    "method": "GET",
+                    "path": "[concat(steps('privateNetworking').privateEndpointSubnets.virtualNetwork.id, '/subnets?api-version=2024-05-01')]"
+                  }
+                },
+                {
+                  "name": "subnet",
+                  "type": "Microsoft.Common.DropDown",
+                  "label": "Shared-resource private endpoint subnet",
+                  "defaultValue": "",
+                  "toolTip": "Select one existing nondelegated subnet for all selected Key Vault, FSLogix Backup, workspace-feed, and global-feed endpoints. This selection does not add service-endpoint firewall rules.",
+                  "constraints": {
+                    "required": true,
+                    "allowedValues": "[if(empty(steps('privateNetworking').privateEndpointSubnets.subnetsApi.value), parse('[{\"label\":\"Select a VNet or check subnet read permissions\",\"value\":\"\"}]'), if(empty(filter(steps('privateNetworking').privateEndpointSubnets.subnetsApi.value, (subnet) => empty(subnet.properties.delegations))), parse('[{\"label\":\"No nondelegated subnets found\",\"value\":\"\"}]'), map(filter(steps('privateNetworking').privateEndpointSubnets.subnetsApi.value, (subnet) => empty(subnet.properties.delegations)), (subnet) => parse(concat('{\"label\":\"', subnet.name, '\",\"value\":{\"id\":\"', subnet.id, '\"}}')))))]"
+                  }
+                },
+                {
+                  "name": "sharedSubnetPrerequisite",
+                  "type": "Microsoft.Common.TextBox",
+                  "label": "Shared endpoint placement prerequisite",
+                  "defaultValue": "Select a nondelegated subnet for all active Shared Services private endpoints.",
+                  "readOnly": true,
+                  "visible": "[or(and(or(steps('operations').resources.deploySecretsKeyVault, steps('operations').resources.deployEncryptionKeyVault), if(equals(steps('operations').paasConnectivity.scenario, 'Custom'), steps('operations').keyVaultPrivateNetworking.keyVaultPrivateEndpoint, equals(steps('operations').paasConnectivity.scenario, 'Private'))), and(steps('operations').resources.deployFSLogixBackupVault, if(equals(steps('operations').paasConnectivity.scenario, 'Custom'), steps('operations').backupNetworking.backupPrivateEndpoint, if(equals(steps('operations').paasConnectivity.scenario, 'Restricted'), equals(steps('operations').backupNetworking.backupConnectivity, 'Private'), true))), and(steps('avdControlPlane').sharedWorkspace.manageWorkspace, steps('avdControlPlane').workspaceFeedEndpoint.manageFeedEndpoint), steps('avdControlPlane').globalFeed.manageGlobalWorkspace)]",
+                  "constraints": {
+                    "required": true,
+                    "validations": [
+                      {
+                        "isValid": "[not(empty(steps('privateNetworking').privateEndpointSubnets.subnet.id))]",
+                        "message": "Select a nondelegated subnet for all active Shared Services private endpoints."
+                      }
+                    ]
+                  }
                 }
               ]
             }
@@ -1804,11 +2095,6 @@
         "domainJoinUserPassword": "[if(steps('operations').resources.deploySecretsKeyVault, steps('operations').credentials.domainJoinUserPassword, '')]",
         "deployEncryptionKeyVault": "[steps('operations').resources.deployEncryptionKeyVault]",
         "encryptionKeyVaultRetentionInDays": "[if(steps('operations').resources.deployEncryptionKeyVault, steps('operations').encKvRetentionInDays, 90)]",
-        "privateEndpoint": "[equals(steps('operations').permittedIPsSection.networkAccess, 'PrivateEndpoint')]",
-        "privateEndpointSubnetResourceId": "[if(equals(steps('operations').permittedIPsSection.networkAccess, 'PrivateEndpoint'), steps('operations').networkSection.privateEndpointSubnet, '')]",
-        "azureKeyVaultPrivateDnsZoneResourceId": "[if(and(equals(steps('operations').permittedIPsSection.networkAccess, 'PrivateEndpoint'), steps('operations').privateDnsSection.enablePrivateDNSIntegration, or(steps('operations').resources.deploySecretsKeyVault, steps('operations').resources.deployEncryptionKeyVault)), steps('operations').privateDnsSection.keyVaultPrivateDnsZone, '')]",
-        "permittedIPs": "[filter(map(steps('operations').permittedIPsSection.permittedIPs, (item) => item.ipAddress), (ip) => not(empty(ip)))]",
-        "paasPublicNetworkAccess": "[steps('operations').permittedIPsSection.paasPublicNetworkAccess]",
         "deployMonitoring": "[steps('monitoring').deployMonitoring]",
         "logAnalyticsWorkspaceSubscriptionId": "[if(steps('monitoring').deployMonitoring, steps('monitoring').subscription.subscriptionId, '')]",
         "logAnalyticsWorkspaceSku": "[if(steps('monitoring').deployMonitoring, steps('monitoring').settings.sku, 'PerGB2018')]",
@@ -1820,24 +2106,21 @@
         "existingAvdWorkspaceResourceId": "[if(and(steps('avdControlPlane').sharedWorkspace.manageWorkspace, equals(steps('avdControlPlane').sharedWorkspace.workspaceMode, 'Update')), steps('avdControlPlane').sharedWorkspace.existingWorkspace.id, '')]",
         "avdWorkspaceFriendlyName": "[if(and(steps('avdControlPlane').sharedWorkspace.manageWorkspace, equals(steps('avdControlPlane').sharedWorkspace.workspaceMode, 'Create')), steps('avdControlPlane').sharedWorkspace.workspaceFriendlyName, '')]",
         "avdWorkspacePublicNetworkAccess": "[if(steps('avdControlPlane').workspaceFeedEndpoint.manageFeedEndpoint, steps('avdControlPlane').workspaceFeedEndpoint.workspacePublicNetworkAccess, 'Enabled')]",
-        "workspaceFeedPrivateEndpointSubnetResourceId": "[if(steps('avdControlPlane').workspaceFeedEndpoint.manageFeedEndpoint, steps('avdControlPlane').workspaceFeedEndpoint.feedSubnet.id, '')]",
-        "avdPrivateDnsZoneResourceId": "[if(and(steps('avdControlPlane').privateDns.enablePrivateDNSIntegration, steps('avdControlPlane').workspaceFeedEndpoint.manageFeedEndpoint), steps('avdControlPlane').privateDns.feedPrivateDnsZone.id, '')]",
+        "deployWorkspaceFeedPrivateEndpoint": "[and(steps('avdControlPlane').sharedWorkspace.manageWorkspace, steps('avdControlPlane').workspaceFeedEndpoint.manageFeedEndpoint)]",
         "manageGlobalAvdWorkspace": "[steps('avdControlPlane').globalFeed.manageGlobalWorkspace]",
         "globalAvdWorkspaceMode": "[if(steps('avdControlPlane').globalFeed.manageGlobalWorkspace, steps('avdControlPlane').globalFeed.globalWorkspaceMode, 'Create')]",
         "existingGlobalAvdWorkspaceResourceId": "[if(and(steps('avdControlPlane').globalFeed.manageGlobalWorkspace, equals(steps('avdControlPlane').globalFeed.globalWorkspaceMode, 'Update')), steps('avdControlPlane').globalFeed.existingGlobalWorkspace.id, '')]",
-        "globalFeedPrivateEndpointSubnetResourceId": "[if(steps('avdControlPlane').globalFeed.manageGlobalWorkspace, steps('avdControlPlane').globalFeed.globalSubnet.id, '')]",
-        "globalFeedPrivateDnsZoneResourceId": "[if(and(steps('avdControlPlane').privateDns.enablePrivateDNSIntegration, steps('avdControlPlane').globalFeed.manageGlobalWorkspace), if(steps('avdControlPlane').privateDns.reuseFeedPrivateDnsZoneForGlobalFeed, steps('avdControlPlane').privateDns.feedPrivateDnsZone.id, steps('avdControlPlane').privateDns.globalPrivateDnsZone.id), '')]",
         "deployFSLogixBackupVault": "[steps('operations').resources.deployFSLogixBackupVault]",
         "fslogixBackupPolicyName": "[if(steps('operations').resources.deployFSLogixBackupVault, steps('operations').policySettings.policyName, 'filesharepolicy')]",
         "fslogixBackupRetentionDays": "[if(steps('operations').resources.deployFSLogixBackupVault, steps('operations').policySettings.retentionDays, 30)]",
         "fslogixBackupTimeZone": "[if(steps('operations').resources.deployFSLogixBackupVault, steps('operations').policySettings.timeZone, 'UTC')]",
-        "azureBackupPrivateDnsZoneResourceId": "[if(and(steps('operations').resources.deployFSLogixBackupVault, equals(steps('operations').permittedIPsSection.networkAccess, 'PrivateEndpoint'), steps('operations').privateDnsSection.enablePrivateDNSIntegration), steps('operations').privateDnsSection.azureBackupPrivateDnsZone, '')]",
-        "azureBlobPrivateDnsZoneResourceId": "[if(and(steps('operations').resources.deployFSLogixBackupVault, equals(steps('operations').permittedIPsSection.networkAccess, 'PrivateEndpoint'), steps('operations').privateDnsSection.enablePrivateDNSIntegration), steps('operations').privateDnsSection.azureBlobPrivateDnsZone, '')]",
-        "azureQueuePrivateDnsZoneResourceId": "[if(and(steps('operations').resources.deployFSLogixBackupVault, equals(steps('operations').permittedIPsSection.networkAccess, 'PrivateEndpoint'), steps('operations').privateDnsSection.enablePrivateDNSIntegration), steps('operations').privateDnsSection.azureQueuePrivateDnsZone, '')]",
         "secretsKeyVaultNameOverride": "[if(empty(steps('tagsAndNaming').naming.secretsKeyVaultNameOverride),'',steps('tagsAndNaming').naming.secretsKeyVaultNameOverride)]",
         "encryptionKeyVaultNameOverride": "[if(empty(steps('tagsAndNaming').naming.encryptionKeyVaultNameOverride),'',steps('tagsAndNaming').naming.encryptionKeyVaultNameOverride)]",
         "namingConvention": "[parse(concat('{\"components\":[\"', steps('tagsAndNaming').naming.component1, '\",\"', if(empty(steps('tagsAndNaming').naming.component2),'none',steps('tagsAndNaming').naming.component2), '\",\"', if(empty(steps('tagsAndNaming').naming.component3),'none',steps('tagsAndNaming').naming.component3), '\",\"', if(empty(steps('tagsAndNaming').naming.component4),'none',steps('tagsAndNaming').naming.component4), '\",\"', if(empty(steps('tagsAndNaming').naming.component5),'none',steps('tagsAndNaming').naming.component5), '\",\"', if(empty(steps('tagsAndNaming').naming.component6),'none',steps('tagsAndNaming').naming.component6), '\"],\"delimiter\":\"', steps('tagsAndNaming').naming.delimiter, '\",\"freeform1\":\"', if(empty(steps('tagsAndNaming').naming.freeform1Value),'',steps('tagsAndNaming').naming.freeform1Value), '\",\"environment\":\"', if(empty(steps('tagsAndNaming').naming.environmentValue),'',steps('tagsAndNaming').naming.environmentValue), '\",\"freeform2\":\"', if(empty(steps('tagsAndNaming').naming.freeform2Value),'',steps('tagsAndNaming').naming.freeform2Value), '\",\"workload\":\"', if(empty(steps('tagsAndNaming').naming.workloadValue),'',steps('tagsAndNaming').naming.workloadValue), '\",\"locationAbbreviation\":\"', if(empty(steps('tagsAndNaming').naming.locationAbbreviationOverride),'',steps('tagsAndNaming').naming.locationAbbreviationOverride), '\",\"resourceTypeCodes\":{\"resourceGroups\":\"', if(empty(steps('tagsAndNaming').naming.rtCodeRg),'rg',steps('tagsAndNaming').naming.rtCodeRg), '\",\"keyVaults\":\"', if(empty(steps('tagsAndNaming').naming.rtCodeKv),'kv',steps('tagsAndNaming').naming.rtCodeKv), '\",\"recoveryServicesVaults\":\"', if(empty(steps('tagsAndNaming').naming.rtCodeRsv),'rsv',steps('tagsAndNaming').naming.rtCodeRsv), '\",\"workspaces\":\"', if(empty(steps('tagsAndNaming').naming.rtCodeWorkspace),'vdws',steps('tagsAndNaming').naming.rtCodeWorkspace), '\",\"privateEndpoints\":\"', if(empty(steps('tagsAndNaming').naming.rtCodePe),'pe',steps('tagsAndNaming').naming.rtCodePe), '\",\"networkInterfaces\":\"', if(empty(steps('tagsAndNaming').naming.rtCodeNic),'nic',steps('tagsAndNaming').naming.rtCodeNic), '\"}}'))]",
-        "tags": "[steps('tagsAndNaming').tags.resourceTags]"
+        "tags": "[steps('tagsAndNaming').tags.resourceTags]",
+        "paasNetworking": "[first(map(parse('[0]'), (_) => {\"publicNetworkAccess\": if(equals(steps('operations').paasConnectivity.scenario, 'Restricted'), 'EnabledWithRestrictions', 'Disabled'), \"privateEndpoint\": not(equals(steps('operations').paasConnectivity.scenario, 'Restricted')), \"keyVault\": if(or(steps('operations').resources.deploySecretsKeyVault, steps('operations').resources.deployEncryptionKeyVault), first(map(parse('[0]'), (_) => {\"publicNetworkAccess\": if(equals(steps('operations').paasConnectivity.scenario, 'Custom'), steps('operations').keyVaultPublicNetworking.keyVaultPublicNetworkAccess, if(equals(steps('operations').paasConnectivity.scenario, 'Restricted'), 'EnabledWithRestrictions', 'Disabled')), \"privateEndpoint\": if(equals(steps('operations').paasConnectivity.scenario, 'Custom'), steps('operations').keyVaultPrivateNetworking.keyVaultPrivateEndpoint, equals(steps('operations').paasConnectivity.scenario, 'Private')), \"permittedIPs\": if(equals(if(equals(steps('operations').paasConnectivity.scenario, 'Custom'), steps('operations').keyVaultPublicNetworking.keyVaultPublicNetworkAccess, if(equals(steps('operations').paasConnectivity.scenario, 'Restricted'), 'EnabledWithRestrictions', 'Disabled')), 'EnabledWithRestrictions'), if(or(steps('operations').resources.deploySecretsKeyVault, steps('operations').resources.deployEncryptionKeyVault), if(empty(steps('operations').keyVaultServiceEndpointAccess.keyVaultPermittedIPs), parse('[]'), filter(map(steps('operations').keyVaultServiceEndpointAccess.keyVaultPermittedIPs, (item) => item.ipAddress), (ip) => not(empty(ip)))), parse('[]')), parse('[]')), \"serviceEndpointSubnetResourceIds\": if(equals(if(equals(steps('operations').paasConnectivity.scenario, 'Custom'), steps('operations').keyVaultPublicNetworking.keyVaultPublicNetworkAccess, if(equals(steps('operations').paasConnectivity.scenario, 'Restricted'), 'EnabledWithRestrictions', 'Disabled')), 'EnabledWithRestrictions'), if(or(steps('operations').resources.deploySecretsKeyVault, steps('operations').resources.deployEncryptionKeyVault), if(empty(steps('operations').keyVaultServiceEndpointAccess.keyVaultServiceEndpointSubnets), parse('[]'), filter(steps('operations').keyVaultServiceEndpointAccess.keyVaultServiceEndpointSubnets, (id) => not(empty(id)))), parse('[]')), parse('[]'))})), parse('{}')), \"backup\": if(and(steps('operations').resources.deployFSLogixBackupVault, not(and(equals(steps('operations').paasConnectivity.scenario, 'Restricted'), not(or(equals(steps('operations').backupNetworking.backupConnectivity, 'Private'), equals(steps('operations').backupNetworking.backupConnectivity, 'Public')))))), first(map(parse('[0]'), (_) => {\"publicNetworkAccess\": if(equals(steps('operations').paasConnectivity.scenario, 'Custom'), steps('operations').backupNetworking.backupPublicNetworkAccess, if(and(equals(steps('operations').paasConnectivity.scenario, 'Restricted'), equals(steps('operations').backupNetworking.backupConnectivity, 'Public')), 'Enabled', 'Disabled')), \"privateEndpoint\": if(equals(steps('operations').paasConnectivity.scenario, 'Custom'), steps('operations').backupNetworking.backupPrivateEndpoint, if(equals(steps('operations').paasConnectivity.scenario, 'Restricted'), equals(steps('operations').backupNetworking.backupConnectivity, 'Private'), true))})), parse('{}'))}))]",
+        "privateEndpointSubnetResourceIds": "[first(map(parse('[0]'), (_) => {\"sharedResources\": if(empty(if(or(and(or(steps('operations').resources.deploySecretsKeyVault, steps('operations').resources.deployEncryptionKeyVault), if(equals(steps('operations').paasConnectivity.scenario, 'Custom'), steps('operations').keyVaultPrivateNetworking.keyVaultPrivateEndpoint, equals(steps('operations').paasConnectivity.scenario, 'Private'))), and(steps('operations').resources.deployFSLogixBackupVault, if(equals(steps('operations').paasConnectivity.scenario, 'Custom'), steps('operations').backupNetworking.backupPrivateEndpoint, if(equals(steps('operations').paasConnectivity.scenario, 'Restricted'), equals(steps('operations').backupNetworking.backupConnectivity, 'Private'), true))), and(steps('avdControlPlane').sharedWorkspace.manageWorkspace, steps('avdControlPlane').workspaceFeedEndpoint.manageFeedEndpoint), steps('avdControlPlane').globalFeed.manageGlobalWorkspace), steps('privateNetworking').privateEndpointSubnets.subnet.id, '')), '', if(or(and(or(steps('operations').resources.deploySecretsKeyVault, steps('operations').resources.deployEncryptionKeyVault), if(equals(steps('operations').paasConnectivity.scenario, 'Custom'), steps('operations').keyVaultPrivateNetworking.keyVaultPrivateEndpoint, equals(steps('operations').paasConnectivity.scenario, 'Private'))), and(steps('operations').resources.deployFSLogixBackupVault, if(equals(steps('operations').paasConnectivity.scenario, 'Custom'), steps('operations').backupNetworking.backupPrivateEndpoint, if(equals(steps('operations').paasConnectivity.scenario, 'Restricted'), equals(steps('operations').backupNetworking.backupConnectivity, 'Private'), true))), and(steps('avdControlPlane').sharedWorkspace.manageWorkspace, steps('avdControlPlane').workspaceFeedEndpoint.manageFeedEndpoint), steps('avdControlPlane').globalFeed.manageGlobalWorkspace), steps('privateNetworking').privateEndpointSubnets.subnet.id, ''))}))]",
+        "privateDnsZoneResourceIds": "[first(map(parse('[0]'), (_) => {\"vault\": if(empty(if(and(or(steps('operations').resources.deploySecretsKeyVault, steps('operations').resources.deployEncryptionKeyVault), and(if(equals(steps('operations').paasConnectivity.scenario, 'Custom'), steps('operations').keyVaultPrivateNetworking.keyVaultPrivateEndpoint, equals(steps('operations').paasConnectivity.scenario, 'Private')), steps('operations').keyVaultPrivateNetworking.enablePrivateDNSIntegration)), steps('operations').keyVaultPrivateNetworking.vaultPrivateDnsZone, '')), '', if(and(or(steps('operations').resources.deploySecretsKeyVault, steps('operations').resources.deployEncryptionKeyVault), and(if(equals(steps('operations').paasConnectivity.scenario, 'Custom'), steps('operations').keyVaultPrivateNetworking.keyVaultPrivateEndpoint, equals(steps('operations').paasConnectivity.scenario, 'Private')), steps('operations').keyVaultPrivateNetworking.enablePrivateDNSIntegration)), steps('operations').keyVaultPrivateNetworking.vaultPrivateDnsZone, '')), \"backup\": if(empty(if(and(steps('operations').resources.deployFSLogixBackupVault, if(equals(steps('operations').paasConnectivity.scenario, 'Custom'), steps('operations').backupNetworking.backupPrivateEndpoint, if(equals(steps('operations').paasConnectivity.scenario, 'Restricted'), equals(steps('operations').backupNetworking.backupConnectivity, 'Private'), true)), steps('operations').privateDnsSection.enablePrivateDNSIntegration), steps('operations').privateDnsSection.backupPrivateDnsZone, '')), '', if(and(steps('operations').resources.deployFSLogixBackupVault, if(equals(steps('operations').paasConnectivity.scenario, 'Custom'), steps('operations').backupNetworking.backupPrivateEndpoint, if(equals(steps('operations').paasConnectivity.scenario, 'Restricted'), equals(steps('operations').backupNetworking.backupConnectivity, 'Private'), true)), steps('operations').privateDnsSection.enablePrivateDNSIntegration), steps('operations').privateDnsSection.backupPrivateDnsZone, '')), \"blob\": if(empty(if(and(steps('operations').resources.deployFSLogixBackupVault, if(equals(steps('operations').paasConnectivity.scenario, 'Custom'), steps('operations').backupNetworking.backupPrivateEndpoint, if(equals(steps('operations').paasConnectivity.scenario, 'Restricted'), equals(steps('operations').backupNetworking.backupConnectivity, 'Private'), true)), steps('operations').privateDnsSection.enablePrivateDNSIntegration), steps('operations').privateDnsSection.blobPrivateDnsZone, '')), '', if(and(steps('operations').resources.deployFSLogixBackupVault, if(equals(steps('operations').paasConnectivity.scenario, 'Custom'), steps('operations').backupNetworking.backupPrivateEndpoint, if(equals(steps('operations').paasConnectivity.scenario, 'Restricted'), equals(steps('operations').backupNetworking.backupConnectivity, 'Private'), true)), steps('operations').privateDnsSection.enablePrivateDNSIntegration), steps('operations').privateDnsSection.blobPrivateDnsZone, '')), \"queue\": if(empty(if(and(steps('operations').resources.deployFSLogixBackupVault, if(equals(steps('operations').paasConnectivity.scenario, 'Custom'), steps('operations').backupNetworking.backupPrivateEndpoint, if(equals(steps('operations').paasConnectivity.scenario, 'Restricted'), equals(steps('operations').backupNetworking.backupConnectivity, 'Private'), true)), steps('operations').privateDnsSection.enablePrivateDNSIntegration), steps('operations').privateDnsSection.queuePrivateDnsZone, '')), '', if(and(steps('operations').resources.deployFSLogixBackupVault, if(equals(steps('operations').paasConnectivity.scenario, 'Custom'), steps('operations').backupNetworking.backupPrivateEndpoint, if(equals(steps('operations').paasConnectivity.scenario, 'Restricted'), equals(steps('operations').backupNetworking.backupConnectivity, 'Private'), true)), steps('operations').privateDnsSection.enablePrivateDNSIntegration), steps('operations').privateDnsSection.queuePrivateDnsZone, '')), \"avdFeed\": if(steps('avdControlPlane').sharedWorkspace.manageWorkspace, if(empty(if(and(steps('avdControlPlane').privateDns.enablePrivateDNSIntegration, steps('avdControlPlane').workspaceFeedEndpoint.manageFeedEndpoint), steps('avdControlPlane').privateDns.feedPrivateDnsZone.id, '')), '', if(and(steps('avdControlPlane').privateDns.enablePrivateDNSIntegration, steps('avdControlPlane').workspaceFeedEndpoint.manageFeedEndpoint), steps('avdControlPlane').privateDns.feedPrivateDnsZone.id, '')), ''), \"avdGlobalFeed\": if(empty(if(and(steps('avdControlPlane').privateDns.enablePrivateDNSIntegration, steps('avdControlPlane').globalFeed.manageGlobalWorkspace), if(steps('avdControlPlane').privateDns.reuseFeedPrivateDnsZoneForGlobalFeed, steps('avdControlPlane').privateDns.feedPrivateDnsZone.id, steps('avdControlPlane').privateDns.globalPrivateDnsZone.id), '')), '', if(and(steps('avdControlPlane').privateDns.enablePrivateDNSIntegration, steps('avdControlPlane').globalFeed.manageGlobalWorkspace), if(steps('avdControlPlane').privateDns.reuseFeedPrivateDnsZoneForGlobalFeed, steps('avdControlPlane').privateDns.feedPrivateDnsZone.id, steps('avdControlPlane').privateDns.globalPrivateDnsZone.id), ''))}))]"
       }
     }
   }

@@ -794,43 +794,39 @@
             {
               "name": "networkSettings",
               "type": "Microsoft.Common.Section",
-              "label": "Network Settings",
+              "label": "Function App: Outbound VNet integration",
               "elements": [
                 {
-                  "name": "overview",
-                  "type": "Microsoft.Common.TextBlock",
-                  "options": {
-                    "text": "The network settings defined here are used to configure the remainder of the service or private endpoint configurations if selected. All endpoints will be deployed to the virtual machine subnet picked in the previous step."
-                  }
-                },
-                {
-                  "name": "networkAccess",
+                  "name": "enableVnetIntegration",
                   "type": "Microsoft.Common.OptionsGroup",
-                  "label": "Network access",
-                  "defaultValue": "Disable public access and use private access",
+                  "label": "Enable outbound VNet integration",
+                  "defaultValue": "Yes",
                   "constraints": {
                     "required": true,
                     "allowedValues": [
                       {
-                        "label": "Disable public access and use private access",
-                        "value": "private"
+                        "label": "Yes",
+                        "value": true
                       },
                       {
-                        "label": "Enable public access from selected virtual networks and IP addresses",
-                        "value": "service"
-                      },
-                      {
-                        "label": "Enable public access from all networks",
-                        "value": "public"
+                        "label": "No",
+                        "value": false
                       }
                     ]
+                  }
+                },
+                {
+                  "name": "overview",
+                  "type": "Microsoft.Common.TextBlock",
+                  "options": {
+                    "text": "Outbound VNet integration lets the Function reach private resources or use service endpoints from its delegated subnet. It is independent of inbound access, private endpoint deployment, and runtime Storage firewall rules."
                   }
                 },
                 {
                   "name": "virtualNetwork",
                   "type": "Microsoft.Solutions.ResourceSelector",
                   "label": "Virtual Network",
-                  "visible": "[not(equals(steps('functionApp').networkSettings.networkAccess, 'public'))]",
+                  "visible": "[steps('functionApp').networkSettings.enableVnetIntegration]",
                   "resourceType": "Microsoft.Network/virtualNetworks",
                   "scope": {
                     "location": "[steps('basics').scope.location.name]",
@@ -843,7 +839,7 @@
                 {
                   "name": "subnetsApi",
                   "type": "Microsoft.Solutions.ArmApiControl",
-                  "condition": "[not(equals(steps('functionApp').networkSettings.networkAccess, 'public'))]",
+                  "condition": "[and(steps('functionApp').networkSettings.enableVnetIntegration, not(empty(steps('functionApp').networkSettings.virtualNetwork.id)))]",
                   "request": {
                     "method": "GET",
                     "path": "[concat(steps('functionApp').networkSettings.virtualNetwork.id, '/subnets?api-version=2022-05-01')]"
@@ -852,7 +848,7 @@
                 {
                   "name": "delegatedSubnet",
                   "type": "Microsoft.Common.DropDown",
-                  "visible": "[not(equals(steps('functionApp').networkSettings.networkAccess, 'public'))]",
+                  "visible": "[steps('functionApp').networkSettings.enableVnetIntegration]",
                   "label": "Delegated Subnet (Function App Outbound)",
                   "defaultValue": "",
                   "toolTip": "Select an existing delegated subnet for the outbound connectivity on the function app.",
@@ -860,70 +856,6 @@
                     "required": true,
                     "allowedValues": "[map(filter(steps('functionApp').networkSettings.subnetsApi.value, (item) => not(empty(filter(if(empty(item.properties.delegations), parse('[]'), item.properties.delegations), (delegation) => equals(toLower(delegation.properties.serviceName), 'microsoft.web/serverfarms'))))), (item) => parse(concat('{\"label\":\"', item.name, '\",\"value\":\"', item.id, '\"}')))]"
                   }
-                }
-              ]
-            },
-            {
-              "name": "privateDnsZones",
-              "type": "Microsoft.Common.Section",
-              "label": "Private DNS Zones",
-              "visible": "[equals(steps('functionApp').networkSettings.networkAccess, 'private')]",
-              "elements": [
-                {
-                  "name": "subscription",
-                  "type": "Microsoft.Common.SubscriptionSelector",
-                  "resourceProviders": [
-                    "Microsoft.Network"
-                  ],
-                  "visible": "[equals(steps('functionApp').networkSettings.networkAccess, 'private')]"
-                },
-                {
-                  "name": "privateDnsZonesApi",
-                  "type": "Microsoft.Solutions.ArmApiControl",
-                  "condition": "[equals(steps('functionApp').networkSettings.networkAccess, 'private')]",
-                  "request": {
-                    "method": "GET",
-                    "path": "[concat('/subscriptions/', steps('functionApp').privateDnsZones.subscription.subscriptionId, '/providers/Microsoft.Network/privateDnsZones?api-version=2018-09-01')]"
-                  }
-                },
-                {
-                  "name": "azureBlobs",
-                  "type": "Microsoft.Common.DropDown",
-                  "label": "Azure blobs",
-                  "toolTip": "Select the private DNS zone for Azure Blobs.",
-                  "multiLine": true,
-                  "defaultValue": "[first(map(filter(steps('functionApp').privateDnsZones.privateDnsZonesApi.value, (item) => contains(item.name, 'blob')), (item) => item.name))]",
-                  "constraints": {
-                    "allowedValues": "[map(filter(steps('functionApp').privateDnsZones.privateDnsZonesApi.value, (item) => contains(item.name, 'blob')), (item) => parse(concat('{\"label\":\"', item.name, '\",\"description\":\"', first(skip(split(item.id, '/'), 4)), '\",\"value\":\"', item.id, '\"}')))]",
-                    "required": "[equals(steps('functionApp').networkSettings.networkAccess, 'private')]"
-                  },
-                  "visible": "[equals(steps('functionApp').networkSettings.networkAccess, 'private')]"
-                },
-                {
-                  "name": "azureFunctions",
-                  "type": "Microsoft.Common.DropDown",
-                  "label": "Azure functions",
-                  "toolTip": "Select the private DNS zone for Azure Functions.",
-                  "multiLine": true,
-                  "defaultValue": "[first(map(filter(steps('functionApp').privateDnsZones.privateDnsZonesApi.value, (item) => contains(item.name, 'azurewebsites')), (item) => item.name))]",
-                  "constraints": {
-                    "allowedValues": "[map(filter(steps('functionApp').privateDnsZones.privateDnsZonesApi.value, (item) => contains(item.name, 'azurewebsites')), (item) => parse(concat('{\"label\":\"', item.name, '\",\"description\":\"', first(skip(split(item.id, '/'), 4)), '\",\"value\":\"', item.id, '\"}')))]",
-                    "required": "[equals(steps('functionApp').networkSettings.networkAccess, 'private')]"
-                  },
-                  "visible": "[equals(steps('functionApp').networkSettings.networkAccess, 'private')]"
-                },
-                {
-                  "name": "keyVault",
-                  "type": "Microsoft.Common.DropDown",
-                  "label": "Key vault",
-                  "toolTip": "Select the private DNS zone for the key vault.",
-                  "multiLine": true,
-                  "defaultValue": "[first(map(filter(steps('functionApp').privateDnsZones.privateDnsZonesApi.value, (item) => contains(item.name, 'vault')), (item) => item.name))]",
-                  "constraints": {
-                    "allowedValues": "[map(filter(steps('functionApp').privateDnsZones.privateDnsZonesApi.value, (item) => contains(item.name, 'vault')), (item) => parse(concat('{\"label\":\"', item.name, '\",\"description\":\"', first(skip(split(item.id, '/'), 4)), '\",\"value\":\"', item.id, '\"}')))]",
-                    "required": "[equals(steps('functionApp').networkSettings.networkAccess, 'private')]"
-                  },
-                  "visible": "[equals(steps('functionApp').networkSettings.networkAccess, 'private')]"
                 }
               ]
             },
@@ -966,10 +898,874 @@
                   "type": "Microsoft.Solutions.ResourceSelector",
                   "label": "Azure Monitor Private Link Scope",
                   "resourceType": "Microsoft.Insights/privateLinkScopes",
-                  "visible": "[and(equals(steps('functionApp').monitoring.enableMonitoring, 'enabled'), equals(steps('functionApp').networkSettings.networkAccess, 'private'))]",
+                  "visible": "[and(equals(steps('functionApp').monitoring.enableMonitoring, 'enabled'), steps('functionApp').networkSettings.enableVnetIntegration)]",
                   "constraints": {
                     "required": true
                   }
+                }
+              ]
+            },
+            {
+              "name": "serviceEndpointVirtualNetworksApi",
+              "type": "Microsoft.Solutions.ArmApiControl",
+              "condition": "[not(empty(steps('basics').scope.subscription.id))]",
+              "request": {
+                "method": "GET",
+                "path": "[if(empty(steps('basics').scope.subscription.id), '', concat(steps('basics').scope.subscription.id, '/providers/Microsoft.Network/virtualNetworks?api-version=2022-11-01'))]",
+                "transforms": {
+                  "loaded": "`true`",
+                  "vnets": "value",
+                  "subnets": "value[].properties.subnets[]",
+                  "nextLink": "nextLink"
+                }
+              }
+            },
+            {
+              "name": "storagePrivateNetworking",
+              "type": "Microsoft.Common.Section",
+              "label": "Storage networking: Private endpoints",
+              "visible": "[true]",
+              "elements": [
+                {
+                  "name": "privateEndpointInfo",
+                  "type": "Microsoft.Common.InfoBox",
+                  "options": {
+                    "style": "Info",
+                    "text": "Applies to all Storage accounts created by this deployment. Existing or consumed accounts are not reconfigured. Private endpoints and public endpoint access are independent. Configure DNS for the intended client path; public firewall rules do not restrict Private Link traffic."
+                  }
+                },
+                {
+                  "name": "storagePrivateEndpoint",
+                  "type": "Microsoft.Common.OptionsGroup",
+                  "label": "Deploy Storage private endpoints",
+                  "defaultValue": "Yes",
+                  "constraints": {
+                    "required": true,
+                    "allowedValues": [
+                      {
+                        "label": "Yes",
+                        "value": true
+                      },
+                      {
+                        "label": "No",
+                        "value": false
+                      }
+                    ]
+                  }
+                },
+                {
+                  "name": "privateEndpointVirtualNetwork",
+                  "type": "Microsoft.Common.DropDown",
+                  "label": "Private endpoint virtual network",
+                  "defaultValue": "",
+                  "multiLine": true,
+                  "visible": "[steps('functionApp').storagePrivateNetworking.storagePrivateEndpoint]",
+                  "constraints": {
+                    "required": true,
+                    "allowedValues": "[if(not(equals(steps('functionApp').serviceEndpointVirtualNetworksApi.transformed.loaded, true)), parse('[{\"label\":\"Loading VNet inventory\",\"value\":\"\"}]'), if(empty(filter(steps('functionApp').serviceEndpointVirtualNetworksApi.transformed.vnets, (vnet) => equals(vnet.location, steps('basics').scope.location.name))), parse('[{\"label\":\"No regional VNets found\",\"value\":\"\"}]'), map(filter(steps('functionApp').serviceEndpointVirtualNetworksApi.transformed.vnets, (vnet) => equals(vnet.location, steps('basics').scope.location.name)), (vnet) => parse(concat('{\"label\":\"', vnet.name, '\",\"description\":\"Resource group: ', first(skip(split(vnet.id, '/'), 4)), '\",\"value\":{\"id\":\"', vnet.id, '\"}}')))))]"
+                  }
+                },
+                {
+                  "name": "privateEndpointSubnetsApi",
+                  "type": "Microsoft.Solutions.ArmApiControl",
+                  "condition": "[and(true, steps('functionApp').storagePrivateNetworking.storagePrivateEndpoint, not(empty(steps('functionApp').storagePrivateNetworking.privateEndpointVirtualNetwork.id)))]",
+                  "request": {
+                    "method": "GET",
+                    "path": "[concat(steps('functionApp').storagePrivateNetworking.privateEndpointVirtualNetwork.id, '/subnets?api-version=2022-05-01')]"
+                  }
+                },
+                {
+                  "name": "privateEndpointSubnet",
+                  "type": "Microsoft.Common.DropDown",
+                  "label": "Private endpoint subnet",
+                  "defaultValue": "",
+                  "visible": "[steps('functionApp').storagePrivateNetworking.storagePrivateEndpoint]",
+                  "toolTip": "Choose an existing nondelegated subnet. Function outbound integration requires a separate delegated subnet.",
+                  "constraints": {
+                    "required": true,
+                    "allowedValues": "[if(empty(steps('functionApp').storagePrivateNetworking.privateEndpointSubnetsApi.value), parse('[{\"label\":\"Select a VNet or check subnet read permissions\",\"value\":\"\"}]'), if(empty(filter(steps('functionApp').storagePrivateNetworking.privateEndpointSubnetsApi.value, (snet) => empty(snet.properties.delegations))), parse('[{\"label\":\"No nondelegated subnets found\",\"value\":\"\"}]'), map(filter(steps('functionApp').storagePrivateNetworking.privateEndpointSubnetsApi.value, (snet) => empty(snet.properties.delegations)), (snet) => parse(concat('{\"label\":\"', snet.name, '\",\"value\":{\"id\":\"', snet.id, '\"}}')))))]"
+                  }
+                },
+                {
+                  "name": "enablePrivateDNSIntegration",
+                  "type": "Microsoft.Common.OptionsGroup",
+                  "label": "Integrate with Azure Private DNS",
+                  "defaultValue": "Yes",
+                  "constraints": {
+                    "required": true,
+                    "allowedValues": [
+                      {
+                        "label": "Yes",
+                        "value": true
+                      },
+                      {
+                        "label": "No",
+                        "value": false
+                      }
+                    ]
+                  },
+                  "visible": "[steps('functionApp').storagePrivateNetworking.storagePrivateEndpoint]"
+                },
+                {
+                  "name": "externalDnsInfo",
+                  "type": "Microsoft.Common.InfoBox",
+                  "options": {
+                    "style": "Warning",
+                    "text": "If Azure Private DNS integration is disabled, provide DNS records through your approved DNS or policy process. Private endpoints alone do not configure client name resolution."
+                  },
+                  "visible": "[and(steps('functionApp').storagePrivateNetworking.storagePrivateEndpoint, not(steps('functionApp').storagePrivateNetworking.enablePrivateDNSIntegration))]"
+                },
+                {
+                  "name": "privateDnsSubscription",
+                  "type": "Microsoft.Common.SubscriptionSelector",
+                  "resourceProviders": [
+                    "Microsoft.Network"
+                  ],
+                  "visible": "[and(steps('functionApp').storagePrivateNetworking.storagePrivateEndpoint, steps('functionApp').storagePrivateNetworking.enablePrivateDNSIntegration)]"
+                },
+                {
+                  "name": "privateDnsZonesApi",
+                  "type": "Microsoft.Solutions.ArmApiControl",
+                  "condition": "[and(true, steps('functionApp').storagePrivateNetworking.storagePrivateEndpoint, steps('functionApp').storagePrivateNetworking.enablePrivateDNSIntegration, not(empty(steps('functionApp').storagePrivateNetworking.privateDnsSubscription.subscriptionId)))]",
+                  "request": {
+                    "method": "GET",
+                    "path": "[concat('/subscriptions/', steps('functionApp').storagePrivateNetworking.privateDnsSubscription.subscriptionId, '/providers/Microsoft.Network/privateDnsZones?api-version=2018-09-01')]"
+                  }
+                },
+                {
+                  "name": "blobPrivateDnsZone",
+                  "type": "Microsoft.Common.DropDown",
+                  "filter": true,
+                  "label": "Blob private DNS zone",
+                  "defaultValue": "[if(empty(steps('functionApp').storagePrivateNetworking.privateDnsZonesApi.value), 'Select a DNS subscription or check zone availability', if(empty(filter(steps('functionApp').storagePrivateNetworking.privateDnsZonesApi.value, (zone) => contains(zone.name, 'privatelink.blob.'))), 'Select a DNS subscription or check zone availability', first(map(filter(steps('functionApp').storagePrivateNetworking.privateDnsZonesApi.value, (zone) => contains(zone.name, 'privatelink.blob.')), (zone) => zone.name))))]",
+                  "multiLine": true,
+                  "visible": "[and(steps('functionApp').storagePrivateNetworking.storagePrivateEndpoint, steps('functionApp').storagePrivateNetworking.enablePrivateDNSIntegration)]",
+                  "constraints": {
+                    "required": true,
+                    "allowedValues": "[if(empty(steps('functionApp').storagePrivateNetworking.privateDnsZonesApi.value), parse('[{\"label\":\"Select a DNS subscription or check zone availability\",\"value\":\"\"}]'), if(empty(filter(steps('functionApp').storagePrivateNetworking.privateDnsZonesApi.value, (zone) => contains(zone.name, 'privatelink.blob.'))), parse('[{\"label\":\"Select a DNS subscription or check zone availability\",\"value\":\"\"}]'), map(filter(steps('functionApp').storagePrivateNetworking.privateDnsZonesApi.value, (zone) => contains(zone.name, 'privatelink.blob.')), (zone) => parse(concat('{\"label\":\"', zone.name, '\",\"description\":\"Resource group: ', first(skip(split(zone.id, '/'), 4)), '\",\"value\":\"', zone.id, '\"}')))))]"
+                  }
+                }
+              ]
+            },
+            {
+              "name": "storagePublicNetworking",
+              "type": "Microsoft.Common.Section",
+              "label": "Storage networking: Public endpoint access",
+              "visible": "[true]",
+              "elements": [
+                {
+                  "name": "storagePublicNetworkAccess",
+                  "type": "Microsoft.Common.DropDown",
+                  "label": "Public network access",
+                  "defaultValue": "Disabled",
+                  "toolTip": "Applies to all Storage accounts created by this deployment. Existing or consumed accounts are not reconfigured.",
+                  "constraints": {
+                    "required": true,
+                    "allowedValues": [
+                      {
+                        "label": "Disabled",
+                        "value": "Disabled"
+                      },
+                      {
+                        "label": "Enabled with restrictions",
+                        "value": "EnabledWithRestrictions"
+                      },
+                      {
+                        "label": "Enabled",
+                        "value": "Enabled"
+                      }
+                    ]
+                  }
+                },
+                {
+                  "name": "publicAccessDisabledInfo",
+                  "type": "Microsoft.Common.TextBlock",
+                  "visible": "[equals(steps('functionApp').storagePublicNetworking.storagePublicNetworkAccess, 'Disabled')]",
+                  "options": {
+                    "text": "Public network access is disabled. Ensure private connectivity is available. Existing trusted-service exceptions may still apply."
+                  }
+                },
+                {
+                  "name": "publicAccessEnabledWithRestrictionsInfo",
+                  "type": "Microsoft.Common.TextBlock",
+                  "visible": "[equals(steps('functionApp').storagePublicNetworking.storagePublicNetworkAccess, 'EnabledWithRestrictions')]",
+                  "options": {
+                    "text": "Allow IP addresses, service-endpoint subnets, or both. Other public traffic is denied, subject to existing service exceptions."
+                  }
+                },
+                {
+                  "name": "publicAccessEnabledInfo",
+                  "type": "Microsoft.Common.TextBlock",
+                  "visible": "[equals(steps('functionApp').storagePublicNetworking.storagePublicNetworkAccess, 'Enabled')]",
+                  "options": {
+                    "text": "Public network access is unrestricted. Stored IP and subnet rules do not limit traffic. Authentication is still required."
+                  }
+                },
+                {
+                  "name": "noPrivateConnectivityWarning",
+                  "type": "Microsoft.Common.InfoBox",
+                  "options": {
+                    "style": "Warning",
+                    "text": "Public access is disabled and this deployment is not creating private endpoints for this service. Provide an existing approved connectivity path before deploying."
+                  },
+                  "visible": "[and(equals(steps('functionApp').storagePublicNetworking.storagePublicNetworkAccess, 'Disabled'), not(steps('functionApp').storagePrivateNetworking.storagePrivateEndpoint))]"
+                }
+              ]
+            },
+            {
+              "name": "storageServiceEndpointAccess",
+              "type": "Microsoft.Common.Section",
+              "label": "Storage networking: Allowed public-endpoint sources",
+              "visible": "[and(true, equals(steps('functionApp').storagePublicNetworking.storagePublicNetworkAccess, 'EnabledWithRestrictions'))]",
+              "elements": [
+                {
+                  "name": "requirements",
+                  "type": "Microsoft.Common.InfoBox",
+                  "options": {
+                    "style": "Info",
+                    "text": "Applies to all Storage accounts created by this deployment. Existing or consumed accounts are not reconfigured. Allow IP addresses, service-endpoint subnets, or both. This deployment never enables endpoints on existing subnets. Service endpoints use the public service endpoint, not a private IP."
+                  }
+                },
+                {
+                  "name": "storagePermittedIPs",
+                  "type": "Microsoft.Common.EditableGrid",
+                  "label": "Permitted public IPv4 addresses or CIDR ranges",
+                  "ariaLabel": "Enter permitted public IPv4 addresses or CIDR ranges",
+                  "visible": "[equals(steps('functionApp').storagePublicNetworking.storagePublicNetworkAccess, 'EnabledWithRestrictions')]",
+                  "constraints": {
+                    "width": "Full",
+                    "rows": {
+                      "count": {
+                        "min": 0,
+                        "max": 100
+                      }
+                    },
+                    "columns": [
+                      {
+                        "id": "ipAddress",
+                        "header": "IPv4 address or CIDR",
+                        "width": "1fr",
+                        "element": {
+                          "type": "Microsoft.Common.TextBox",
+                          "placeholder": "203.0.113.10 or 203.0.113.0/24",
+                          "constraints": {
+                            "required": false,
+                            "regex": "^$|^(?:(?:25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])\\.){3}(?:25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])(?:/(?:[0-9]|[12][0-9]|3[0-2]))?$",
+                            "validationMessage": "Enter an IPv4 address or CIDR range with a prefix from 0 to 32."
+                          }
+                        }
+                      }
+                    ]
+                  }
+                },
+                {
+                  "name": "inventoryStatus",
+                  "type": "Microsoft.Common.InfoBox",
+                  "options": {
+                    "style": "Info",
+                    "text": "The subnet inventory has not loaded. If this persists, check the subscription and Microsoft.Network read permissions."
+                  },
+                  "visible": "[not(equals(steps('functionApp').serviceEndpointVirtualNetworksApi.transformed.loaded, true))]"
+                },
+                {
+                  "name": "inventoryPageWarning",
+                  "type": "Microsoft.Common.InfoBox",
+                  "options": {
+                    "style": "Warning",
+                    "text": "The VNet API returned a partial inventory. Use a parameter-file deployment for subnets on later pages."
+                  },
+                  "visible": "[not(empty(steps('functionApp').serviceEndpointVirtualNetworksApi.transformed.nextLink))]"
+                },
+                {
+                  "name": "storageServiceEndpointSubnets",
+                  "type": "Microsoft.Common.DropDown",
+                  "label": "Storage access subnets",
+                  "multiselect": true,
+                  "selectAll": false,
+                  "filter": true,
+                  "multiLine": true,
+                  "defaultValue": "[parse('[]')]",
+                  "toolTip": "Requires existing Microsoft.Storage in the storage region, or Microsoft.Storage.Global for cross-region access where supported. Applies only to storage accounts created by this deployment; existing topology ACLs remain additive. Select the Function outbound subnet here when it needs access to the Function's own storage; this does not update consumed profile-share ACLs.",
+                  "visible": "[and(true, equals(steps('functionApp').storagePublicNetworking.storagePublicNetworkAccess, 'EnabledWithRestrictions'))]",
+                  "constraints": {
+                    "required": false,
+                    "allowedValues": "[if(not(equals(steps('functionApp').serviceEndpointVirtualNetworksApi.transformed.loaded, true)), parse('[{\"label\":\"Loading subnet inventory\",\"value\":\"\"}]'), if(or(empty(steps('functionApp').serviceEndpointVirtualNetworksApi.transformed.vnets), empty(steps('functionApp').serviceEndpointVirtualNetworksApi.transformed.subnets)), parse('[{\"label\":\"No eligible subnets found\",\"value\":\"\"}]'), if(empty(filter(steps('functionApp').serviceEndpointVirtualNetworksApi.transformed.subnets, (snet) => if(empty(snet.properties.serviceEndpoints), false, or(not(empty(filter(snet.properties.serviceEndpoints, (se) => equals(se.service, 'Microsoft.Storage.Global')))), and(not(empty(filter(snet.properties.serviceEndpoints, (se) => equals(se.service, 'Microsoft.Storage')))), contains(map(filter(steps('functionApp').serviceEndpointVirtualNetworksApi.transformed.vnets, (vnet) => equals(vnet.location, steps('basics').scope.location.name)), (vnet) => vnet.id), first(split(snet.id, '/subnets/')))))))), parse('[{\"label\":\"No eligible subnets found\",\"value\":\"\"}]'), map(filter(steps('functionApp').serviceEndpointVirtualNetworksApi.transformed.subnets, (snet) => if(empty(snet.properties.serviceEndpoints), false, or(not(empty(filter(snet.properties.serviceEndpoints, (se) => equals(se.service, 'Microsoft.Storage.Global')))), and(not(empty(filter(snet.properties.serviceEndpoints, (se) => equals(se.service, 'Microsoft.Storage')))), contains(map(filter(steps('functionApp').serviceEndpointVirtualNetworksApi.transformed.vnets, (vnet) => equals(vnet.location, steps('basics').scope.location.name)), (vnet) => vnet.id), first(split(snet.id, '/subnets/'))))))), (snet) => parse(concat('{\"label\":\"', first(skip(split(snet.id, '/'), 8)), ' | ', snet.name, '\",\"description\":\"Resource Group: ', first(skip(split(snet.id, '/'), 4)), '\",\"value\":\"', snet.id, '\"}'))))))]"
+                  }
+                },
+                {
+                  "name": "emptyAllowlistWarning",
+                  "type": "Microsoft.Common.InfoBox",
+                  "options": {
+                    "style": "Warning",
+                    "text": "No ordinary public sources are allowed. Private endpoints still work if reachable; existing service exceptions may apply. Add IP or subnet rules if clients need the public path."
+                  },
+                  "visible": "[and(empty(steps('functionApp').storageServiceEndpointAccess.storagePermittedIPs), empty(if(empty(steps('functionApp').storageServiceEndpointAccess.storageServiceEndpointSubnets), parse('[]'), filter(steps('functionApp').storageServiceEndpointAccess.storageServiceEndpointSubnets, (id) => not(empty(id))))))]"
+                }
+              ]
+            },
+            {
+              "name": "keyVaultPrivateNetworking",
+              "type": "Microsoft.Common.Section",
+              "label": "Key Vault networking: Private endpoints",
+              "visible": "[true]",
+              "elements": [
+                {
+                  "name": "privateEndpointInfo",
+                  "type": "Microsoft.Common.InfoBox",
+                  "options": {
+                    "style": "Info",
+                    "text": "Applies to all credentials and encryption Key Vaults created by this deployment. Existing vaults are not reconfigured. Private endpoints and public endpoint access are independent. Configure DNS for the intended client path; public firewall rules do not restrict Private Link traffic."
+                  }
+                },
+                {
+                  "name": "keyVaultPrivateEndpoint",
+                  "type": "Microsoft.Common.OptionsGroup",
+                  "label": "Deploy Key Vault private endpoints",
+                  "defaultValue": "Yes",
+                  "constraints": {
+                    "required": true,
+                    "allowedValues": [
+                      {
+                        "label": "Yes",
+                        "value": true
+                      },
+                      {
+                        "label": "No",
+                        "value": false
+                      }
+                    ]
+                  }
+                },
+                {
+                  "name": "privateEndpointVirtualNetwork",
+                  "type": "Microsoft.Common.DropDown",
+                  "label": "Private endpoint virtual network",
+                  "defaultValue": "",
+                  "multiLine": true,
+                  "visible": "[steps('functionApp').keyVaultPrivateNetworking.keyVaultPrivateEndpoint]",
+                  "constraints": {
+                    "required": true,
+                    "allowedValues": "[if(not(equals(steps('functionApp').serviceEndpointVirtualNetworksApi.transformed.loaded, true)), parse('[{\"label\":\"Loading VNet inventory\",\"value\":\"\"}]'), if(empty(filter(steps('functionApp').serviceEndpointVirtualNetworksApi.transformed.vnets, (vnet) => equals(vnet.location, steps('basics').scope.location.name))), parse('[{\"label\":\"No regional VNets found\",\"value\":\"\"}]'), map(filter(steps('functionApp').serviceEndpointVirtualNetworksApi.transformed.vnets, (vnet) => equals(vnet.location, steps('basics').scope.location.name)), (vnet) => parse(concat('{\"label\":\"', vnet.name, '\",\"description\":\"Resource group: ', first(skip(split(vnet.id, '/'), 4)), '\",\"value\":{\"id\":\"', vnet.id, '\"}}')))))]"
+                  }
+                },
+                {
+                  "name": "privateEndpointSubnetsApi",
+                  "type": "Microsoft.Solutions.ArmApiControl",
+                  "condition": "[and(true, steps('functionApp').keyVaultPrivateNetworking.keyVaultPrivateEndpoint, not(empty(steps('functionApp').keyVaultPrivateNetworking.privateEndpointVirtualNetwork.id)))]",
+                  "request": {
+                    "method": "GET",
+                    "path": "[concat(steps('functionApp').keyVaultPrivateNetworking.privateEndpointVirtualNetwork.id, '/subnets?api-version=2022-05-01')]"
+                  }
+                },
+                {
+                  "name": "privateEndpointSubnet",
+                  "type": "Microsoft.Common.DropDown",
+                  "label": "Private endpoint subnet",
+                  "defaultValue": "",
+                  "visible": "[steps('functionApp').keyVaultPrivateNetworking.keyVaultPrivateEndpoint]",
+                  "toolTip": "Choose an existing nondelegated subnet. Function outbound integration requires a separate delegated subnet.",
+                  "constraints": {
+                    "required": true,
+                    "allowedValues": "[if(empty(steps('functionApp').keyVaultPrivateNetworking.privateEndpointSubnetsApi.value), parse('[{\"label\":\"Select a VNet or check subnet read permissions\",\"value\":\"\"}]'), if(empty(filter(steps('functionApp').keyVaultPrivateNetworking.privateEndpointSubnetsApi.value, (snet) => empty(snet.properties.delegations))), parse('[{\"label\":\"No nondelegated subnets found\",\"value\":\"\"}]'), map(filter(steps('functionApp').keyVaultPrivateNetworking.privateEndpointSubnetsApi.value, (snet) => empty(snet.properties.delegations)), (snet) => parse(concat('{\"label\":\"', snet.name, '\",\"value\":{\"id\":\"', snet.id, '\"}}')))))]"
+                  }
+                },
+                {
+                  "name": "enablePrivateDNSIntegration",
+                  "type": "Microsoft.Common.OptionsGroup",
+                  "label": "Integrate with Azure Private DNS",
+                  "defaultValue": "Yes",
+                  "constraints": {
+                    "required": true,
+                    "allowedValues": [
+                      {
+                        "label": "Yes",
+                        "value": true
+                      },
+                      {
+                        "label": "No",
+                        "value": false
+                      }
+                    ]
+                  },
+                  "visible": "[steps('functionApp').keyVaultPrivateNetworking.keyVaultPrivateEndpoint]"
+                },
+                {
+                  "name": "externalDnsInfo",
+                  "type": "Microsoft.Common.InfoBox",
+                  "options": {
+                    "style": "Warning",
+                    "text": "If Azure Private DNS integration is disabled, provide DNS records through your approved DNS or policy process. Private endpoints alone do not configure client name resolution."
+                  },
+                  "visible": "[and(steps('functionApp').keyVaultPrivateNetworking.keyVaultPrivateEndpoint, not(steps('functionApp').keyVaultPrivateNetworking.enablePrivateDNSIntegration))]"
+                },
+                {
+                  "name": "privateDnsSubscription",
+                  "type": "Microsoft.Common.SubscriptionSelector",
+                  "resourceProviders": [
+                    "Microsoft.Network"
+                  ],
+                  "visible": "[and(steps('functionApp').keyVaultPrivateNetworking.keyVaultPrivateEndpoint, steps('functionApp').keyVaultPrivateNetworking.enablePrivateDNSIntegration)]"
+                },
+                {
+                  "name": "privateDnsZonesApi",
+                  "type": "Microsoft.Solutions.ArmApiControl",
+                  "condition": "[and(true, steps('functionApp').keyVaultPrivateNetworking.keyVaultPrivateEndpoint, steps('functionApp').keyVaultPrivateNetworking.enablePrivateDNSIntegration, not(empty(steps('functionApp').keyVaultPrivateNetworking.privateDnsSubscription.subscriptionId)))]",
+                  "request": {
+                    "method": "GET",
+                    "path": "[concat('/subscriptions/', steps('functionApp').keyVaultPrivateNetworking.privateDnsSubscription.subscriptionId, '/providers/Microsoft.Network/privateDnsZones?api-version=2018-09-01')]"
+                  }
+                },
+                {
+                  "name": "vaultPrivateDnsZone",
+                  "type": "Microsoft.Common.DropDown",
+                  "filter": true,
+                  "label": "Key Vault private DNS zone",
+                  "defaultValue": "[if(empty(steps('functionApp').keyVaultPrivateNetworking.privateDnsZonesApi.value), 'Select a DNS subscription or check zone availability', if(empty(filter(steps('functionApp').keyVaultPrivateNetworking.privateDnsZonesApi.value, (zone) => contains(zone.name, 'privatelink.vaultcore.'))), 'Select a DNS subscription or check zone availability', first(map(filter(steps('functionApp').keyVaultPrivateNetworking.privateDnsZonesApi.value, (zone) => contains(zone.name, 'privatelink.vaultcore.')), (zone) => zone.name))))]",
+                  "multiLine": true,
+                  "visible": "[and(steps('functionApp').keyVaultPrivateNetworking.keyVaultPrivateEndpoint, steps('functionApp').keyVaultPrivateNetworking.enablePrivateDNSIntegration)]",
+                  "constraints": {
+                    "required": true,
+                    "allowedValues": "[if(empty(steps('functionApp').keyVaultPrivateNetworking.privateDnsZonesApi.value), parse('[{\"label\":\"Select a DNS subscription or check zone availability\",\"value\":\"\"}]'), if(empty(filter(steps('functionApp').keyVaultPrivateNetworking.privateDnsZonesApi.value, (zone) => contains(zone.name, 'privatelink.vaultcore.'))), parse('[{\"label\":\"Select a DNS subscription or check zone availability\",\"value\":\"\"}]'), map(filter(steps('functionApp').keyVaultPrivateNetworking.privateDnsZonesApi.value, (zone) => contains(zone.name, 'privatelink.vaultcore.')), (zone) => parse(concat('{\"label\":\"', zone.name, '\",\"description\":\"Resource group: ', first(skip(split(zone.id, '/'), 4)), '\",\"value\":\"', zone.id, '\"}')))))]"
+                  }
+                }
+              ]
+            },
+            {
+              "name": "keyVaultPublicNetworking",
+              "type": "Microsoft.Common.Section",
+              "label": "Key Vault networking: Public endpoint access",
+              "visible": "[true]",
+              "elements": [
+                {
+                  "name": "keyVaultPublicNetworkAccess",
+                  "type": "Microsoft.Common.DropDown",
+                  "label": "Public network access",
+                  "defaultValue": "Disabled",
+                  "toolTip": "Applies to all credentials and encryption Key Vaults created by this deployment. Existing vaults are not reconfigured.",
+                  "constraints": {
+                    "required": true,
+                    "allowedValues": [
+                      {
+                        "label": "Disabled",
+                        "value": "Disabled"
+                      },
+                      {
+                        "label": "Enabled with restrictions",
+                        "value": "EnabledWithRestrictions"
+                      },
+                      {
+                        "label": "Enabled",
+                        "value": "Enabled"
+                      }
+                    ]
+                  }
+                },
+                {
+                  "name": "publicAccessDisabledInfo",
+                  "type": "Microsoft.Common.TextBlock",
+                  "visible": "[equals(steps('functionApp').keyVaultPublicNetworking.keyVaultPublicNetworkAccess, 'Disabled')]",
+                  "options": {
+                    "text": "Public network access is disabled. Ensure private connectivity is available. Existing trusted-service exceptions may still apply."
+                  }
+                },
+                {
+                  "name": "publicAccessEnabledWithRestrictionsInfo",
+                  "type": "Microsoft.Common.TextBlock",
+                  "visible": "[equals(steps('functionApp').keyVaultPublicNetworking.keyVaultPublicNetworkAccess, 'EnabledWithRestrictions')]",
+                  "options": {
+                    "text": "Allow IP addresses, service-endpoint subnets, or both. Other public traffic is denied, subject to existing service exceptions."
+                  }
+                },
+                {
+                  "name": "publicAccessEnabledInfo",
+                  "type": "Microsoft.Common.TextBlock",
+                  "visible": "[equals(steps('functionApp').keyVaultPublicNetworking.keyVaultPublicNetworkAccess, 'Enabled')]",
+                  "options": {
+                    "text": "Public network access is unrestricted. Stored IP and subnet rules do not limit traffic. Authentication is still required."
+                  }
+                },
+                {
+                  "name": "noPrivateConnectivityWarning",
+                  "type": "Microsoft.Common.InfoBox",
+                  "options": {
+                    "style": "Warning",
+                    "text": "Public access is disabled and this deployment is not creating private endpoints for this service. Provide an existing approved connectivity path before deploying."
+                  },
+                  "visible": "[and(equals(steps('functionApp').keyVaultPublicNetworking.keyVaultPublicNetworkAccess, 'Disabled'), not(steps('functionApp').keyVaultPrivateNetworking.keyVaultPrivateEndpoint))]"
+                }
+              ]
+            },
+            {
+              "name": "keyVaultServiceEndpointAccess",
+              "type": "Microsoft.Common.Section",
+              "label": "Key Vault networking: Allowed public-endpoint sources",
+              "visible": "[and(true, equals(steps('functionApp').keyVaultPublicNetworking.keyVaultPublicNetworkAccess, 'EnabledWithRestrictions'))]",
+              "elements": [
+                {
+                  "name": "requirements",
+                  "type": "Microsoft.Common.InfoBox",
+                  "options": {
+                    "style": "Info",
+                    "text": "Applies to all credentials and encryption Key Vaults created by this deployment. Existing vaults are not reconfigured. Allow IP addresses, service-endpoint subnets, or both. This deployment never enables endpoints on existing subnets. Service endpoints use the public service endpoint, not a private IP."
+                  }
+                },
+                {
+                  "name": "keyVaultPermittedIPs",
+                  "type": "Microsoft.Common.EditableGrid",
+                  "label": "Permitted public IPv4 addresses or CIDR ranges",
+                  "ariaLabel": "Enter permitted public IPv4 addresses or CIDR ranges",
+                  "visible": "[equals(steps('functionApp').keyVaultPublicNetworking.keyVaultPublicNetworkAccess, 'EnabledWithRestrictions')]",
+                  "constraints": {
+                    "width": "Full",
+                    "rows": {
+                      "count": {
+                        "min": 0,
+                        "max": 100
+                      }
+                    },
+                    "columns": [
+                      {
+                        "id": "ipAddress",
+                        "header": "IPv4 address or CIDR",
+                        "width": "1fr",
+                        "element": {
+                          "type": "Microsoft.Common.TextBox",
+                          "placeholder": "203.0.113.10 or 203.0.113.0/24",
+                          "constraints": {
+                            "required": false,
+                            "regex": "^$|^(?:(?:25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])\\.){3}(?:25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])(?:/(?:[0-9]|[12][0-9]|3[0-2]))?$",
+                            "validationMessage": "Enter an IPv4 address or CIDR range with a prefix from 0 to 32."
+                          }
+                        }
+                      }
+                    ]
+                  }
+                },
+                {
+                  "name": "inventoryStatus",
+                  "type": "Microsoft.Common.InfoBox",
+                  "options": {
+                    "style": "Info",
+                    "text": "The subnet inventory has not loaded. If this persists, check the subscription and Microsoft.Network read permissions."
+                  },
+                  "visible": "[not(equals(steps('functionApp').serviceEndpointVirtualNetworksApi.transformed.loaded, true))]"
+                },
+                {
+                  "name": "inventoryPageWarning",
+                  "type": "Microsoft.Common.InfoBox",
+                  "options": {
+                    "style": "Warning",
+                    "text": "The VNet API returned a partial inventory. Use a parameter-file deployment for subnets on later pages."
+                  },
+                  "visible": "[not(empty(steps('functionApp').serviceEndpointVirtualNetworksApi.transformed.nextLink))]"
+                },
+                {
+                  "name": "keyVaultServiceEndpointSubnets",
+                  "type": "Microsoft.Common.DropDown",
+                  "label": "Key Vault access subnets",
+                  "multiselect": true,
+                  "selectAll": false,
+                  "filter": true,
+                  "multiLine": true,
+                  "defaultValue": "[parse('[]')]",
+                  "toolTip": "Microsoft.KeyVault must already be enabled on every selected subnet. Applies only to Key Vaults created by this deployment, not adopted vaults.",
+                  "visible": "[and(true, equals(steps('functionApp').keyVaultPublicNetworking.keyVaultPublicNetworkAccess, 'EnabledWithRestrictions'))]",
+                  "constraints": {
+                    "required": false,
+                    "allowedValues": "[if(not(equals(steps('functionApp').serviceEndpointVirtualNetworksApi.transformed.loaded, true)), parse('[{\"label\":\"Loading subnet inventory\",\"value\":\"\"}]'), if(or(empty(steps('functionApp').serviceEndpointVirtualNetworksApi.transformed.vnets), empty(steps('functionApp').serviceEndpointVirtualNetworksApi.transformed.subnets)), parse('[{\"label\":\"No eligible subnets found\",\"value\":\"\"}]'), if(empty(filter(steps('functionApp').serviceEndpointVirtualNetworksApi.transformed.subnets, (snet) => if(empty(snet.properties.serviceEndpoints), false, not(empty(filter(snet.properties.serviceEndpoints, (se) => equals(se.service, 'Microsoft.KeyVault'))))))), parse('[{\"label\":\"No eligible subnets found\",\"value\":\"\"}]'), map(filter(steps('functionApp').serviceEndpointVirtualNetworksApi.transformed.subnets, (snet) => if(empty(snet.properties.serviceEndpoints), false, not(empty(filter(snet.properties.serviceEndpoints, (se) => equals(se.service, 'Microsoft.KeyVault')))))), (snet) => parse(concat('{\"label\":\"', first(skip(split(snet.id, '/'), 8)), ' | ', snet.name, '\",\"description\":\"Resource Group: ', first(skip(split(snet.id, '/'), 4)), '\",\"value\":\"', snet.id, '\"}'))))))]"
+                  }
+                },
+                {
+                  "name": "emptyAllowlistWarning",
+                  "type": "Microsoft.Common.InfoBox",
+                  "options": {
+                    "style": "Warning",
+                    "text": "No ordinary public sources are allowed. Private endpoints still work if reachable; existing service exceptions may apply. Add IP or subnet rules if clients need the public path."
+                  },
+                  "visible": "[and(empty(steps('functionApp').keyVaultServiceEndpointAccess.keyVaultPermittedIPs), empty(if(empty(steps('functionApp').keyVaultServiceEndpointAccess.keyVaultServiceEndpointSubnets), parse('[]'), filter(steps('functionApp').keyVaultServiceEndpointAccess.keyVaultServiceEndpointSubnets, (id) => not(empty(id))))))]"
+                }
+              ]
+            },
+            {
+              "name": "functionAppPrivateNetworking",
+              "type": "Microsoft.Common.Section",
+              "label": "Function App networking: Private endpoints",
+              "visible": "[true]",
+              "elements": [
+                {
+                  "name": "privateEndpointInfo",
+                  "type": "Microsoft.Common.InfoBox",
+                  "options": {
+                    "style": "Info",
+                    "text": "Applies to Function App inbound and SCM access. It does not configure outbound VNet integration or runtime Storage access. Private endpoints and public endpoint access are independent. Configure DNS for the intended client path; public firewall rules do not restrict Private Link traffic."
+                  }
+                },
+                {
+                  "name": "functionAppPrivateEndpoint",
+                  "type": "Microsoft.Common.OptionsGroup",
+                  "label": "Deploy Function App private endpoints",
+                  "defaultValue": "Yes",
+                  "constraints": {
+                    "required": true,
+                    "allowedValues": [
+                      {
+                        "label": "Yes",
+                        "value": true
+                      },
+                      {
+                        "label": "No",
+                        "value": false
+                      }
+                    ]
+                  }
+                },
+                {
+                  "name": "privateEndpointVirtualNetwork",
+                  "type": "Microsoft.Common.DropDown",
+                  "label": "Private endpoint virtual network",
+                  "defaultValue": "",
+                  "multiLine": true,
+                  "visible": "[steps('functionApp').functionAppPrivateNetworking.functionAppPrivateEndpoint]",
+                  "constraints": {
+                    "required": true,
+                    "allowedValues": "[if(not(equals(steps('functionApp').serviceEndpointVirtualNetworksApi.transformed.loaded, true)), parse('[{\"label\":\"Loading VNet inventory\",\"value\":\"\"}]'), if(empty(filter(steps('functionApp').serviceEndpointVirtualNetworksApi.transformed.vnets, (vnet) => equals(vnet.location, steps('basics').scope.location.name))), parse('[{\"label\":\"No regional VNets found\",\"value\":\"\"}]'), map(filter(steps('functionApp').serviceEndpointVirtualNetworksApi.transformed.vnets, (vnet) => equals(vnet.location, steps('basics').scope.location.name)), (vnet) => parse(concat('{\"label\":\"', vnet.name, '\",\"description\":\"Resource group: ', first(skip(split(vnet.id, '/'), 4)), '\",\"value\":{\"id\":\"', vnet.id, '\"}}')))))]"
+                  }
+                },
+                {
+                  "name": "privateEndpointSubnetsApi",
+                  "type": "Microsoft.Solutions.ArmApiControl",
+                  "condition": "[and(true, steps('functionApp').functionAppPrivateNetworking.functionAppPrivateEndpoint, not(empty(steps('functionApp').functionAppPrivateNetworking.privateEndpointVirtualNetwork.id)))]",
+                  "request": {
+                    "method": "GET",
+                    "path": "[concat(steps('functionApp').functionAppPrivateNetworking.privateEndpointVirtualNetwork.id, '/subnets?api-version=2022-05-01')]"
+                  }
+                },
+                {
+                  "name": "privateEndpointSubnet",
+                  "type": "Microsoft.Common.DropDown",
+                  "label": "Private endpoint subnet",
+                  "defaultValue": "",
+                  "visible": "[steps('functionApp').functionAppPrivateNetworking.functionAppPrivateEndpoint]",
+                  "toolTip": "Choose an existing nondelegated subnet. Function outbound integration requires a separate delegated subnet.",
+                  "constraints": {
+                    "required": true,
+                    "allowedValues": "[if(empty(steps('functionApp').functionAppPrivateNetworking.privateEndpointSubnetsApi.value), parse('[{\"label\":\"Select a VNet or check subnet read permissions\",\"value\":\"\"}]'), if(empty(filter(steps('functionApp').functionAppPrivateNetworking.privateEndpointSubnetsApi.value, (snet) => empty(snet.properties.delegations))), parse('[{\"label\":\"No nondelegated subnets found\",\"value\":\"\"}]'), map(filter(steps('functionApp').functionAppPrivateNetworking.privateEndpointSubnetsApi.value, (snet) => empty(snet.properties.delegations)), (snet) => parse(concat('{\"label\":\"', snet.name, '\",\"value\":{\"id\":\"', snet.id, '\"}}')))))]"
+                  }
+                },
+                {
+                  "name": "enablePrivateDNSIntegration",
+                  "type": "Microsoft.Common.OptionsGroup",
+                  "label": "Integrate with Azure Private DNS",
+                  "defaultValue": "Yes",
+                  "constraints": {
+                    "required": true,
+                    "allowedValues": [
+                      {
+                        "label": "Yes",
+                        "value": true
+                      },
+                      {
+                        "label": "No",
+                        "value": false
+                      }
+                    ]
+                  },
+                  "visible": "[steps('functionApp').functionAppPrivateNetworking.functionAppPrivateEndpoint]"
+                },
+                {
+                  "name": "externalDnsInfo",
+                  "type": "Microsoft.Common.InfoBox",
+                  "options": {
+                    "style": "Warning",
+                    "text": "If Azure Private DNS integration is disabled, provide DNS records through your approved DNS or policy process. Private endpoints alone do not configure client name resolution."
+                  },
+                  "visible": "[and(steps('functionApp').functionAppPrivateNetworking.functionAppPrivateEndpoint, not(steps('functionApp').functionAppPrivateNetworking.enablePrivateDNSIntegration))]"
+                },
+                {
+                  "name": "privateDnsSubscription",
+                  "type": "Microsoft.Common.SubscriptionSelector",
+                  "resourceProviders": [
+                    "Microsoft.Network"
+                  ],
+                  "visible": "[and(steps('functionApp').functionAppPrivateNetworking.functionAppPrivateEndpoint, steps('functionApp').functionAppPrivateNetworking.enablePrivateDNSIntegration)]"
+                },
+                {
+                  "name": "privateDnsZonesApi",
+                  "type": "Microsoft.Solutions.ArmApiControl",
+                  "condition": "[and(true, steps('functionApp').functionAppPrivateNetworking.functionAppPrivateEndpoint, steps('functionApp').functionAppPrivateNetworking.enablePrivateDNSIntegration, not(empty(steps('functionApp').functionAppPrivateNetworking.privateDnsSubscription.subscriptionId)))]",
+                  "request": {
+                    "method": "GET",
+                    "path": "[concat('/subscriptions/', steps('functionApp').functionAppPrivateNetworking.privateDnsSubscription.subscriptionId, '/providers/Microsoft.Network/privateDnsZones?api-version=2018-09-01')]"
+                  }
+                },
+                {
+                  "name": "websitesPrivateDnsZone",
+                  "type": "Microsoft.Common.DropDown",
+                  "filter": true,
+                  "label": "Function App private DNS zone",
+                  "defaultValue": "[if(empty(steps('functionApp').functionAppPrivateNetworking.privateDnsZonesApi.value), 'Select a DNS subscription or check zone availability', if(empty(filter(steps('functionApp').functionAppPrivateNetworking.privateDnsZonesApi.value, (zone) => contains(zone.name, 'privatelink.azurewebsites.'))), 'Select a DNS subscription or check zone availability', first(map(filter(steps('functionApp').functionAppPrivateNetworking.privateDnsZonesApi.value, (zone) => contains(zone.name, 'privatelink.azurewebsites.')), (zone) => zone.name))))]",
+                  "multiLine": true,
+                  "visible": "[and(steps('functionApp').functionAppPrivateNetworking.functionAppPrivateEndpoint, steps('functionApp').functionAppPrivateNetworking.enablePrivateDNSIntegration)]",
+                  "constraints": {
+                    "required": true,
+                    "allowedValues": "[if(empty(steps('functionApp').functionAppPrivateNetworking.privateDnsZonesApi.value), parse('[{\"label\":\"Select a DNS subscription or check zone availability\",\"value\":\"\"}]'), if(empty(filter(steps('functionApp').functionAppPrivateNetworking.privateDnsZonesApi.value, (zone) => contains(zone.name, 'privatelink.azurewebsites.'))), parse('[{\"label\":\"Select a DNS subscription or check zone availability\",\"value\":\"\"}]'), map(filter(steps('functionApp').functionAppPrivateNetworking.privateDnsZonesApi.value, (zone) => contains(zone.name, 'privatelink.azurewebsites.')), (zone) => parse(concat('{\"label\":\"', zone.name, '\",\"description\":\"Resource group: ', first(skip(split(zone.id, '/'), 4)), '\",\"value\":\"', zone.id, '\"}')))))]"
+                  }
+                }
+              ]
+            },
+            {
+              "name": "functionAppPublicNetworking",
+              "type": "Microsoft.Common.Section",
+              "label": "Function App networking: Public endpoint access",
+              "visible": "[true]",
+              "elements": [
+                {
+                  "name": "functionAppPublicNetworkAccess",
+                  "type": "Microsoft.Common.DropDown",
+                  "label": "Public network access",
+                  "defaultValue": "Disabled",
+                  "toolTip": "Applies to Function App inbound and SCM access. It does not configure outbound VNet integration or runtime Storage access.",
+                  "constraints": {
+                    "required": true,
+                    "allowedValues": [
+                      {
+                        "label": "Disabled",
+                        "value": "Disabled"
+                      },
+                      {
+                        "label": "Enabled with restrictions",
+                        "value": "EnabledWithRestrictions"
+                      },
+                      {
+                        "label": "Enabled",
+                        "value": "Enabled"
+                      }
+                    ]
+                  }
+                },
+                {
+                  "name": "publicAccessDisabledInfo",
+                  "type": "Microsoft.Common.TextBlock",
+                  "visible": "[equals(steps('functionApp').functionAppPublicNetworking.functionAppPublicNetworkAccess, 'Disabled')]",
+                  "options": {
+                    "text": "Public network access is disabled. Ensure private connectivity is available. Existing trusted-service exceptions may still apply."
+                  }
+                },
+                {
+                  "name": "publicAccessEnabledWithRestrictionsInfo",
+                  "type": "Microsoft.Common.TextBlock",
+                  "visible": "[equals(steps('functionApp').functionAppPublicNetworking.functionAppPublicNetworkAccess, 'EnabledWithRestrictions')]",
+                  "options": {
+                    "text": "Allow IP addresses, service-endpoint subnets, or both. Other public traffic is denied, subject to existing service exceptions."
+                  }
+                },
+                {
+                  "name": "publicAccessEnabledInfo",
+                  "type": "Microsoft.Common.TextBlock",
+                  "visible": "[equals(steps('functionApp').functionAppPublicNetworking.functionAppPublicNetworkAccess, 'Enabled')]",
+                  "options": {
+                    "text": "Public network access is unrestricted. Stored IP and subnet rules do not limit traffic. Authentication is still required."
+                  }
+                },
+                {
+                  "name": "noPrivateConnectivityWarning",
+                  "type": "Microsoft.Common.InfoBox",
+                  "options": {
+                    "style": "Warning",
+                    "text": "Public access is disabled and this deployment is not creating private endpoints for this service. Provide an existing approved connectivity path before deploying."
+                  },
+                  "visible": "[and(equals(steps('functionApp').functionAppPublicNetworking.functionAppPublicNetworkAccess, 'Disabled'), not(steps('functionApp').functionAppPrivateNetworking.functionAppPrivateEndpoint))]"
+                }
+              ]
+            },
+            {
+              "name": "functionAppServiceEndpointAccess",
+              "type": "Microsoft.Common.Section",
+              "label": "Function App networking: Allowed public-endpoint sources",
+              "visible": "[and(true, equals(steps('functionApp').functionAppPublicNetworking.functionAppPublicNetworkAccess, 'EnabledWithRestrictions'))]",
+              "elements": [
+                {
+                  "name": "requirements",
+                  "type": "Microsoft.Common.InfoBox",
+                  "options": {
+                    "style": "Info",
+                    "text": "Applies to Function App inbound and SCM access. It does not configure outbound VNet integration or runtime Storage access. Allow IP addresses, service-endpoint subnets, or both. This deployment never enables endpoints on existing subnets. Service endpoints use the public service endpoint, not a private IP."
+                  }
+                },
+                {
+                  "name": "functionAppPermittedIPs",
+                  "type": "Microsoft.Common.EditableGrid",
+                  "label": "Permitted public IPv4 addresses or CIDR ranges",
+                  "ariaLabel": "Enter permitted public IPv4 addresses or CIDR ranges",
+                  "visible": "[equals(steps('functionApp').functionAppPublicNetworking.functionAppPublicNetworkAccess, 'EnabledWithRestrictions')]",
+                  "constraints": {
+                    "width": "Full",
+                    "rows": {
+                      "count": {
+                        "min": 0,
+                        "max": 100
+                      }
+                    },
+                    "columns": [
+                      {
+                        "id": "ipAddress",
+                        "header": "IPv4 address or CIDR",
+                        "width": "1fr",
+                        "element": {
+                          "type": "Microsoft.Common.TextBox",
+                          "placeholder": "203.0.113.10 or 203.0.113.0/24",
+                          "constraints": {
+                            "required": false,
+                            "regex": "^$|^(?:(?:25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])\\.){3}(?:25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])(?:/(?:[0-9]|[12][0-9]|3[0-2]))?$",
+                            "validationMessage": "Enter an IPv4 address or CIDR range with a prefix from 0 to 32."
+                          }
+                        }
+                      }
+                    ]
+                  }
+                },
+                {
+                  "name": "inventoryStatus",
+                  "type": "Microsoft.Common.InfoBox",
+                  "options": {
+                    "style": "Info",
+                    "text": "The subnet inventory has not loaded. If this persists, check the subscription and Microsoft.Network read permissions."
+                  },
+                  "visible": "[not(equals(steps('functionApp').serviceEndpointVirtualNetworksApi.transformed.loaded, true))]"
+                },
+                {
+                  "name": "inventoryPageWarning",
+                  "type": "Microsoft.Common.InfoBox",
+                  "options": {
+                    "style": "Warning",
+                    "text": "The VNet API returned a partial inventory. Use a parameter-file deployment for subnets on later pages."
+                  },
+                  "visible": "[not(empty(steps('functionApp').serviceEndpointVirtualNetworksApi.transformed.nextLink))]"
+                },
+                {
+                  "name": "functionAppServiceEndpointSubnets",
+                  "type": "Microsoft.Common.DropDown",
+                  "label": "Function App inbound access subnets",
+                  "multiselect": true,
+                  "selectAll": false,
+                  "filter": true,
+                  "multiLine": true,
+                  "defaultValue": "[parse('[]')]",
+                  "toolTip": "Requires existing Microsoft.Web. These are inbound access restrictions only, not outbound VNet integration. Select outbound integration separately.",
+                  "visible": "[and(true, equals(steps('functionApp').functionAppPublicNetworking.functionAppPublicNetworkAccess, 'EnabledWithRestrictions'))]",
+                  "constraints": {
+                    "required": false,
+                    "allowedValues": "[if(not(equals(steps('functionApp').serviceEndpointVirtualNetworksApi.transformed.loaded, true)), parse('[{\"label\":\"Loading subnet inventory\",\"value\":\"\"}]'), if(or(empty(steps('functionApp').serviceEndpointVirtualNetworksApi.transformed.vnets), empty(steps('functionApp').serviceEndpointVirtualNetworksApi.transformed.subnets)), parse('[{\"label\":\"No eligible subnets found\",\"value\":\"\"}]'), if(empty(filter(steps('functionApp').serviceEndpointVirtualNetworksApi.transformed.subnets, (snet) => if(empty(snet.properties.serviceEndpoints), false, not(empty(filter(snet.properties.serviceEndpoints, (se) => equals(se.service, 'Microsoft.Web'))))))), parse('[{\"label\":\"No eligible subnets found\",\"value\":\"\"}]'), map(filter(steps('functionApp').serviceEndpointVirtualNetworksApi.transformed.subnets, (snet) => if(empty(snet.properties.serviceEndpoints), false, not(empty(filter(snet.properties.serviceEndpoints, (se) => equals(se.service, 'Microsoft.Web')))))), (snet) => parse(concat('{\"label\":\"', first(skip(split(snet.id, '/'), 8)), ' | ', snet.name, '\",\"description\":\"Resource Group: ', first(skip(split(snet.id, '/'), 4)), '\",\"value\":\"', snet.id, '\"}'))))))]"
+                  }
+                },
+                {
+                  "name": "emptyAllowlistWarning",
+                  "type": "Microsoft.Common.InfoBox",
+                  "options": {
+                    "style": "Warning",
+                    "text": "No ordinary public sources are allowed. Private endpoints still work if reachable; existing service exceptions may apply. Add IP or subnet rules if clients need the public path."
+                  },
+                  "visible": "[and(empty(steps('functionApp').functionAppServiceEndpointAccess.functionAppPermittedIPs), empty(if(empty(steps('functionApp').functionAppServiceEndpointAccess.functionAppServiceEndpointSubnets), parse('[]'), filter(steps('functionApp').functionAppServiceEndpointAccess.functionAppServiceEndpointSubnets, (id) => not(empty(id))))))]"
                 }
               ]
             }
@@ -1329,17 +2125,16 @@
         "appServicePlanSku": "[if(steps('functionApp').general.existingAppServicePlan, 'P0v3', steps('functionApp').general.appServicePlanSku)]",
         "artifactsContainerUri": "[if(steps('virtualMachine').customizations.addCustomScripts, if(and(not(empty(steps('virtualMachine').customizations.storageAccount)), not(empty(steps('virtualMachine').customizations.container))), concat(steps('virtualMachine').customizations.storageAccount.blobEndpoint, steps('virtualMachine').customizations.container), ''), '')]",
         "artifactsUserAssignedIdentityResourceId": "[if(steps('virtualMachine').customizations.addCustomScripts, if(not(empty(steps('virtualMachine').customizations.managedIdentity)), steps('virtualMachine').customizations.managedIdentity.id, ''), '')]",
-        "azureBlobPrivateDnsZoneResourceId": "[if(equals(steps('functionApp').networkSettings.networkAccess, 'private'), steps('functionApp').privateDnsZones.azureBlobs, '')]",
-        "azureFunctionAppPrivateDnsZoneResourceId": "[if(equals(steps('functionApp').networkSettings.networkAccess, 'private'), steps('functionApp').privateDnsZones.azureFunctions, '')]",
-        "azureKeyVaultPrivateDnsZoneResourceId": "[if(equals(steps('functionApp').networkSettings.networkAccess, 'private'), steps('functionApp').privateDnsZones.keyVault, '')]",
+        "blobPrivateDnsZoneResourceId": "[if(and(true, and(steps('functionApp').storagePrivateNetworking.storagePrivateEndpoint, steps('functionApp').storagePrivateNetworking.enablePrivateDNSIntegration)), steps('functionApp').storagePrivateNetworking.blobPrivateDnsZone, '')]",
+        "websitesPrivateDnsZoneResourceId": "[if(and(true, and(steps('functionApp').functionAppPrivateNetworking.functionAppPrivateEndpoint, steps('functionApp').functionAppPrivateNetworking.enablePrivateDNSIntegration)), steps('functionApp').functionAppPrivateNetworking.websitesPrivateDnsZone, '')]",
+        "vaultPrivateDnsZoneResourceId": "[if(and(true, and(steps('functionApp').keyVaultPrivateNetworking.keyVaultPrivateEndpoint, steps('functionApp').keyVaultPrivateNetworking.enablePrivateDNSIntegration)), steps('functionApp').keyVaultPrivateNetworking.vaultPrivateDnsZone, '')]",
         "bootDiagnostics": "[steps('virtualMachine').general.bootDiagnostics]",
         "diskControllerType": "[steps('virtualMachine').disk.controllerType]",
         "diskEncryptionSetName": "[if(equals(steps('virtualMachine').disk.encryptionType, 'EncryptionAtRestWithPlatformKey'), '', steps('namingAndTags').naming.diskEncryptionSet)]",
         "diskEncryptionType": "[if(equals(steps('virtualMachine').disk.encryptionType, 'EncryptionAtRestWithPlatformKey'), 'EncryptionAtRestWithCustomerKey', steps('virtualMachine').disk.encryptionType)]",
         "diskName": "[steps('namingAndTags').naming.disk]",
         "encryptionAtHost": "[steps('virtualMachine').disk.encryptionAtHost]",
-        "endpointType": "[steps('functionApp').networkSettings.networkAccess]",
-        "functionAppDelegatedSubnetResourceId": "[if(not(equals(steps('functionApp').networkSettings.networkAccess, 'public')), steps('functionApp').networkSettings.delegatedSubnet, '')]",
+        "functionAppDelegatedSubnetResourceId": "[if(steps('functionApp').networkSettings.enableVnetIntegration, steps('functionApp').networkSettings.delegatedSubnet, '')]",
         "functionAppName": "[steps('namingAndTags').naming.functionApp]",
         "imageLicenseType": "[steps('virtualMachine').image.licenseType]",
         "imageVersionResourceId": "[first(map(steps('virtualMachine').image.versionsApi.transformed.list, (item) => item.value))]",
@@ -1349,13 +2144,13 @@
         "logAnalyticsWorkspaceResourceId": "[if(equals(steps('functionApp').monitoring.enableMonitoring, 'enabled'), steps('functionApp').monitoring.workspace.id, '')]",
         "networkInterfaceName": "[steps('namingAndTags').naming.networkInterface]",
         "privateIPAddress": "[steps('virtualMachine').network.privateIPAddress]",
-        "privateLinkScopeResourceId": "[if(and(equals(steps('functionApp').monitoring.enableMonitoring, 'enabled'), equals(steps('functionApp').networkSettings.networkAccess, 'private')), steps('functionApp').monitoring.privateLinkScope.id, '')]",
+        "privateLinkScopeResourceId": "[if(and(equals(steps('functionApp').monitoring.enableMonitoring, 'enabled'), steps('functionApp').networkSettings.enableVnetIntegration), steps('functionApp').monitoring.privateLinkScope.id, '')]",
         "resourceGroupName": "[steps('namingAndTags').naming.resourceGroup]",
         "schedule": "[steps('functionApp').general.schedule]",
         "secureBoot": "[steps('virtualMachine').security.secureBoot]",
         "securityType": "[steps('virtualMachine').security.securityType]",
         "storageAccountName": "[steps('namingAndTags').naming.storage]",
-        "subnetResourceId": "[steps('virtualMachine').network.subnet]",
+        "virtualMachineSubnetResourceId": "[steps('virtualMachine').network.subnet]",
         "tags": "[steps('namingAndTags').tagsSection.tags]",
         "templateSpecName": "[steps('namingAndTags').naming.templateSpec]",
         "timeZone": "[steps('functionApp').general.timeZone]",
@@ -1363,7 +2158,22 @@
         "virtualMachineCustomizations": "[if(steps('virtualMachine').customizations.addCustomScripts, steps('virtualMachine').customizations.customScripts, parse('[]'))]",
         "virtualMachineName": "[steps('namingAndTags').naming.virtualMachine]",
         "virtualMachineSize": "[steps('virtualMachine').general.size]",
-        "vTpm": "[steps('virtualMachine').security.vTpm]"
+        "vTpm": "[steps('virtualMachine').security.vTpm]",
+        "storageServiceEndpointSubnetResourceIds": "[if(true, if(empty(steps('functionApp').storageServiceEndpointAccess.storageServiceEndpointSubnets), parse('[]'), filter(steps('functionApp').storageServiceEndpointAccess.storageServiceEndpointSubnets, (id) => not(empty(id)))), parse('[]'))]",
+        "keyVaultServiceEndpointSubnetResourceIds": "[if(true, if(empty(steps('functionApp').keyVaultServiceEndpointAccess.keyVaultServiceEndpointSubnets), parse('[]'), filter(steps('functionApp').keyVaultServiceEndpointAccess.keyVaultServiceEndpointSubnets, (id) => not(empty(id)))), parse('[]'))]",
+        "functionAppServiceEndpointSubnetResourceIds": "[if(true, if(empty(steps('functionApp').functionAppServiceEndpointAccess.functionAppServiceEndpointSubnets), parse('[]'), filter(steps('functionApp').functionAppServiceEndpointAccess.functionAppServiceEndpointSubnets, (id) => not(empty(id)))), parse('[]'))]",
+        "storagePrivateEndpoint": "[if(true, steps('functionApp').storagePrivateNetworking.storagePrivateEndpoint, false)]",
+        "storagePrivateEndpointSubnetResourceId": "[if(and(true, steps('functionApp').storagePrivateNetworking.storagePrivateEndpoint), steps('functionApp').storagePrivateNetworking.privateEndpointSubnet.id, '')]",
+        "storagePermittedIPs": "[if(true, if(empty(steps('functionApp').storageServiceEndpointAccess.storagePermittedIPs), parse('[]'), filter(map(steps('functionApp').storageServiceEndpointAccess.storagePermittedIPs, (item) => item.ipAddress), (ip) => not(empty(ip)))), parse('[]'))]",
+        "storagePublicNetworkAccess": "[if(true, steps('functionApp').storagePublicNetworking.storagePublicNetworkAccess, 'Disabled')]",
+        "keyVaultPrivateEndpoint": "[if(true, steps('functionApp').keyVaultPrivateNetworking.keyVaultPrivateEndpoint, false)]",
+        "keyVaultPrivateEndpointSubnetResourceId": "[if(and(true, steps('functionApp').keyVaultPrivateNetworking.keyVaultPrivateEndpoint), steps('functionApp').keyVaultPrivateNetworking.privateEndpointSubnet.id, '')]",
+        "keyVaultPermittedIPs": "[if(true, if(empty(steps('functionApp').keyVaultServiceEndpointAccess.keyVaultPermittedIPs), parse('[]'), filter(map(steps('functionApp').keyVaultServiceEndpointAccess.keyVaultPermittedIPs, (item) => item.ipAddress), (ip) => not(empty(ip)))), parse('[]'))]",
+        "keyVaultPublicNetworkAccess": "[if(true, steps('functionApp').keyVaultPublicNetworking.keyVaultPublicNetworkAccess, 'Disabled')]",
+        "functionAppPrivateEndpoint": "[if(true, steps('functionApp').functionAppPrivateNetworking.functionAppPrivateEndpoint, false)]",
+        "functionAppPrivateEndpointSubnetResourceId": "[if(and(true, steps('functionApp').functionAppPrivateNetworking.functionAppPrivateEndpoint), steps('functionApp').functionAppPrivateNetworking.privateEndpointSubnet.id, '')]",
+        "functionAppPermittedIPs": "[if(true, if(empty(steps('functionApp').functionAppServiceEndpointAccess.functionAppPermittedIPs), parse('[]'), filter(map(steps('functionApp').functionAppServiceEndpointAccess.functionAppPermittedIPs, (item) => item.ipAddress), (ip) => not(empty(ip)))), parse('[]'))]",
+        "functionAppPublicNetworkAccess": "[if(true, steps('functionApp').functionAppPublicNetworking.functionAppPublicNetworkAccess, 'Disabled')]"
       }
     }
   }

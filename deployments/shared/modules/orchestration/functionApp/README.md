@@ -17,6 +17,30 @@ parameter without a default is a required Bicep input even if its feature is
 optional: pass an empty string, array, or object only where its description
 allows that.
 
+The public endpoint supports separate `storageServiceEndpointSubnetResourceIds`
+and `functionAppServiceEndpointSubnetResourceIds` allowlists. The former authorizes
+runtime storage with existing Storage service endpoints; the latter authorizes
+inbound app clients with existing `Microsoft.Web` service endpoints. Neither
+configures outbound VNet integration or modifies existing subnets. Only explicit family allowlists are applied;
+PE and outbound integration subnets are not implicitly allowed. See the
+[service endpoint contracts](../../../../../docs/parameters.md#service-endpoint-subnet-allowlists)
+for modes, caller wiring, and operational prerequisites.
+
+Session Host Replacer adapts its three typed deployment-intent objects through the shared
+[networking scenario library](../networking/scenarios.bicep) before calling this composer.
+Its secure omitted defaults are private endpoints and disabled public access; its Restricted
+Portal scenario supplies independent runtime Storage and operator app/SCM sources.
+Other Function App add-ons retain their current flat entry contracts. The composer interface,
+resource properties, and defaults are unchanged by this adapter.
+
+App and SCM use the same access restrictions (`scmIpSecurityRestrictionsUseMain: true`).
+Disabling public access without an app private endpoint removes direct app/SCM access;
+outbound VNet integration cannot restore it. Timer execution is separate from operator
+code/file access. A single app private endpoint serves SCM too, but clients need private
+routing and app/SCM DNS. Azure Private DNS zone groups add both records; external DNS must
+provide both. See [Microsoft's guidance](https://learn.microsoft.com/azure/app-service/overview-private-endpoint#kuduscm-endpoint)
+and the [Replacer operator-access contract](../../../../add-ons/sessionHostReplacer/README.md#4-network-requirements-for-zero-trust-networking).
+
 ## Composition and sequencing
 
 1. Create the hosting plan with the plan module, or obtain an existing compatible
@@ -98,35 +122,30 @@ scale-unit capabilities before deployment.
 
 ## Networking behavior
 
-`paasPublicNetworkAccess` applies one public-access mode to runtime storage and the app, separately
-from private endpoint creation:
+`storagePublicNetworkAccess` and `functionAppPublicNetworkAccess` independently
+select one policy for runtime storage and app inbound access. Both default `Disabled`.
+Each family has its own `${service}PermittedIPs` and
+`${service}ServiceEndpointSubnetResourceIds` lists.
 
-| Mode | Public endpoint | App/SCM unmatched action and storage firewall |
+| Mode | Public endpoint | Family firewall unmatched action |
 | --- | --- | --- |
-| `Disabled` | Disabled even with IP rules | Deny; supplied rules remain configured |
-| `EnabledWithRestrictions` | Enabled even without private endpoints | Deny, including with an empty IP list |
-| `Enabled` | Enabled even with private endpoints | Allow; stored allow rules do not restrict access |
-| `Auto` (default) | Legacy inference below | Preserves existing caller behavior |
+| `Disabled` | Disabled even with allow rules | Deny; supplied rules remain configured |
+| `EnabledWithRestrictions` | Enabled even without private endpoints | Deny, including with empty allowlists |
+| `Enabled` | Enabled even with private endpoints | Allow; stored rules do not restrict access |
 
-For `Auto`, the current `privateEndpoint` and `permittedIPs` combination is preserved:
+`storagePrivateEndpoint` and `functionAppPrivateEndpoint` default false and independently
+gate their own endpoints and DNS zone groups. Each uses its own
+`${service}PrivateEndpointSubnetResourceId`; existing DNS parameter names are unchanged.
+The app endpoint is inbound only. `functionAppDelegatedSubnetResourceId` configures
+outbound VNet integration independently; it never supplies inbound Microsoft.Web
+or runtime Storage allowlist rules. Select a runtime-storage route and matching DNS
+before disabling its public endpoint.
 
-| Private endpoints | Permitted IPs | Public endpoint behavior |
-| --- | --- | --- |
-| Enabled | Empty | Disabled for storage and the app |
-| Enabled | Nonempty | Enabled with restrictions alongside private endpoints |
-| Disabled | Nonempty | Enabled with restrictions |
-| Disabled | Empty | Enabled without these network restrictions |
-
-These are not interchangeable with a private-only guarantee. App restrictions
-also allow the `AzureCloud` service tag, storage retains `AzureServices` bypass,
-and SCM uses the main app restrictions when configured. Storage trusted-service bypass can still
-apply when public network access is Disabled. Do not assume an IP list alone satisfies a
-customer's approved-public-access guardrail. Network reachability does not grant
-storage authorization.
-
-Private endpoint subnet/DNS connectivity and outbound app VNet integration are
-separate inputs. The caller must provide the appropriate private path and DNS
-zones for the selected cloud.
+App restrictions also allow the `AzureCloud` service tag, storage retains `AzureServices`
+bypass, and SCM uses the main app restrictions. Trusted-service bypass can still apply
+with public access Disabled; reachability does not grant authorization.
+Monitoring and adopted App Service plans remain separately owned/configured.
+The global mode, IP list, and combined PE inputs are removed, without compatibility aliases.
 
 Storage private-endpoint names are resolved into a shared array before the resource loop.
 The endpoints and their DNS zone groups use that array so Bicep's indexed-parent expansion

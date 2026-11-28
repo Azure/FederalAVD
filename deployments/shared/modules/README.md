@@ -17,6 +17,60 @@ A module belongs here when its behavior is reusable across deployment entry poin
 encode one solution's deployment workflow. Solution-specific sequencing, API workarounds, and scope
 adapters remain under their owning deployment directory.
 
+## Service-family network policies
+
+Standard and Automated Host Pools, Image Management, and Shared Services resolve their
+[typed networking intent](../../../docs/parameters.md#typed-networking-solution-rollout)
+through [the shared scenario library](orchestration/networking/scenarios.bicep)
+into the existing composer inputs below. Their common defaults are private endpoints and disabled
+public access, with independent service overrides and allowlists.
+Add-ons and Host Pool PoC expose independent Storage, Key Vault, and Function App policies only
+where those families are created. Public modes default `Disabled`, and each family has
+its own IP/subnet allowlists and PE flag/subnet. There are no per-resource overrides,
+global inheritance, or automatic allowances for PE/outbound integration subnets.
+Existing resources and customer subnet configuration remain caller-owned.
+
+The FSLogix composer and Azure Files adapter use `storagePublicNetworkAccess`,
+`storagePermittedIPs`, `storagePrivateEndpoint`, and
+`storagePrivateEndpointSubnetResourceId`. Host Pool callers map their host-pool ownership
+subnet into that Storage subnet input. Their existing
+`storageServiceEndpointSubnetResourceIds` input is unchanged.
+The Key Vault composer likewise uses `keyVaultPublicNetworkAccess`,
+`keyVaultPermittedIPs`, `keyVaultPrivateEndpoint`, and
+`keyVaultPrivateEndpointSubnetResourceId`. Host Pool and Shared Services callers map their shared ownership
+subnet into that Key Vault subnet input. Its existing
+`keyVaultServiceEndpointSubnetResourceIds` input is unchanged.
+Both composers' public policies are explicit and default `Disabled`, without Auto.
+The [multi-family Function App composer](orchestration/functionApp/README.md#networking-behavior)
+instead requires independent app and runtime-Storage inputs. Monitoring, Recovery
+Services backup, managed-disk access, and AVD controls are not governed by those policies.
+Resource modules retain their resource-level inputs; see
+[deployment intent and Azure-shaped inputs](../../../docs/design.md#deployment-intent-and-azure-shaped-inputs)
+for the distinction between policy intent and Azure API configuration.
+
+### Backup orchestration
+
+The shared [FSLogix Backup composer](orchestration/recoveryServices/fslogixBackupVault.bicep)
+assembles a Recovery Services vault, Azure Files snapshot policy, and optional private endpoint.
+It belongs in orchestration; the vault, policy, and endpoint implementations remain resource modules.
+The [personal VM Backup composer](../../hostpools/modules/hosts/modules/recoveryServices.bicep)
+remains solution-local because it owns the host-pool VM policy and staged CMK workflow.
+
+Both composers require explicit `publicNetworkAccess` (`Enabled` or `Disabled`) independently
+of `privateEndpoint`. Only newly created vault networking is managed. Recovery Services vaults
+do not expose Storage/Key Vault-style IP or service-endpoint subnet allowlists, so
+`EnabledWithRestrictions` is not a supported Backup composer value.
+Both Host Pool entries and Shared Services supply independently resolved Backup public access and
+endpoint flags from their typed networking object. Restricted common intent requires an explicit
+choice for newly created vaults, with no implicit public fallback. The standalone FSLogix Storage
+add-on retains its existing contract: enabled vault public access without a vault private endpoint.
+
+Direct module consumers must replace the former
+`resourceModules/recoveryServices/fslogixBackupVault.bicep` reference with
+`orchestration/recoveryServices/fslogixBackupVault.bicep` and pass `publicNetworkAccess`.
+This relocation does not change Backup Private Link generation, DNS requirements, CMK sequencing,
+policy retention, or storage registration and protection.
+
 ## Resource Modules
 
 All resource modules are under `resourceModules`. AVD resource modules and session-host workflow
@@ -51,6 +105,7 @@ resource operation. They should not depend on standard or automated host-pool en
 | `orchestration/avdServicePrincipalRbac.bicep` | Standard host pool, automated host pool | Assigns the Azure Virtual Desktop service principal the roles required for Start VM on Connect and dynamic scaling. |
 | `orchestration/customerManagedKeys/diskCmk.bicep` | Standard host pool, automated policy | Composes customer-managed disk-key resources. |
 | `orchestration/fslogix/fslogix.bicep` | Standard host pool, automated host pool, FSLogix Storage add-on | Routes FSLogix storage to Azure Files or Azure NetApp Files and optionally registers Azure Files backup items. |
+| `orchestration/recoveryServices/fslogixBackupVault.bicep` | Standard host pool, automated host pool, Shared Services, FSLogix Storage add-on | Composes a Recovery Services vault, Azure Files snapshot policy, and optional private endpoint with independent public access. |
 | `orchestration/monitoring/monitoring.bicep` | Standard host pool, Shared Services | Composes Log Analytics, Data Collection Endpoint, AVD Insights DCR, and optional Azure Monitor Private Link Scope linkage. |
 | `orchestration/sessionHosts` | Standard host pool, Session Hosts add-on | Composes direct session-host VM deployment, customization, disk, and backup operations. |
 | `orchestration/keyVaults/keyVaults.bicep` | Standard host pool, Shared Services | Composes secrets and encryption Key Vaults and their dependent resources. |

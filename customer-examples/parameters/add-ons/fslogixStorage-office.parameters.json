@@ -20,13 +20,15 @@
     "fslogixOfficeStorageTier": { "value": "Standard" },
     "fslogixOfficeStorageRedundancy": { "value": "Inherit" },
     "fslogixOfficeShareSizeInGB": { "value": 100 },
-    "privateEndpoint": { "value": true },
-    "privateEndpointSubnetResourceId": {
+    "storagePrivateEndpoint": { "value": true },
+    "storagePrivateEndpointSubnetResourceId": {
       "value": "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-network/providers/Microsoft.Network/virtualNetworks/vnet-avd/subnets/private-endpoints"
     },
-    "azureFilePrivateDnsZoneResourceId": {
+    "filePrivateDnsZoneResourceId": {
       "value": "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-network/providers/Microsoft.Network/privateDnsZones/privatelink.file.core.windows.net"
     },
-    "paasPublicNetworkAccess": { "value": "Disabled" }
+    "storagePublicNetworkAccess": { "value": "Disabled" },
+    "storagePermittedIPs": { "value": [] },
+    "storageServiceEndpointSubnetResourceIds": { "value": [] }
   }
 }

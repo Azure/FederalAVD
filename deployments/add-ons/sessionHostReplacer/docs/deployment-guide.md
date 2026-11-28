@@ -3,6 +3,12 @@
 For first-deployment prerequisites, permissions and parameters, see [README.md](../README.md).
 The [canonical replacement flow](replacement-flow.md) owns lifecycle behavior.
 
+For Private / Restricted public / Custom infrastructure choices, typed parameter migration,
+and operator SCM/code access requirements, see
+[network requirements](../README.md#4-network-requirements-for-zero-trust-networking).
+Runtime Storage sources, operator app/SCM sources, shared private endpoint placement, and outbound
+VNet integration are separate choices; Portal sign-in does not bypass network restrictions.
+
 ## Scope
 
 SHR has one execution model, regardless of SideBySide or DeleteFirst replacement mode:
@@ -194,7 +200,7 @@ Portal rendering or successful Azure deployment.
 ## Upgrading an Existing Deployment
 
 This is a breaking contract change: remove `enableQueueContinuation` and the SHR-specific
-`azureQueuePrivateDnsZoneResourceId` from existing SHR parameter files. Do not remove similarly named
+`queuePrivateDnsZoneResourceId` from existing SHR parameter files. Do not remove similarly named
 parameters from other solutions. There is no supported switch back to direct timer execution.
 
 Before restarting an upgraded app, verify the [scaling plan exclusion contract](../README.md#scaling-plan-exclusion-contract).

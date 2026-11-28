@@ -2626,6 +2626,25 @@
           "label": "Infrastructure",
           "elements": [
             {
+              "name": "enableVnetIntegration",
+              "type": "Microsoft.Common.OptionsGroup",
+              "label": "Enable Function App outbound VNet integration",
+              "defaultValue": "Yes",
+              "constraints": {
+                "required": true,
+                "allowedValues": [
+                  {
+                    "label": "Yes",
+                    "value": true
+                  },
+                  {
+                    "label": "No",
+                    "value": false
+                  }
+                ]
+              }
+            },
+            {
               "name": "resourceGroupsApi",
               "type": "Microsoft.Solutions.ArmApiControl",
               "condition": "[not(empty(steps('basics').subscription.id))]",
@@ -2815,41 +2834,6 @@
               }
             },
             {
-              "name": "zeroTrustNetworkingInfoBox",
-              "type": "Microsoft.Common.InfoBox",
-              "options": {
-                "text": "Private Networking for the Function App and Runtime Storage\n\nEnable private endpoints for the Function App and its Blob/Table runtime storage. SHR uses two timers and does not require Queue storage. Public network access is selected independently below. Existing Key Vault access is not changed.\n\nThe Function App needs outbound virtual network integration to reach private resources, using a dedicated subnet with Microsoft.Web/serverFarms delegation. Configure private DNS and a working private access path before disabling public access. For centralized DNS, see the linked networking guidance.",
-                "style": "Info",
-                "uri": "https://learn.microsoft.com/en-us/azure/azure-functions/functions-networking-options?tabs=azure-portal"
-              }
-            },
-            {
-              "name": "configureZeroTrustNetworking",
-              "type": "Microsoft.Common.CheckBox",
-              "label": "Configure Zero Trust Networking",
-              "defaultValue": true
-            },
-            {
-              "name": "zeroTrustNetworkingTextBlock2",
-              "type": "Microsoft.Common.TextBlock",
-              "visible": "[steps('infrastructure').configureZeroTrustNetworking]",
-              "options": {
-                "link": {
-                  "label": "Microsoft Learn | Private Link Deployment in a Hub and Spoke Network",
-                  "uri": "https://learn.microsoft.com/en-us/azure/architecture/networking/guide/private-link-hub-spoke-network"
-                },
-                "text": "When deploying function app zero trust networking, you must select the subnet and Private DNS Zones required for DNS resolution. The available virtual networks are dynamically filtered according to the regions specified for the resource types in earlier configuration screens. The drop-down menus will present only the virtual networks, subnets, and Private DNS Zones that match your prior selections, ensuring that you can choose the appropriate resources for your Zero Trust implementation."
-              }
-            },
-            {
-              "name": "subnetsHeader",
-              "type": "Microsoft.Common.TextBlock",
-              "visible": "[steps('infrastructure').configureZeroTrustNetworking]",
-              "options": {
-                "text": "Subnets"
-              }
-            },
-            {
               "name": "virtualNetworksApi",
               "type": "Microsoft.Solutions.ArmApiControl",
               "condition": "[not(empty(steps('basics').subscription.id))]",
@@ -2862,7 +2846,7 @@
               "name": "virtualNetwork",
               "type": "Microsoft.Common.DropDown",
               "label": "Virtual Network",
-              "visible": "[steps('infrastructure').configureZeroTrustNetworking]",
+              "visible": "[steps('infrastructure').enableVnetIntegration]",
               "multiLine": true,
               "toolTip": "Select the virtual network to which the function app will be integrated. The list is filtered based on the subscription and location selected on the 'Deployment Basics' page.",
               "constraints": {
@@ -2888,196 +2872,712 @@
                 "required": true,
                 "allowedValues": "[map(filter(steps('infrastructure').subnetsApi.value, (snet) => equals(first(map(snet.properties.delegations, (del) => del.properties.serviceName)), 'Microsoft.Web/serverFarms')), (snet) => parse(concat('{\"label\":\"', snet.name, '\",\"value\":\"', snet.id, '\"}')))]"
               },
-              "visible": "[steps('infrastructure').configureZeroTrustNetworking]"
+              "visible": "[steps('infrastructure').enableVnetIntegration]"
             },
             {
-              "name": "functionAppPrivateEndpointSubnet",
-              "type": "Microsoft.Common.DropDown",
-              "label": "Function App Private Endpoint Subnet",
-              "toolTip": "Select the subnet for function app private endpoints (inbound access and storage account). This subnet must NOT have any delegations and must be different from the outbound subnet.",
-              "constraints": {
-                "required": true,
-                "allowedValues": "[map(filter(steps('infrastructure').subnetsApi.value, (snet) => and(empty(snet.properties.delegations), not(equals(snet.id, steps('infrastructure').functionAppOutboundSubnet)))), (snet) => parse(concat('{\"label\":\"', snet.name, '\",\"value\":\"', snet.id, '\"}')))]"
-              },
-              "visible": "[steps('infrastructure').configureZeroTrustNetworking]"
-            },
-            {
-              "name": "privateDNSZonesHeader",
-              "type": "Microsoft.Common.TextBlock",
-              "visible": "[steps('infrastructure').configureZeroTrustNetworking]",
-              "options": {
-                "text": "Private DNS Zones"
-              }
-            },
-            {
-              "name": "privateDNSZoneIntegrationTextBlock",
-              "type": "Microsoft.Common.TextBlock",
-              "visible": "[steps('infrastructure').configureZeroTrustNetworking]",
-              "options": {
-                "text": "To connect privately with your function app and private endpoints, you need DNS records. We recommend that you integrate your function app private endpoints with private DNS zones. If you select the checkbox below, you'll be asked to select the appropriate Private DNS Zone for each resource type deployed by this solution and the deployment will automatically create the Private DNS integration when creating the private endpoints. Alternatively, you can assign policies to private endpoints to automatically register the endpoints with the appropriate private DNS zones. Uncheck the box below if that is the method you are using.",
-                "link": {
-                  "label": "Learn more",
-                  "uri": "https://learn.microsoft.com/en-us/azure/private-link/private-endpoint-overview#dns-configuration"
+              "name": "serviceEndpointVirtualNetworksApi",
+              "type": "Microsoft.Solutions.ArmApiControl",
+              "condition": "[not(empty(steps('basics').subscription.id))]",
+              "request": {
+                "method": "GET",
+                "path": "[if(empty(steps('basics').subscription.id), '', concat(steps('basics').subscription.id, '/providers/Microsoft.Network/virtualNetworks?api-version=2022-11-01'))]",
+                "transforms": {
+                  "loaded": "`true`",
+                  "vnets": "value",
+                  "subnets": "value[].properties.subnets[]",
+                  "nextLink": "nextLink"
                 }
               }
             },
             {
-              "name": "enablePrivateDNSIntegration",
-              "type": "Microsoft.Common.CheckBox",
-              "label": "Enable Private DNS Zone Integration",
-              "toolTip": "To connect privately with your private endpoint, you need a DNS record. Check this box to select the appropriate private DNS zones so that the deployment automatically integrates each private endpoint with Azure private DNS.",
-              "defaultValue": true,
-              "visible": "[steps('infrastructure').configureZeroTrustNetworking]"
-            },
-            {
-              "name": "privateDNSZonesSubscription",
-              "type": "Microsoft.Common.DropDown",
-              "label": "Private DNS Zone Subscription",
-              "placeholder": "",
-              "defaultValue": "[steps('basics').subscription.displayName]",
-              "toolTip": "Select the subscription that contains your Private DNS Zones.",
-              "constraints": {
-                "allowedValues": "[map(steps('basics').subscriptionsApi.value, (sub) => parse(concat('{\"label\":\"', sub.displayName, '\",\"value\":{\"displayName\":\"', sub.displayName, '\",\"id\":\"', sub.id, '\",\"subscriptionId\":\"', sub.subscriptionId, '\"}}')))]",
-                "required": true
-              },
-              "visible": "[and(steps('infrastructure').configureZeroTrustNetworking, steps('infrastructure').enablePrivateDNSIntegration)]"
-            },
-            {
-              "name": "privateDNSZonesApi",
-              "condition": "[and(steps('infrastructure').enablePrivateDNSIntegration, not(empty(steps('infrastructure').privateDNSZonesSubscription)))]",
-              "type": "Microsoft.Solutions.ArmApiControl",
-              "request": {
-                "method": "GET",
-                "path": "[concat(steps('infrastructure').privateDNSZonesSubscription.id, '/providers/Microsoft.Network/privateDnsZones?api-version=2018-09-01')]"
-              }
-            },
-            {
-              "name": "azureFunctionAppPrivateDnsZone",
-              "type": "Microsoft.Common.DropDown",
-              "defaultValue": "[first(map(filter(steps('infrastructure').privateDNSZonesApi.value, (zone) => or(startsWith(zone.name, 'privatelink.azurewebsites.'), startsWith(zone.name, 'privatelink.appservice.'))), (zone) => zone.name))]",
-              "visible": "[and(steps('infrastructure').configureZeroTrustNetworking, steps('infrastructure').enablePrivateDNSIntegration)]",
-              "label": "Azure Function App",
-              "multiLine": true,
-              "toolTip": "Select the existing Private DNS Zone for Azure Function Apps",
-              "constraints": {
-                "allowedValues": "[map(filter(steps('infrastructure').privateDNSZonesApi.value, (zone) => or(startsWith(zone.name, 'privatelink.azurewebsites.'), startsWith(zone.name, 'privatelink.appservice.'))), (zone) => parse(concat('{\"label\":\"', zone.name, '\",\"description\":\"Resource Group: ', first(skip(split(zone.id, '/'), 4)), '\",\"value\":\"', zone.id, '\"}')))]",
-                "required": true
-              }
-            },
-            {
-              "name": "azureBlobPrivateDnsZone",
-              "type": "Microsoft.Common.DropDown",
-              "defaultValue": "[first(map(filter(steps('infrastructure').privateDNSZonesApi.value, (zone) => contains(zone.name, 'privatelink.blob.')), (zone) => zone.name))]",
-              "visible": "[and(steps('infrastructure').configureZeroTrustNetworking, steps('infrastructure').enablePrivateDNSIntegration)]",
-              "label": "Azure Blob Storage",
-              "multiLine": true,
-              "toolTip": "Select the existing Private DNS Zone for Azure Blob Storage.",
-              "constraints": {
-                "allowedValues": "[map(filter(steps('infrastructure').privateDNSZonesApi.value, (zone) => contains(zone.name, 'privatelink.blob.')), (zone) => parse(concat('{\"label\":\"', zone.name, '\",\"description\":\"Resource Group: ', first(skip(split(zone.id, '/'), 4)), '\",\"value\":\"', zone.id, '\"}')))]",
-                "required": true
-              }
-            },
-            {
-              "name": "azureTablePrivateDnsZone",
-              "type": "Microsoft.Common.DropDown",
-              "defaultValue": "[first(map(filter(steps('infrastructure').privateDNSZonesApi.value, (zone) => contains(zone.name, 'privatelink.table.')), (zone) => zone.name))]",
-              "visible": "[and(steps('infrastructure').configureZeroTrustNetworking, steps('infrastructure').enablePrivateDNSIntegration)]",
-              "label": "Azure Table Storage",
-              "multiLine": true,
-              "toolTip": "Select the existing Private DNS Zone for Azure Table Storage.",
-              "constraints": {
-                "allowedValues": "[map(filter(steps('infrastructure').privateDNSZonesApi.value, (zone) => contains(zone.name, 'privatelink.table.')), (zone) => parse(concat('{\"label\":\"', zone.name, '\",\"description\":\"Resource Group: ', first(skip(split(zone.id, '/'), 4)), '\",\"value\":\"', zone.id, '\"}')))]",
-                "required": true
-              }
-            },
-            {
-              "name": "paasPublicNetworkAccess",
-              "type": "Microsoft.Common.DropDown",
-              "label": "Public network access",
-              "defaultValue": "[if(steps('infrastructure').configureZeroTrustNetworking, 'Disabled', 'Enabled')]",
-              "toolTip": "Shared by the Function App and runtime storage independently of private endpoints and VNet integration. Existing Key Vault and monitoring access are unchanged.",
-              "constraints": {
-                "required": true,
-                "allowedValues": [
-                  {
-                    "label": "Disabled",
-                    "value": "Disabled"
-                  },
-                  {
-                    "label": "Enabled with restrictions",
-                    "value": "EnabledWithRestrictions"
-                  },
-                  {
-                    "label": "Enabled",
-                    "value": "Enabled"
-                  }
-                ]
-              }
-            },
-            {
-              "name": "permittedIPsInfo",
-              "type": "Microsoft.Common.TextBlock",
-              "options": {
-                "text": "Permitted IP Addresses / CIDR Ranges (optional)",
-                "style": "Heading"
-              },
-              "visible": "[equals(steps('infrastructure').paasPublicNetworkAccess, 'EnabledWithRestrictions')]"
-            },
-            {
-              "name": "permittedIPsDisabledInfo",
-              "type": "Microsoft.Common.TextBlock",
-              "visible": "[equals(steps('infrastructure').paasPublicNetworkAccess, 'Disabled')]",
-              "options": {
-                "text": "Public network access is disabled. Ensure private connectivity is available. Existing trusted-service exceptions may still apply."
-              }
-            },
-            {
-              "name": "permittedIPsRestrictedInfo",
-              "type": "Microsoft.Common.TextBlock",
-              "visible": "[equals(steps('infrastructure').paasPublicNetworkAccess, 'EnabledWithRestrictions')]",
-              "options": {
-                "text": "Allow the public IPv4 addresses or CIDR ranges below. Existing AzureCloud app/SCM access and trusted-service storage exceptions remain allowed."
-              }
-            },
-            {
-              "name": "permittedIPsEnabledInfo",
-              "type": "Microsoft.Common.TextBlock",
-              "visible": "[equals(steps('infrastructure').paasPublicNetworkAccess, 'Enabled')]",
-              "options": {
-                "text": "Public network access is allowed from all networks. Authentication and authorization still apply."
-              }
-            },
-            {
-              "name": "permittedIPs",
-              "type": "Microsoft.Common.EditableGrid",
-              "ariaLabel": "Permitted IP Addresses or CIDR Ranges",
-              "label": "Permitted IP Addresses / CIDR Ranges",
-              "visible": "[equals(steps('infrastructure').paasPublicNetworkAccess, 'EnabledWithRestrictions')]",
-              "constraints": {
-                "width": "Full",
-                "rows": {
-                  "count": {
-                    "min": 0,
-                    "max": 50
+              "name": "paasConnectivity",
+              "type": "Microsoft.Common.Section",
+              "label": "Deployment-owned PaaS connectivity",
+              "visible": true,
+              "elements": [
+                {
+                  "name": "scenario",
+                  "type": "Microsoft.Common.DropDown",
+                  "label": "Connectivity scenario",
+                  "defaultValue": "Private connectivity",
+                  "constraints": {
+                    "required": true,
+                    "allowedValues": [
+                      {
+                        "label": "Private connectivity",
+                        "value": "Private"
+                      },
+                      {
+                        "label": "Restricted public connectivity",
+                        "value": "Restricted"
+                      },
+                      {
+                        "label": "Custom configuration (advanced)",
+                        "value": "Custom"
+                      }
+                    ]
                   }
                 },
-                "columns": [
-                  {
-                    "id": "ipAddress",
-                    "header": "IP Address or CIDR Range",
-                    "width": "1fr",
-                    "element": {
-                      "type": "Microsoft.Common.TextBox",
-                      "placeholder": "e.g. 203.0.113.10 or 203.0.113.0/24",
-                      "constraints": {
-                        "required": false,
-                        "regex": "^(\\d{1,3}\\.){3}\\d{1,3}(\\/\\d{1,2})?$",
-                        "validationMessage": "Enter a valid IPv4 address or CIDR range."
-                      }
-                    }
+                {
+                  "name": "ownershipInfo",
+                  "type": "Microsoft.Common.TextBlock",
+                  "options": {
+                    "text": "Runtime Storage and app/SCM use independent source rules and one shared private endpoint subnet. Existing Key Vaults and monitoring networking remain owner-managed."
                   }
-                ]
-              }
+                },
+                {
+                  "name": "privateInfo",
+                  "type": "Microsoft.Common.TextBlock",
+                  "visible": "[equals(steps('infrastructure').paasConnectivity.scenario, 'Private')]",
+                  "options": {
+                    "text": "Use private endpoints for runtime Storage and app/SCM access. Operators need private network connectivity and DNS; runtime Storage needs outbound VNet integration."
+                  }
+                },
+                {
+                  "name": "restrictedInfo",
+                  "type": "Microsoft.Common.TextBlock",
+                  "visible": "[equals(steps('infrastructure').paasConnectivity.scenario, 'Restricted')]",
+                  "options": {
+                    "text": "Use separate Storage and app/SCM IP or service-endpoint subnet rules. Include operator sources for code/file access and explicitly authorize the runtime Storage path."
+                  }
+                },
+                {
+                  "name": "outboundPrerequisite",
+                  "type": "Microsoft.Common.TextBox",
+                  "label": "Private runtime Storage prerequisite",
+                  "defaultValue": "Enable outbound VNet integration and select a Microsoft.Web/serverFarms delegated subnet to reach private runtime Storage.",
+                  "readOnly": true,
+                  "visible": "[if(equals(steps('infrastructure').paasConnectivity.scenario, 'Custom'), steps('infrastructure').storagePrivateNetworking.storagePrivateEndpoint, equals(steps('infrastructure').paasConnectivity.scenario, 'Private'))]",
+                  "constraints": {
+                    "required": true,
+                    "validations": [
+                      {
+                        "isValid": "[and(steps('infrastructure').enableVnetIntegration, not(empty(steps('infrastructure').functionAppOutboundSubnet)))]",
+                        "message": "Enable outbound VNet integration and select a Microsoft.Web/serverFarms delegated subnet to reach private runtime Storage."
+                      }
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "privateEndpointSubnets",
+              "type": "Microsoft.Common.Section",
+              "label": "Shared private endpoint placement",
+              "visible": "[or(if(equals(steps('infrastructure').paasConnectivity.scenario, 'Custom'), steps('infrastructure').storagePrivateNetworking.storagePrivateEndpoint, equals(steps('infrastructure').paasConnectivity.scenario, 'Private')), if(equals(steps('infrastructure').paasConnectivity.scenario, 'Custom'), steps('infrastructure').functionAppPrivateNetworking.functionAppPrivateEndpoint, equals(steps('infrastructure').paasConnectivity.scenario, 'Private')))]",
+              "elements": [
+                {
+                  "name": "privateEndpointVirtualNetwork",
+                  "type": "Microsoft.Common.DropDown",
+                  "label": "Private endpoint virtual network",
+                  "defaultValue": "",
+                  "multiLine": true,
+                  "visible": "[or(if(equals(steps('infrastructure').paasConnectivity.scenario, 'Custom'), steps('infrastructure').storagePrivateNetworking.storagePrivateEndpoint, equals(steps('infrastructure').paasConnectivity.scenario, 'Private')), if(equals(steps('infrastructure').paasConnectivity.scenario, 'Custom'), steps('infrastructure').functionAppPrivateNetworking.functionAppPrivateEndpoint, equals(steps('infrastructure').paasConnectivity.scenario, 'Private')))]",
+                  "constraints": {
+                    "required": true,
+                    "allowedValues": "[if(not(equals(steps('infrastructure').serviceEndpointVirtualNetworksApi.transformed.loaded, true)), parse('[{\"label\":\"Loading VNet inventory\",\"value\":\"\"}]'), if(empty(filter(steps('infrastructure').serviceEndpointVirtualNetworksApi.transformed.vnets, (vnet) => equals(vnet.location, steps('basics').location.name))), parse('[{\"label\":\"No regional VNets found\",\"value\":\"\"}]'), map(filter(steps('infrastructure').serviceEndpointVirtualNetworksApi.transformed.vnets, (vnet) => equals(vnet.location, steps('basics').location.name)), (vnet) => parse(concat('{\"label\":\"', vnet.name, '\",\"description\":\"Resource group: ', first(skip(split(vnet.id, '/'), 4)), '\",\"value\":{\"id\":\"', vnet.id, '\"}}')))))]"
+                  }
+                },
+                {
+                  "name": "privateEndpointSubnetsApi",
+                  "type": "Microsoft.Solutions.ArmApiControl",
+                  "condition": "[and(true, or(if(equals(steps('infrastructure').paasConnectivity.scenario, 'Custom'), steps('infrastructure').storagePrivateNetworking.storagePrivateEndpoint, equals(steps('infrastructure').paasConnectivity.scenario, 'Private')), if(equals(steps('infrastructure').paasConnectivity.scenario, 'Custom'), steps('infrastructure').functionAppPrivateNetworking.functionAppPrivateEndpoint, equals(steps('infrastructure').paasConnectivity.scenario, 'Private'))), not(empty(steps('infrastructure').privateEndpointSubnets.privateEndpointVirtualNetwork.id)))]",
+                  "request": {
+                    "method": "GET",
+                    "path": "[concat(steps('infrastructure').privateEndpointSubnets.privateEndpointVirtualNetwork.id, '/subnets?api-version=2022-05-01')]"
+                  }
+                },
+                {
+                  "name": "privateEndpointSubnet",
+                  "type": "Microsoft.Common.DropDown",
+                  "label": "Private endpoint subnet",
+                  "defaultValue": "",
+                  "visible": "[or(if(equals(steps('infrastructure').paasConnectivity.scenario, 'Custom'), steps('infrastructure').storagePrivateNetworking.storagePrivateEndpoint, equals(steps('infrastructure').paasConnectivity.scenario, 'Private')), if(equals(steps('infrastructure').paasConnectivity.scenario, 'Custom'), steps('infrastructure').functionAppPrivateNetworking.functionAppPrivateEndpoint, equals(steps('infrastructure').paasConnectivity.scenario, 'Private')))]",
+                  "toolTip": "Choose an existing nondelegated subnet. Function outbound integration requires a separate delegated subnet.",
+                  "constraints": {
+                    "required": true,
+                    "allowedValues": "[if(empty(steps('infrastructure').privateEndpointSubnets.privateEndpointSubnetsApi.value), parse('[{\"label\":\"Select a VNet or check subnet read permissions\",\"value\":\"\"}]'), if(empty(filter(steps('infrastructure').privateEndpointSubnets.privateEndpointSubnetsApi.value, (snet) => empty(snet.properties.delegations))), parse('[{\"label\":\"No nondelegated subnets found\",\"value\":\"\"}]'), map(filter(steps('infrastructure').privateEndpointSubnets.privateEndpointSubnetsApi.value, (snet) => empty(snet.properties.delegations)), (snet) => parse(concat('{\"label\":\"', snet.name, '\",\"value\":{\"id\":\"', snet.id, '\"}}')))))]"
+                  }
+                },
+                {
+                  "name": "subnetPrerequisite",
+                  "type": "Microsoft.Common.TextBox",
+                  "label": "Private endpoint placement prerequisite",
+                  "defaultValue": "Select one existing nondelegated shared subnet for all selected private endpoints.",
+                  "readOnly": true,
+                  "visible": "[or(if(equals(steps('infrastructure').paasConnectivity.scenario, 'Custom'), steps('infrastructure').storagePrivateNetworking.storagePrivateEndpoint, equals(steps('infrastructure').paasConnectivity.scenario, 'Private')), if(equals(steps('infrastructure').paasConnectivity.scenario, 'Custom'), steps('infrastructure').functionAppPrivateNetworking.functionAppPrivateEndpoint, equals(steps('infrastructure').paasConnectivity.scenario, 'Private')))]",
+                  "constraints": {
+                    "required": true,
+                    "validations": [
+                      {
+                        "isValid": "[not(empty(steps('infrastructure').privateEndpointSubnets.privateEndpointSubnet.id))]",
+                        "message": "Select one existing nondelegated shared subnet for all selected private endpoints."
+                      }
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "storagePrivateNetworking",
+              "type": "Microsoft.Common.Section",
+              "label": "Storage networking: Private endpoints",
+              "visible": "[or(equals(steps('infrastructure').paasConnectivity.scenario, 'Custom'), if(equals(steps('infrastructure').paasConnectivity.scenario, 'Custom'), steps('infrastructure').storagePrivateNetworking.storagePrivateEndpoint, equals(steps('infrastructure').paasConnectivity.scenario, 'Private')))]",
+              "elements": [
+                {
+                  "name": "privateEndpointInfo",
+                  "type": "Microsoft.Common.InfoBox",
+                  "options": {
+                    "style": "Info",
+                    "text": "Applies to all Storage accounts created by this deployment. Existing or consumed accounts are not reconfigured. Private endpoints and public endpoint access are independent. Configure DNS for the intended client path; public firewall rules do not restrict Private Link traffic."
+                  }
+                },
+                {
+                  "name": "storagePrivateEndpoint",
+                  "type": "Microsoft.Common.OptionsGroup",
+                  "label": "Deploy Storage private endpoints",
+                  "defaultValue": "Yes",
+                  "constraints": {
+                    "required": true,
+                    "allowedValues": [
+                      {
+                        "label": "Yes",
+                        "value": true
+                      },
+                      {
+                        "label": "No",
+                        "value": false
+                      }
+                    ]
+                  },
+                  "visible": "[equals(steps('infrastructure').paasConnectivity.scenario, 'Custom')]"
+                },
+                {
+                  "name": "enablePrivateDNSIntegration",
+                  "type": "Microsoft.Common.OptionsGroup",
+                  "label": "Integrate with Azure Private DNS",
+                  "defaultValue": "Yes",
+                  "constraints": {
+                    "required": true,
+                    "allowedValues": [
+                      {
+                        "label": "Yes",
+                        "value": true
+                      },
+                      {
+                        "label": "No",
+                        "value": false
+                      }
+                    ]
+                  },
+                  "visible": "[if(equals(steps('infrastructure').paasConnectivity.scenario, 'Custom'), steps('infrastructure').storagePrivateNetworking.storagePrivateEndpoint, equals(steps('infrastructure').paasConnectivity.scenario, 'Private'))]"
+                },
+                {
+                  "name": "externalDnsInfo",
+                  "type": "Microsoft.Common.InfoBox",
+                  "options": {
+                    "style": "Warning",
+                    "text": "If Azure Private DNS integration is disabled, provide DNS records through your approved DNS or policy process. Private endpoints alone do not configure client name resolution."
+                  },
+                  "visible": "[and(if(equals(steps('infrastructure').paasConnectivity.scenario, 'Custom'), steps('infrastructure').storagePrivateNetworking.storagePrivateEndpoint, equals(steps('infrastructure').paasConnectivity.scenario, 'Private')), not(steps('infrastructure').storagePrivateNetworking.enablePrivateDNSIntegration))]"
+                },
+                {
+                  "name": "privateDnsSubscription",
+                  "type": "Microsoft.Common.SubscriptionSelector",
+                  "resourceProviders": [
+                    "Microsoft.Network"
+                  ],
+                  "visible": "[and(if(equals(steps('infrastructure').paasConnectivity.scenario, 'Custom'), steps('infrastructure').storagePrivateNetworking.storagePrivateEndpoint, equals(steps('infrastructure').paasConnectivity.scenario, 'Private')), steps('infrastructure').storagePrivateNetworking.enablePrivateDNSIntegration)]"
+                },
+                {
+                  "name": "privateDnsZonesApi",
+                  "type": "Microsoft.Solutions.ArmApiControl",
+                  "condition": "[and(true, if(equals(steps('infrastructure').paasConnectivity.scenario, 'Custom'), steps('infrastructure').storagePrivateNetworking.storagePrivateEndpoint, equals(steps('infrastructure').paasConnectivity.scenario, 'Private')), steps('infrastructure').storagePrivateNetworking.enablePrivateDNSIntegration, not(empty(steps('infrastructure').storagePrivateNetworking.privateDnsSubscription.subscriptionId)))]",
+                  "request": {
+                    "method": "GET",
+                    "path": "[concat('/subscriptions/', steps('infrastructure').storagePrivateNetworking.privateDnsSubscription.subscriptionId, '/providers/Microsoft.Network/privateDnsZones?api-version=2018-09-01')]"
+                  }
+                },
+                {
+                  "name": "blobPrivateDnsZone",
+                  "type": "Microsoft.Common.DropDown",
+                  "filter": true,
+                  "label": "Blob private DNS zone",
+                  "defaultValue": "[if(empty(steps('infrastructure').storagePrivateNetworking.privateDnsZonesApi.value), 'Select a DNS subscription or check zone availability', if(empty(filter(steps('infrastructure').storagePrivateNetworking.privateDnsZonesApi.value, (zone) => contains(zone.name, 'privatelink.blob.'))), 'Select a DNS subscription or check zone availability', first(map(filter(steps('infrastructure').storagePrivateNetworking.privateDnsZonesApi.value, (zone) => contains(zone.name, 'privatelink.blob.')), (zone) => zone.name))))]",
+                  "multiLine": true,
+                  "visible": "[and(if(equals(steps('infrastructure').paasConnectivity.scenario, 'Custom'), steps('infrastructure').storagePrivateNetworking.storagePrivateEndpoint, equals(steps('infrastructure').paasConnectivity.scenario, 'Private')), steps('infrastructure').storagePrivateNetworking.enablePrivateDNSIntegration)]",
+                  "constraints": {
+                    "required": true,
+                    "allowedValues": "[if(empty(steps('infrastructure').storagePrivateNetworking.privateDnsZonesApi.value), parse('[{\"label\":\"Select a DNS subscription or check zone availability\",\"value\":\"\"}]'), if(empty(filter(steps('infrastructure').storagePrivateNetworking.privateDnsZonesApi.value, (zone) => contains(zone.name, 'privatelink.blob.'))), parse('[{\"label\":\"Select a DNS subscription or check zone availability\",\"value\":\"\"}]'), map(filter(steps('infrastructure').storagePrivateNetworking.privateDnsZonesApi.value, (zone) => contains(zone.name, 'privatelink.blob.')), (zone) => parse(concat('{\"label\":\"', zone.name, '\",\"description\":\"Resource group: ', first(skip(split(zone.id, '/'), 4)), '\",\"value\":\"', zone.id, '\"}')))))]"
+                  }
+                },
+                {
+                  "name": "tablePrivateDnsZone",
+                  "type": "Microsoft.Common.DropDown",
+                  "filter": true,
+                  "label": "Table private DNS zone",
+                  "defaultValue": "[if(empty(steps('infrastructure').storagePrivateNetworking.privateDnsZonesApi.value), 'Select a DNS subscription or check zone availability', if(empty(filter(steps('infrastructure').storagePrivateNetworking.privateDnsZonesApi.value, (zone) => contains(zone.name, 'privatelink.table.'))), 'Select a DNS subscription or check zone availability', first(map(filter(steps('infrastructure').storagePrivateNetworking.privateDnsZonesApi.value, (zone) => contains(zone.name, 'privatelink.table.')), (zone) => zone.name))))]",
+                  "multiLine": true,
+                  "visible": "[and(if(equals(steps('infrastructure').paasConnectivity.scenario, 'Custom'), steps('infrastructure').storagePrivateNetworking.storagePrivateEndpoint, equals(steps('infrastructure').paasConnectivity.scenario, 'Private')), steps('infrastructure').storagePrivateNetworking.enablePrivateDNSIntegration)]",
+                  "constraints": {
+                    "required": true,
+                    "allowedValues": "[if(empty(steps('infrastructure').storagePrivateNetworking.privateDnsZonesApi.value), parse('[{\"label\":\"Select a DNS subscription or check zone availability\",\"value\":\"\"}]'), if(empty(filter(steps('infrastructure').storagePrivateNetworking.privateDnsZonesApi.value, (zone) => contains(zone.name, 'privatelink.table.'))), parse('[{\"label\":\"Select a DNS subscription or check zone availability\",\"value\":\"\"}]'), map(filter(steps('infrastructure').storagePrivateNetworking.privateDnsZonesApi.value, (zone) => contains(zone.name, 'privatelink.table.')), (zone) => parse(concat('{\"label\":\"', zone.name, '\",\"description\":\"Resource group: ', first(skip(split(zone.id, '/'), 4)), '\",\"value\":\"', zone.id, '\"}')))))]"
+                  }
+                }
+              ]
+            },
+            {
+              "name": "storagePublicNetworking",
+              "type": "Microsoft.Common.Section",
+              "label": "Storage networking: Public endpoint access",
+              "visible": "[true]",
+              "elements": [
+                {
+                  "name": "storagePublicNetworkAccess",
+                  "type": "Microsoft.Common.DropDown",
+                  "label": "Public network access",
+                  "defaultValue": "Disabled",
+                  "toolTip": "Applies to all Storage accounts created by this deployment. Existing or consumed accounts are not reconfigured.",
+                  "constraints": {
+                    "required": true,
+                    "allowedValues": [
+                      {
+                        "label": "Disabled",
+                        "value": "Disabled"
+                      },
+                      {
+                        "label": "Enabled with restrictions",
+                        "value": "EnabledWithRestrictions"
+                      },
+                      {
+                        "label": "Enabled",
+                        "value": "Enabled"
+                      }
+                    ]
+                  },
+                  "visible": "[equals(steps('infrastructure').paasConnectivity.scenario, 'Custom')]"
+                },
+                {
+                  "name": "publicAccessDisabledInfo",
+                  "type": "Microsoft.Common.TextBlock",
+                  "visible": "[equals(if(equals(steps('infrastructure').paasConnectivity.scenario, 'Custom'), steps('infrastructure').storagePublicNetworking.storagePublicNetworkAccess, if(equals(steps('infrastructure').paasConnectivity.scenario, 'Restricted'), 'EnabledWithRestrictions', 'Disabled')), 'Disabled')]",
+                  "options": {
+                    "text": "Public network access is disabled. Ensure private connectivity is available. Existing trusted-service exceptions may still apply."
+                  }
+                },
+                {
+                  "name": "publicAccessEnabledWithRestrictionsInfo",
+                  "type": "Microsoft.Common.TextBlock",
+                  "visible": "[equals(if(equals(steps('infrastructure').paasConnectivity.scenario, 'Custom'), steps('infrastructure').storagePublicNetworking.storagePublicNetworkAccess, if(equals(steps('infrastructure').paasConnectivity.scenario, 'Restricted'), 'EnabledWithRestrictions', 'Disabled')), 'EnabledWithRestrictions')]",
+                  "options": {
+                    "text": "Allow IP addresses, service-endpoint subnets, or both. Other public traffic is denied, subject to existing service exceptions."
+                  }
+                },
+                {
+                  "name": "publicAccessEnabledInfo",
+                  "type": "Microsoft.Common.InfoBox",
+                  "visible": "[equals(if(equals(steps('infrastructure').paasConnectivity.scenario, 'Custom'), steps('infrastructure').storagePublicNetworking.storagePublicNetworkAccess, if(equals(steps('infrastructure').paasConnectivity.scenario, 'Restricted'), 'EnabledWithRestrictions', 'Disabled')), 'Enabled')]",
+                  "options": {
+                    "text": "Public network access is unrestricted. Stored IP and subnet rules do not limit traffic. Authentication is still required.",
+                    "style": "Warning"
+                  }
+                },
+                {
+                  "name": "noPrivateConnectivityWarning",
+                  "type": "Microsoft.Common.InfoBox",
+                  "options": {
+                    "style": "Warning",
+                    "text": "Public access is disabled and this deployment is not creating private endpoints for this service. Provide an existing approved connectivity path before deploying."
+                  },
+                  "visible": "[and(equals(if(equals(steps('infrastructure').paasConnectivity.scenario, 'Custom'), steps('infrastructure').storagePublicNetworking.storagePublicNetworkAccess, if(equals(steps('infrastructure').paasConnectivity.scenario, 'Restricted'), 'EnabledWithRestrictions', 'Disabled')), 'Disabled'), not(if(equals(steps('infrastructure').paasConnectivity.scenario, 'Custom'), steps('infrastructure').storagePrivateNetworking.storagePrivateEndpoint, equals(steps('infrastructure').paasConnectivity.scenario, 'Private'))))]"
+                }
+              ]
+            },
+            {
+              "name": "storageServiceEndpointAccess",
+              "type": "Microsoft.Common.Section",
+              "label": "Storage networking: Allowed public-endpoint sources",
+              "visible": "[and(true, equals(if(equals(steps('infrastructure').paasConnectivity.scenario, 'Custom'), steps('infrastructure').storagePublicNetworking.storagePublicNetworkAccess, if(equals(steps('infrastructure').paasConnectivity.scenario, 'Restricted'), 'EnabledWithRestrictions', 'Disabled')), 'EnabledWithRestrictions'))]",
+              "elements": [
+                {
+                  "name": "requirements",
+                  "type": "Microsoft.Common.InfoBox",
+                  "options": {
+                    "style": "Info",
+                    "text": "Applies to all Storage accounts created by this deployment. Existing or consumed accounts are not reconfigured. Allow IP addresses, service-endpoint subnets, or both. This deployment never enables endpoints on existing subnets. Service endpoints use the public service endpoint, not a private IP."
+                  }
+                },
+                {
+                  "name": "storagePermittedIPs",
+                  "type": "Microsoft.Common.EditableGrid",
+                  "ariaLabel": "Permitted IP Addresses or CIDR Ranges",
+                  "label": "Permitted IP Addresses / CIDR Ranges",
+                  "visible": "[equals(if(equals(steps('infrastructure').paasConnectivity.scenario, 'Custom'), steps('infrastructure').storagePublicNetworking.storagePublicNetworkAccess, if(equals(steps('infrastructure').paasConnectivity.scenario, 'Restricted'), 'EnabledWithRestrictions', 'Disabled')), 'EnabledWithRestrictions')]",
+                  "constraints": {
+                    "width": "Full",
+                    "rows": {
+                      "count": {
+                        "min": 0,
+                        "max": 50
+                      }
+                    },
+                    "columns": [
+                      {
+                        "id": "ipAddress",
+                        "header": "IP Address or CIDR Range",
+                        "width": "1fr",
+                        "element": {
+                          "type": "Microsoft.Common.TextBox",
+                          "placeholder": "e.g. 203.0.113.10 or 203.0.113.0/24",
+                          "constraints": {
+                            "required": false,
+                            "regex": "^(\\d{1,3}\\.){3}\\d{1,3}(\\/\\d{1,2})?$",
+                            "validationMessage": "Enter a valid IPv4 address or CIDR range."
+                          }
+                        }
+                      }
+                    ]
+                  }
+                },
+                {
+                  "name": "inventoryStatus",
+                  "type": "Microsoft.Common.InfoBox",
+                  "options": {
+                    "style": "Info",
+                    "text": "The subnet inventory has not loaded. If this persists, check the subscription and Microsoft.Network read permissions."
+                  },
+                  "visible": "[not(equals(steps('infrastructure').serviceEndpointVirtualNetworksApi.transformed.loaded, true))]"
+                },
+                {
+                  "name": "inventoryPageWarning",
+                  "type": "Microsoft.Common.InfoBox",
+                  "options": {
+                    "style": "Warning",
+                    "text": "The VNet API returned a partial inventory. Use a parameter-file deployment for subnets on later pages."
+                  },
+                  "visible": "[not(empty(steps('infrastructure').serviceEndpointVirtualNetworksApi.transformed.nextLink))]"
+                },
+                {
+                  "name": "storageServiceEndpointSubnets",
+                  "type": "Microsoft.Common.DropDown",
+                  "label": "Storage access subnets",
+                  "multiselect": true,
+                  "selectAll": false,
+                  "filter": true,
+                  "multiLine": true,
+                  "defaultValue": "[parse('[]')]",
+                  "toolTip": "Requires existing Microsoft.Storage in the storage region, or Microsoft.Storage.Global for cross-region access where supported. Applies only to storage accounts created by this deployment; existing topology ACLs remain additive. Select the Function outbound subnet here when it needs access to the Function's own storage; this does not update consumed profile-share ACLs.",
+                  "visible": "[and(true, equals(if(equals(steps('infrastructure').paasConnectivity.scenario, 'Custom'), steps('infrastructure').storagePublicNetworking.storagePublicNetworkAccess, if(equals(steps('infrastructure').paasConnectivity.scenario, 'Restricted'), 'EnabledWithRestrictions', 'Disabled')), 'EnabledWithRestrictions'))]",
+                  "constraints": {
+                    "required": false,
+                    "allowedValues": "[if(not(equals(steps('infrastructure').serviceEndpointVirtualNetworksApi.transformed.loaded, true)), parse('[{\"label\":\"Loading subnet inventory\",\"value\":\"\"}]'), if(or(empty(steps('infrastructure').serviceEndpointVirtualNetworksApi.transformed.vnets), empty(steps('infrastructure').serviceEndpointVirtualNetworksApi.transformed.subnets)), parse('[{\"label\":\"No eligible subnets found\",\"value\":\"\"}]'), if(empty(filter(steps('infrastructure').serviceEndpointVirtualNetworksApi.transformed.subnets, (snet) => if(empty(snet.properties.serviceEndpoints), false, or(not(empty(filter(snet.properties.serviceEndpoints, (se) => equals(se.service, 'Microsoft.Storage.Global')))), and(not(empty(filter(snet.properties.serviceEndpoints, (se) => equals(se.service, 'Microsoft.Storage')))), contains(map(filter(steps('infrastructure').serviceEndpointVirtualNetworksApi.transformed.vnets, (vnet) => equals(vnet.location, steps('basics').location.name)), (vnet) => vnet.id), first(split(snet.id, '/subnets/')))))))), parse('[{\"label\":\"No eligible subnets found\",\"value\":\"\"}]'), map(filter(steps('infrastructure').serviceEndpointVirtualNetworksApi.transformed.subnets, (snet) => if(empty(snet.properties.serviceEndpoints), false, or(not(empty(filter(snet.properties.serviceEndpoints, (se) => equals(se.service, 'Microsoft.Storage.Global')))), and(not(empty(filter(snet.properties.serviceEndpoints, (se) => equals(se.service, 'Microsoft.Storage')))), contains(map(filter(steps('infrastructure').serviceEndpointVirtualNetworksApi.transformed.vnets, (vnet) => equals(vnet.location, steps('basics').location.name)), (vnet) => vnet.id), first(split(snet.id, '/subnets/'))))))), (snet) => parse(concat('{\"label\":\"', first(skip(split(snet.id, '/'), 8)), ' | ', snet.name, '\",\"description\":\"Resource Group: ', first(skip(split(snet.id, '/'), 4)), '\",\"value\":\"', snet.id, '\"}'))))))]"
+                  }
+                },
+                {
+                  "name": "emptyAllowlistWarning",
+                  "type": "Microsoft.Common.InfoBox",
+                  "options": {
+                    "style": "Warning",
+                    "text": "No ordinary public sources are allowed. Private endpoints still work if reachable; existing service exceptions may apply. Add IP or subnet rules if clients need the public path."
+                  },
+                  "visible": "[and(empty(steps('infrastructure').storageServiceEndpointAccess.storagePermittedIPs), empty(if(empty(steps('infrastructure').storageServiceEndpointAccess.storageServiceEndpointSubnets), parse('[]'), filter(steps('infrastructure').storageServiceEndpointAccess.storageServiceEndpointSubnets, (id) => not(empty(id))))))]"
+                },
+                {
+                  "name": "allowlistPrerequisite",
+                  "type": "Microsoft.Common.TextBox",
+                  "label": "Restricted connectivity prerequisite",
+                  "defaultValue": "Restricted public connectivity without a private endpoint requires an IP/CIDR or eligible service-endpoint subnet.",
+                  "readOnly": true,
+                  "visible": "[and(equals(if(equals(steps('infrastructure').paasConnectivity.scenario, 'Custom'), steps('infrastructure').storagePublicNetworking.storagePublicNetworkAccess, if(equals(steps('infrastructure').paasConnectivity.scenario, 'Restricted'), 'EnabledWithRestrictions', 'Disabled')), 'EnabledWithRestrictions'), not(if(equals(steps('infrastructure').paasConnectivity.scenario, 'Custom'), steps('infrastructure').storagePrivateNetworking.storagePrivateEndpoint, equals(steps('infrastructure').paasConnectivity.scenario, 'Private'))))]",
+                  "constraints": {
+                    "required": true,
+                    "validations": [
+                      {
+                        "isValid": "[or(not(empty(if(empty(steps('infrastructure').storageServiceEndpointAccess.storagePermittedIPs), parse('[]'), filter(map(steps('infrastructure').storageServiceEndpointAccess.storagePermittedIPs, (item) => item.ipAddress), (ip) => not(empty(ip)))))), not(empty(if(empty(steps('infrastructure').storageServiceEndpointAccess.storageServiceEndpointSubnets), parse('[]'), filter(steps('infrastructure').storageServiceEndpointAccess.storageServiceEndpointSubnets, (id) => not(empty(id)))))))]",
+                        "message": "Restricted public connectivity without a private endpoint requires an IP/CIDR or eligible service-endpoint subnet."
+                      }
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "functionAppPrivateNetworking",
+              "type": "Microsoft.Common.Section",
+              "label": "Function App networking: Private endpoints",
+              "visible": "[or(equals(steps('infrastructure').paasConnectivity.scenario, 'Custom'), if(equals(steps('infrastructure').paasConnectivity.scenario, 'Custom'), steps('infrastructure').functionAppPrivateNetworking.functionAppPrivateEndpoint, equals(steps('infrastructure').paasConnectivity.scenario, 'Private')))]",
+              "elements": [
+                {
+                  "name": "privateEndpointInfo",
+                  "type": "Microsoft.Common.InfoBox",
+                  "options": {
+                    "style": "Info",
+                    "text": "One app private endpoint serves both app and SCM. Operators need a route and private DNS for both hostnames. Azure Private DNS zone groups add app and SCM records; external DNS must provide both."
+                  }
+                },
+                {
+                  "name": "functionAppPrivateEndpoint",
+                  "type": "Microsoft.Common.OptionsGroup",
+                  "label": "Deploy Function App private endpoints",
+                  "defaultValue": "Yes",
+                  "constraints": {
+                    "required": true,
+                    "allowedValues": [
+                      {
+                        "label": "Yes",
+                        "value": true
+                      },
+                      {
+                        "label": "No",
+                        "value": false
+                      }
+                    ]
+                  },
+                  "visible": "[equals(steps('infrastructure').paasConnectivity.scenario, 'Custom')]"
+                },
+                {
+                  "name": "enablePrivateDNSIntegration",
+                  "type": "Microsoft.Common.OptionsGroup",
+                  "label": "Integrate with Azure Private DNS",
+                  "defaultValue": "Yes",
+                  "constraints": {
+                    "required": true,
+                    "allowedValues": [
+                      {
+                        "label": "Yes",
+                        "value": true
+                      },
+                      {
+                        "label": "No",
+                        "value": false
+                      }
+                    ]
+                  },
+                  "visible": "[if(equals(steps('infrastructure').paasConnectivity.scenario, 'Custom'), steps('infrastructure').functionAppPrivateNetworking.functionAppPrivateEndpoint, equals(steps('infrastructure').paasConnectivity.scenario, 'Private'))]"
+                },
+                {
+                  "name": "externalDnsInfo",
+                  "type": "Microsoft.Common.InfoBox",
+                  "options": {
+                    "style": "Warning",
+                    "text": "If Azure Private DNS integration is disabled, provide DNS records through your approved DNS or policy process. Private endpoints alone do not configure client name resolution."
+                  },
+                  "visible": "[and(if(equals(steps('infrastructure').paasConnectivity.scenario, 'Custom'), steps('infrastructure').functionAppPrivateNetworking.functionAppPrivateEndpoint, equals(steps('infrastructure').paasConnectivity.scenario, 'Private')), not(steps('infrastructure').functionAppPrivateNetworking.enablePrivateDNSIntegration))]"
+                },
+                {
+                  "name": "privateDnsSubscription",
+                  "type": "Microsoft.Common.SubscriptionSelector",
+                  "resourceProviders": [
+                    "Microsoft.Network"
+                  ],
+                  "visible": "[and(if(equals(steps('infrastructure').paasConnectivity.scenario, 'Custom'), steps('infrastructure').functionAppPrivateNetworking.functionAppPrivateEndpoint, equals(steps('infrastructure').paasConnectivity.scenario, 'Private')), steps('infrastructure').functionAppPrivateNetworking.enablePrivateDNSIntegration)]"
+                },
+                {
+                  "name": "privateDnsZonesApi",
+                  "type": "Microsoft.Solutions.ArmApiControl",
+                  "condition": "[and(true, if(equals(steps('infrastructure').paasConnectivity.scenario, 'Custom'), steps('infrastructure').functionAppPrivateNetworking.functionAppPrivateEndpoint, equals(steps('infrastructure').paasConnectivity.scenario, 'Private')), steps('infrastructure').functionAppPrivateNetworking.enablePrivateDNSIntegration, not(empty(steps('infrastructure').functionAppPrivateNetworking.privateDnsSubscription.subscriptionId)))]",
+                  "request": {
+                    "method": "GET",
+                    "path": "[concat('/subscriptions/', steps('infrastructure').functionAppPrivateNetworking.privateDnsSubscription.subscriptionId, '/providers/Microsoft.Network/privateDnsZones?api-version=2018-09-01')]"
+                  }
+                },
+                {
+                  "name": "websitesPrivateDnsZone",
+                  "type": "Microsoft.Common.DropDown",
+                  "filter": true,
+                  "label": "Function App private DNS zone",
+                  "defaultValue": "[if(empty(steps('infrastructure').functionAppPrivateNetworking.privateDnsZonesApi.value), 'Select a DNS subscription or check zone availability', if(empty(filter(steps('infrastructure').functionAppPrivateNetworking.privateDnsZonesApi.value, (zone) => contains(zone.name, 'privatelink.azurewebsites.'))), 'Select a DNS subscription or check zone availability', first(map(filter(steps('infrastructure').functionAppPrivateNetworking.privateDnsZonesApi.value, (zone) => contains(zone.name, 'privatelink.azurewebsites.')), (zone) => zone.name))))]",
+                  "multiLine": true,
+                  "visible": "[and(if(equals(steps('infrastructure').paasConnectivity.scenario, 'Custom'), steps('infrastructure').functionAppPrivateNetworking.functionAppPrivateEndpoint, equals(steps('infrastructure').paasConnectivity.scenario, 'Private')), steps('infrastructure').functionAppPrivateNetworking.enablePrivateDNSIntegration)]",
+                  "constraints": {
+                    "required": true,
+                    "allowedValues": "[if(empty(steps('infrastructure').functionAppPrivateNetworking.privateDnsZonesApi.value), parse('[{\"label\":\"Select a DNS subscription or check zone availability\",\"value\":\"\"}]'), if(empty(filter(steps('infrastructure').functionAppPrivateNetworking.privateDnsZonesApi.value, (zone) => contains(zone.name, 'privatelink.azurewebsites.'))), parse('[{\"label\":\"Select a DNS subscription or check zone availability\",\"value\":\"\"}]'), map(filter(steps('infrastructure').functionAppPrivateNetworking.privateDnsZonesApi.value, (zone) => contains(zone.name, 'privatelink.azurewebsites.')), (zone) => parse(concat('{\"label\":\"', zone.name, '\",\"description\":\"Resource group: ', first(skip(split(zone.id, '/'), 4)), '\",\"value\":\"', zone.id, '\"}')))))]"
+                  }
+                }
+              ]
+            },
+            {
+              "name": "functionAppPublicNetworking",
+              "type": "Microsoft.Common.Section",
+              "label": "Function App networking: Public endpoint access",
+              "visible": "[true]",
+              "elements": [
+                {
+                  "name": "functionAppPublicNetworkAccess",
+                  "type": "Microsoft.Common.DropDown",
+                  "label": "Public network access",
+                  "defaultValue": "Disabled",
+                  "toolTip": "Applies to Function App inbound and SCM access. It does not configure outbound VNet integration or runtime Storage access.",
+                  "constraints": {
+                    "required": true,
+                    "allowedValues": [
+                      {
+                        "label": "Disabled",
+                        "value": "Disabled"
+                      },
+                      {
+                        "label": "Enabled with restrictions",
+                        "value": "EnabledWithRestrictions"
+                      },
+                      {
+                        "label": "Enabled",
+                        "value": "Enabled"
+                      }
+                    ]
+                  },
+                  "visible": "[equals(steps('infrastructure').paasConnectivity.scenario, 'Custom')]"
+                },
+                {
+                  "name": "publicAccessDisabledInfo",
+                  "type": "Microsoft.Common.TextBlock",
+                  "visible": "[equals(if(equals(steps('infrastructure').paasConnectivity.scenario, 'Custom'), steps('infrastructure').functionAppPublicNetworking.functionAppPublicNetworkAccess, if(equals(steps('infrastructure').paasConnectivity.scenario, 'Restricted'), 'EnabledWithRestrictions', 'Disabled')), 'Disabled')]",
+                  "options": {
+                    "text": "Public network access is disabled. Ensure private connectivity is available. Existing trusted-service exceptions may still apply."
+                  }
+                },
+                {
+                  "name": "publicAccessEnabledWithRestrictionsInfo",
+                  "type": "Microsoft.Common.TextBlock",
+                  "visible": "[equals(if(equals(steps('infrastructure').paasConnectivity.scenario, 'Custom'), steps('infrastructure').functionAppPublicNetworking.functionAppPublicNetworkAccess, if(equals(steps('infrastructure').paasConnectivity.scenario, 'Restricted'), 'EnabledWithRestrictions', 'Disabled')), 'EnabledWithRestrictions')]",
+                  "options": {
+                    "text": "Allow IP addresses, service-endpoint subnets, or both. Other public traffic is denied, subject to existing service exceptions."
+                  }
+                },
+                {
+                  "name": "publicAccessEnabledInfo",
+                  "type": "Microsoft.Common.InfoBox",
+                  "visible": "[equals(if(equals(steps('infrastructure').paasConnectivity.scenario, 'Custom'), steps('infrastructure').functionAppPublicNetworking.functionAppPublicNetworkAccess, if(equals(steps('infrastructure').paasConnectivity.scenario, 'Restricted'), 'EnabledWithRestrictions', 'Disabled')), 'Enabled')]",
+                  "options": {
+                    "text": "Public network access is unrestricted. Stored IP and subnet rules do not limit traffic. Authentication is still required.",
+                    "style": "Warning"
+                  }
+                },
+                {
+                  "name": "noPrivateConnectivityWarning",
+                  "type": "Microsoft.Common.InfoBox",
+                  "options": {
+                    "style": "Warning",
+                    "text": "Public access is disabled and this deployment is not creating private endpoints for this service. Provide an existing approved connectivity path before deploying."
+                  },
+                  "visible": "[and(equals(if(equals(steps('infrastructure').paasConnectivity.scenario, 'Custom'), steps('infrastructure').functionAppPublicNetworking.functionAppPublicNetworkAccess, if(equals(steps('infrastructure').paasConnectivity.scenario, 'Restricted'), 'EnabledWithRestrictions', 'Disabled')), 'Disabled'), not(if(equals(steps('infrastructure').paasConnectivity.scenario, 'Custom'), steps('infrastructure').functionAppPrivateNetworking.functionAppPrivateEndpoint, equals(steps('infrastructure').paasConnectivity.scenario, 'Private'))))]"
+                }
+              ]
+            },
+            {
+              "name": "functionAppServiceEndpointAccess",
+              "type": "Microsoft.Common.Section",
+              "label": "Function App networking: Allowed public-endpoint sources",
+              "visible": "[and(true, equals(if(equals(steps('infrastructure').paasConnectivity.scenario, 'Custom'), steps('infrastructure').functionAppPublicNetworking.functionAppPublicNetworkAccess, if(equals(steps('infrastructure').paasConnectivity.scenario, 'Restricted'), 'EnabledWithRestrictions', 'Disabled')), 'EnabledWithRestrictions'))]",
+              "elements": [
+                {
+                  "name": "requirements",
+                  "type": "Microsoft.Common.InfoBox",
+                  "options": {
+                    "style": "Info",
+                    "text": "Applies to Function App inbound and SCM access. It does not configure outbound VNet integration or runtime Storage access. Allow IP addresses, service-endpoint subnets, or both. This deployment never enables endpoints on existing subnets. Service endpoints use the public service endpoint, not a private IP."
+                  }
+                },
+                {
+                  "name": "operatorAccessInfo",
+                  "type": "Microsoft.Common.InfoBox",
+                  "options": {
+                    "style": "Info",
+                    "text": "App and SCM share these restrictions. Allow the operator browser's public egress IP/CIDR, or a reachable Microsoft.Web service-endpoint subnet. Portal sign-in alone does not grant network access."
+                  }
+                },
+                {
+                  "name": "functionAppPermittedIPs",
+                  "type": "Microsoft.Common.EditableGrid",
+                  "ariaLabel": "Permitted IP Addresses or CIDR Ranges",
+                  "label": "Permitted IP Addresses / CIDR Ranges",
+                  "visible": "[equals(if(equals(steps('infrastructure').paasConnectivity.scenario, 'Custom'), steps('infrastructure').functionAppPublicNetworking.functionAppPublicNetworkAccess, if(equals(steps('infrastructure').paasConnectivity.scenario, 'Restricted'), 'EnabledWithRestrictions', 'Disabled')), 'EnabledWithRestrictions')]",
+                  "constraints": {
+                    "width": "Full",
+                    "rows": {
+                      "count": {
+                        "min": 0,
+                        "max": 50
+                      }
+                    },
+                    "columns": [
+                      {
+                        "id": "ipAddress",
+                        "header": "IP Address or CIDR Range",
+                        "width": "1fr",
+                        "element": {
+                          "type": "Microsoft.Common.TextBox",
+                          "placeholder": "e.g. 203.0.113.10 or 203.0.113.0/24",
+                          "constraints": {
+                            "required": false,
+                            "regex": "^(\\d{1,3}\\.){3}\\d{1,3}(\\/\\d{1,2})?$",
+                            "validationMessage": "Enter a valid IPv4 address or CIDR range."
+                          }
+                        }
+                      }
+                    ]
+                  }
+                },
+                {
+                  "name": "inventoryStatus",
+                  "type": "Microsoft.Common.InfoBox",
+                  "options": {
+                    "style": "Info",
+                    "text": "The subnet inventory has not loaded. If this persists, check the subscription and Microsoft.Network read permissions."
+                  },
+                  "visible": "[not(equals(steps('infrastructure').serviceEndpointVirtualNetworksApi.transformed.loaded, true))]"
+                },
+                {
+                  "name": "inventoryPageWarning",
+                  "type": "Microsoft.Common.InfoBox",
+                  "options": {
+                    "style": "Warning",
+                    "text": "The VNet API returned a partial inventory. Use a parameter-file deployment for subnets on later pages."
+                  },
+                  "visible": "[not(empty(steps('infrastructure').serviceEndpointVirtualNetworksApi.transformed.nextLink))]"
+                },
+                {
+                  "name": "functionAppServiceEndpointSubnets",
+                  "type": "Microsoft.Common.DropDown",
+                  "label": "Function App inbound access subnets",
+                  "multiselect": true,
+                  "selectAll": false,
+                  "filter": true,
+                  "multiLine": true,
+                  "defaultValue": "[parse('[]')]",
+                  "toolTip": "Requires existing Microsoft.Web. App/SCM inbound restrictions only, not outbound VNet integration. Select operator source subnets here; select outbound integration separately.",
+                  "visible": "[and(true, equals(if(equals(steps('infrastructure').paasConnectivity.scenario, 'Custom'), steps('infrastructure').functionAppPublicNetworking.functionAppPublicNetworkAccess, if(equals(steps('infrastructure').paasConnectivity.scenario, 'Restricted'), 'EnabledWithRestrictions', 'Disabled')), 'EnabledWithRestrictions'))]",
+                  "constraints": {
+                    "required": false,
+                    "allowedValues": "[if(not(equals(steps('infrastructure').serviceEndpointVirtualNetworksApi.transformed.loaded, true)), parse('[{\"label\":\"Loading subnet inventory\",\"value\":\"\"}]'), if(or(empty(steps('infrastructure').serviceEndpointVirtualNetworksApi.transformed.vnets), empty(steps('infrastructure').serviceEndpointVirtualNetworksApi.transformed.subnets)), parse('[{\"label\":\"No eligible subnets found\",\"value\":\"\"}]'), if(empty(filter(steps('infrastructure').serviceEndpointVirtualNetworksApi.transformed.subnets, (snet) => if(empty(snet.properties.serviceEndpoints), false, not(empty(filter(snet.properties.serviceEndpoints, (se) => equals(se.service, 'Microsoft.Web'))))))), parse('[{\"label\":\"No eligible subnets found\",\"value\":\"\"}]'), map(filter(steps('infrastructure').serviceEndpointVirtualNetworksApi.transformed.subnets, (snet) => if(empty(snet.properties.serviceEndpoints), false, not(empty(filter(snet.properties.serviceEndpoints, (se) => equals(se.service, 'Microsoft.Web')))))), (snet) => parse(concat('{\"label\":\"', first(skip(split(snet.id, '/'), 8)), ' | ', snet.name, '\",\"description\":\"Resource Group: ', first(skip(split(snet.id, '/'), 4)), '\",\"value\":\"', snet.id, '\"}'))))))]"
+                  }
+                },
+                {
+                  "name": "emptyAllowlistWarning",
+                  "type": "Microsoft.Common.InfoBox",
+                  "options": {
+                    "style": "Warning",
+                    "text": "No ordinary public sources are allowed. Private endpoints still work if reachable; existing service exceptions may apply. Add IP or subnet rules if clients need the public path."
+                  },
+                  "visible": "[and(empty(steps('infrastructure').functionAppServiceEndpointAccess.functionAppPermittedIPs), empty(if(empty(steps('infrastructure').functionAppServiceEndpointAccess.functionAppServiceEndpointSubnets), parse('[]'), filter(steps('infrastructure').functionAppServiceEndpointAccess.functionAppServiceEndpointSubnets, (id) => not(empty(id))))))]"
+                },
+                {
+                  "name": "allowlistPrerequisite",
+                  "type": "Microsoft.Common.TextBox",
+                  "label": "Restricted connectivity prerequisite",
+                  "defaultValue": "Restricted public connectivity without a private endpoint requires an IP/CIDR or eligible service-endpoint subnet.",
+                  "readOnly": true,
+                  "visible": "[and(equals(if(equals(steps('infrastructure').paasConnectivity.scenario, 'Custom'), steps('infrastructure').functionAppPublicNetworking.functionAppPublicNetworkAccess, if(equals(steps('infrastructure').paasConnectivity.scenario, 'Restricted'), 'EnabledWithRestrictions', 'Disabled')), 'EnabledWithRestrictions'), not(if(equals(steps('infrastructure').paasConnectivity.scenario, 'Custom'), steps('infrastructure').functionAppPrivateNetworking.functionAppPrivateEndpoint, equals(steps('infrastructure').paasConnectivity.scenario, 'Private'))))]",
+                  "constraints": {
+                    "required": true,
+                    "validations": [
+                      {
+                        "isValid": "[or(not(empty(if(empty(steps('infrastructure').functionAppServiceEndpointAccess.functionAppPermittedIPs), parse('[]'), filter(map(steps('infrastructure').functionAppServiceEndpointAccess.functionAppPermittedIPs, (item) => item.ipAddress), (ip) => not(empty(ip)))))), not(empty(if(empty(steps('infrastructure').functionAppServiceEndpointAccess.functionAppServiceEndpointSubnets), parse('[]'), filter(steps('infrastructure').functionAppServiceEndpointAccess.functionAppServiceEndpointSubnets, (id) => not(empty(id)))))))]",
+                        "message": "Restricted public connectivity without a private endpoint requires an IP/CIDR or eligible service-endpoint subnet."
+                      }
+                    ]
+                  }
+                }
+              ]
             }
           ]
         },
@@ -3579,7 +4079,7 @@
                   "type": "Microsoft.Common.TextBlock",
                   "visible": "[empty(steps('basics').hostsRGProps.tags.virtualMachineNameConv)]",
                   "options": {
-                    "text": "Examples:\n• If existing VMs are 'avdvm-001', use 'SHNAME' (no prefix/suffix)\n• If existing VMs are 'vm-avdvm-001', use 'vm-SHNAME'\n• If existing VMs are 'avdvm-001-vm', use 'SHNAME-vm'"
+                    "text": "Examples:\n\u2022 If existing VMs are 'avdvm-001', use 'SHNAME' (no prefix/suffix)\n\u2022 If existing VMs are 'vm-avdvm-001', use 'vm-SHNAME'\n\u2022 If existing VMs are 'avdvm-001-vm', use 'SHNAME-vm'"
                   }
                 },
                 {
@@ -3705,14 +4205,7 @@
         "zoneRedundant": "[if(not(steps('infrastructure').useExistingHostingPlan), steps('infrastructure').zoneRedundant, false)]",
         "keyManagementStorageAccounts": "[steps('infrastructure').keyManagementStorageAccounts]",
         "encryptionKeyVaultResourceId": "[if(contains(steps('infrastructure').keyManagementStorageAccounts, 'Customer'), steps('infrastructure').encryptionKeyVault, '')]",
-        "privateEndpoint": "[steps('infrastructure').configureZeroTrustNetworking]",
-        "functionAppDelegatedSubnetResourceId": "[if(steps('infrastructure').configureZeroTrustNetworking, steps('infrastructure').functionAppOutboundSubnet, '')]",
-        "privateEndpointSubnetResourceId": "[if(steps('infrastructure').configureZeroTrustNetworking, steps('infrastructure').functionAppPrivateEndpointSubnet, '')]",
-        "azureFunctionAppPrivateDnsZoneResourceId": "[if(and(steps('infrastructure').configureZeroTrustNetworking, steps('infrastructure').enablePrivateDNSIntegration), steps('infrastructure').azureFunctionAppPrivateDnsZone, '')]",
-        "azureBlobPrivateDnsZoneResourceId": "[if(and(steps('infrastructure').configureZeroTrustNetworking, steps('infrastructure').enablePrivateDNSIntegration), steps('infrastructure').azureBlobPrivateDnsZone, '')]",
-        "azureTablePrivateDnsZoneResourceId": "[if(and(steps('infrastructure').configureZeroTrustNetworking, steps('infrastructure').enablePrivateDNSIntegration), steps('infrastructure').azureTablePrivateDnsZone, '')]",
-        "permittedIPs": "[filter(map(steps('infrastructure').permittedIPs, (item) => item.ipAddress), (ip) => not(empty(ip)))]",
-        "paasPublicNetworkAccess": "[steps('infrastructure').paasPublicNetworkAccess]",
+        "functionAppDelegatedSubnetResourceId": "[if(steps('infrastructure').enableVnetIntegration, steps('infrastructure').functionAppOutboundSubnet, '')]",
         "identitySolution": "[if(contains(steps('hosts').identity.machineIdentity, 'DomainServices'), steps('hosts').identity.machineIdentity, if(or(equals(steps('basics').hostPoolProps.properties.hostPoolType, 'Personal'), not(and(equals(steps('userProfiles').profileSolution, 'FSLogix'), steps('userProfiles').configureSessionHosts))), 'EntraId', steps('userProfiles').userIdentity))]",
         "domainName": "[if(contains(steps('hosts').identity.machineIdentity, 'DomainServices'), steps('hosts').identity.domainName, '')]",
         "ouPath": "[if(or(equals(steps('hosts').identity.machineIdentity, 'ActiveDirectoryDomainServices'), equals(steps('hosts').identity.machineIdentity, 'EntraDomainServices')), steps('hosts').identity.ouPath, '')]",
@@ -3772,7 +4265,10 @@
         "virtualMachineDiskNameConv": "[if(empty(steps('basics').hostsRGProps.tags.virtualMachineDiskNameConv), steps('advanced').sessionHostNaming.diskNameConvOverride, steps('basics').hostsRGProps.tags.virtualMachineDiskNameConv)]",
         "virtualMachineNicNameConv": "[if(empty(steps('basics').hostsRGProps.tags.virtualMachineNicNameConv), steps('advanced').sessionHostNaming.networkInterfaceNameConvOverride, steps('basics').hostsRGProps.tags.virtualMachineNicNameConv)]",
         "availabilitySetNameConv": "[if(empty(steps('basics').hostsRGProps.tags.availabilitySetNameConv), steps('advanced').sessionHostNaming.availabilitySetNameConvOverride, steps('basics').hostsRGProps.tags.availabilitySetNameConv)]",
-        "tags": "[steps('advanced').tagsSection.tags]"
+        "tags": "[steps('advanced').tagsSection.tags]",
+        "paasNetworking": "[first(map(parse('[0]'), (_) => {\"publicNetworkAccess\": if(equals(steps('infrastructure').paasConnectivity.scenario, 'Restricted'), 'EnabledWithRestrictions', 'Disabled'), \"privateEndpoint\": not(equals(steps('infrastructure').paasConnectivity.scenario, 'Restricted')), \"storage\": if(true, first(map(parse('[0]'), (_) => {\"publicNetworkAccess\": if(equals(steps('infrastructure').paasConnectivity.scenario, 'Custom'), steps('infrastructure').storagePublicNetworking.storagePublicNetworkAccess, if(equals(steps('infrastructure').paasConnectivity.scenario, 'Restricted'), 'EnabledWithRestrictions', 'Disabled')), \"privateEndpoint\": if(equals(steps('infrastructure').paasConnectivity.scenario, 'Custom'), steps('infrastructure').storagePrivateNetworking.storagePrivateEndpoint, equals(steps('infrastructure').paasConnectivity.scenario, 'Private')), \"permittedIPs\": if(equals(if(equals(steps('infrastructure').paasConnectivity.scenario, 'Custom'), steps('infrastructure').storagePublicNetworking.storagePublicNetworkAccess, if(equals(steps('infrastructure').paasConnectivity.scenario, 'Restricted'), 'EnabledWithRestrictions', 'Disabled')), 'EnabledWithRestrictions'), if(empty(steps('infrastructure').storageServiceEndpointAccess.storagePermittedIPs), parse('[]'), filter(map(steps('infrastructure').storageServiceEndpointAccess.storagePermittedIPs, (item) => item.ipAddress), (ip) => not(empty(ip)))), parse('[]')), \"serviceEndpointSubnetResourceIds\": if(equals(if(equals(steps('infrastructure').paasConnectivity.scenario, 'Custom'), steps('infrastructure').storagePublicNetworking.storagePublicNetworkAccess, if(equals(steps('infrastructure').paasConnectivity.scenario, 'Restricted'), 'EnabledWithRestrictions', 'Disabled')), 'EnabledWithRestrictions'), if(empty(steps('infrastructure').storageServiceEndpointAccess.storageServiceEndpointSubnets), parse('[]'), filter(steps('infrastructure').storageServiceEndpointAccess.storageServiceEndpointSubnets, (id) => not(empty(id)))), parse('[]'))})), parse('{}')), \"functionApp\": if(true, first(map(parse('[0]'), (_) => {\"publicNetworkAccess\": if(equals(steps('infrastructure').paasConnectivity.scenario, 'Custom'), steps('infrastructure').functionAppPublicNetworking.functionAppPublicNetworkAccess, if(equals(steps('infrastructure').paasConnectivity.scenario, 'Restricted'), 'EnabledWithRestrictions', 'Disabled')), \"privateEndpoint\": if(equals(steps('infrastructure').paasConnectivity.scenario, 'Custom'), steps('infrastructure').functionAppPrivateNetworking.functionAppPrivateEndpoint, equals(steps('infrastructure').paasConnectivity.scenario, 'Private')), \"permittedIPs\": if(equals(if(equals(steps('infrastructure').paasConnectivity.scenario, 'Custom'), steps('infrastructure').functionAppPublicNetworking.functionAppPublicNetworkAccess, if(equals(steps('infrastructure').paasConnectivity.scenario, 'Restricted'), 'EnabledWithRestrictions', 'Disabled')), 'EnabledWithRestrictions'), if(empty(steps('infrastructure').functionAppServiceEndpointAccess.functionAppPermittedIPs), parse('[]'), filter(map(steps('infrastructure').functionAppServiceEndpointAccess.functionAppPermittedIPs, (item) => item.ipAddress), (ip) => not(empty(ip)))), parse('[]')), \"serviceEndpointSubnetResourceIds\": if(equals(if(equals(steps('infrastructure').paasConnectivity.scenario, 'Custom'), steps('infrastructure').functionAppPublicNetworking.functionAppPublicNetworkAccess, if(equals(steps('infrastructure').paasConnectivity.scenario, 'Restricted'), 'EnabledWithRestrictions', 'Disabled')), 'EnabledWithRestrictions'), if(empty(steps('infrastructure').functionAppServiceEndpointAccess.functionAppServiceEndpointSubnets), parse('[]'), filter(steps('infrastructure').functionAppServiceEndpointAccess.functionAppServiceEndpointSubnets, (id) => not(empty(id)))), parse('[]'))})), parse('{}'))}))]",
+        "privateEndpointSubnetResourceIds": "[first(map(parse('[0]'), (_) => {\"sharedResources\": if(or(if(equals(steps('infrastructure').paasConnectivity.scenario, 'Custom'), steps('infrastructure').storagePrivateNetworking.storagePrivateEndpoint, equals(steps('infrastructure').paasConnectivity.scenario, 'Private')), if(equals(steps('infrastructure').paasConnectivity.scenario, 'Custom'), steps('infrastructure').functionAppPrivateNetworking.functionAppPrivateEndpoint, equals(steps('infrastructure').paasConnectivity.scenario, 'Private'))), steps('infrastructure').privateEndpointSubnets.privateEndpointSubnet.id, '')}))]",
+        "privateDnsZoneResourceIds": "[first(map(parse('[0]'), (_) => {\"blob\": if(and(if(equals(steps('infrastructure').paasConnectivity.scenario, 'Custom'), steps('infrastructure').storagePrivateNetworking.storagePrivateEndpoint, equals(steps('infrastructure').paasConnectivity.scenario, 'Private')), steps('infrastructure').storagePrivateNetworking.enablePrivateDNSIntegration), steps('infrastructure').storagePrivateNetworking.blobPrivateDnsZone, ''), \"table\": if(and(if(equals(steps('infrastructure').paasConnectivity.scenario, 'Custom'), steps('infrastructure').storagePrivateNetworking.storagePrivateEndpoint, equals(steps('infrastructure').paasConnectivity.scenario, 'Private')), steps('infrastructure').storagePrivateNetworking.enablePrivateDNSIntegration), steps('infrastructure').storagePrivateNetworking.tablePrivateDnsZone, ''), \"websites\": if(and(if(equals(steps('infrastructure').paasConnectivity.scenario, 'Custom'), steps('infrastructure').functionAppPrivateNetworking.functionAppPrivateEndpoint, equals(steps('infrastructure').paasConnectivity.scenario, 'Private')), steps('infrastructure').functionAppPrivateNetworking.enablePrivateDNSIntegration), steps('infrastructure').functionAppPrivateNetworking.websitesPrivateDnsZone, '')}))]"
       },
       "kind": "Subscription",
       "location": "[steps('basics').location.name]",

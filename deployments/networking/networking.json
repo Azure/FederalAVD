@@ -6,7 +6,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.49.2.45890",
-      "templateHash": "1796793606427725227"
+      "templateHash": "15955848899928962045"
     }
   },
   "definitions": {
@@ -875,7 +875,7 @@
         "description": "Optional. The Air-Gapped Cloud Recovery Services RegionCode."
       }
     },
-    "azureBackupZoneId": {
+    "backupPrivateDnsZoneResourceId": {
       "type": "string",
       "defaultValue": "",
       "metadata": {
@@ -889,7 +889,7 @@
         "description": "Optional. Determines if the Azure Blob Storage private DNS zone should be created."
       }
     },
-    "azureBlobZoneId": {
+    "blobPrivateDnsZoneResourceId": {
       "type": "string",
       "defaultValue": "",
       "metadata": {
@@ -903,7 +903,7 @@
         "description": "Optional. Determines if the Azure Files Storage private DNS zone should be created."
       }
     },
-    "azureFilesZoneId": {
+    "filePrivateDnsZoneResourceId": {
       "type": "string",
       "defaultValue": "",
       "metadata": {
@@ -917,7 +917,7 @@
         "description": "Optional. Determines if the Azure Queue Storage private DNS zone should be created."
       }
     },
-    "azureQueueZoneId": {
+    "queuePrivateDnsZoneResourceId": {
       "type": "string",
       "defaultValue": "",
       "metadata": {
@@ -931,7 +931,7 @@
         "description": "Optional. Determines if the Azure Table Storage private DNS zone should be created."
       }
     },
-    "azureTableZoneId": {
+    "tablePrivateDnsZoneResourceId": {
       "type": "string",
       "defaultValue": "",
       "metadata": {
@@ -945,7 +945,7 @@
         "description": "Optional. Determines if the Azure Key Vault private DNS zone should be created."
       }
     },
-    "azureKeyVaultZoneId": {
+    "vaultPrivateDnsZoneResourceId": {
       "type": "string",
       "defaultValue": "",
       "metadata": {
@@ -987,7 +987,7 @@
         "description": "Optional. Determines if the Azure Web App private DNS zone should be created."
       }
     },
-    "azureWebAppZoneId": {
+    "websitesPrivateDnsZoneResourceId": {
       "type": "string",
       "defaultValue": "",
       "metadata": {
@@ -1547,35 +1547,35 @@
     },
     "backupPrivateDnsZone": "[if(parameters('createAzureBackupZone'), if(startsWith(variables('cloud'), 'us'), format('privatelink.{0}.backup.windowsazure.{1}', variables('recoveryServicesGeo'), variables('cloudSuffix')), format('privatelink.{0}.backup.windowsazure.{1}', variables('recoveryServicesGeo'), variables('privateDnsZoneSuffixes_Backup')[environment().name])), '')]",
     "blobPrivateDnsZone": "[if(parameters('createAzureBlobZone'), format('privatelink.blob.{0}', environment().suffixes.storage), '')]",
-    "filesPrivateDnsZone": "[if(parameters('createAzureFilesZone'), format('privatelink.file.{0}', environment().suffixes.storage), '')]",
+    "filePrivateDnsZone": "[if(parameters('createAzureFilesZone'), format('privatelink.file.{0}', environment().suffixes.storage), '')]",
     "queuePrivateDnsZone": "[if(parameters('createAzureQueueZone'), format('privatelink.queue.{0}', environment().suffixes.storage), '')]",
     "tablePrivateDnsZone": "[if(parameters('createAzureTableZone'), format('privatelink.table.{0}', environment().suffixes.storage), '')]",
-    "keyVaultPrivateDnsZone": "[if(parameters('createAzureKeyVaultZone'), format('privatelink{0}', replace(environment().suffixes.keyvaultDns, 'vault', 'vaultcore')), '')]",
+    "vaultPrivateDnsZone": "[if(parameters('createAzureKeyVaultZone'), format('privatelink{0}', replace(environment().suffixes.keyvaultDns, 'vault', 'vaultcore')), '')]",
     "avdFeedPrivateDnsZone": "[if(parameters('createAvdFeedZone'), if(startsWith(variables('cloud'), 'us'), format('privatelink.wvd.{0}', variables('cloudSuffix')), variables('privateDnsZones_AzureVirtualDesktop')[environment().name]), '')]",
     "avdGlobalFeedPrivateDnsZone": "[if(parameters('createAvdGlobalFeedZone'), if(startsWith(variables('cloud'), 'us'), format('privatelink-global.wvd.{0}', variables('cloudSuffix')), variables('privateDnsZones_AzureVirtualDesktopGlobalFeed')[environment().name]), '')]",
-    "webAppPrivateDnsZone": "[if(parameters('createAzureWebAppZone'), if(startsWith(variables('cloud'), 'us'), format('privatelink.azurewebsites.{0}', variables('cloudSuffix')), format('privatelink.azurewebsites.{0}', variables('privateDnsZoneSuffixes_AzureWebApps')[environment().name])), '')]",
+    "websitesPrivateDnsZone": "[if(parameters('createAzureWebAppZone'), if(startsWith(variables('cloud'), 'us'), format('privatelink.azurewebsites.{0}', variables('cloudSuffix')), format('privatelink.azurewebsites.{0}', variables('privateDnsZoneSuffixes_AzureWebApps')[environment().name])), '')]",
     "privateDnsZones": [
       "[variables('backupPrivateDnsZone')]",
       "[variables('blobPrivateDnsZone')]",
-      "[variables('filesPrivateDnsZone')]",
+      "[variables('filePrivateDnsZone')]",
       "[variables('queuePrivateDnsZone')]",
       "[variables('tablePrivateDnsZone')]",
-      "[variables('keyVaultPrivateDnsZone')]",
+      "[variables('vaultPrivateDnsZone')]",
       "[variables('avdFeedPrivateDnsZone')]",
       "[variables('avdGlobalFeedPrivateDnsZone')]",
-      "[variables('webAppPrivateDnsZone')]"
+      "[variables('websitesPrivateDnsZone')]"
     ],
     "dedupedPrivateDnsZones": "[union(variables('privateDnsZones'), variables('privateDnsZones'))]",
     "existingPrivateDnsZones": [
-      "[parameters('azureBackupZoneId')]",
-      "[parameters('azureBlobZoneId')]",
-      "[parameters('azureFilesZoneId')]",
-      "[parameters('azureQueueZoneId')]",
-      "[parameters('azureTableZoneId')]",
-      "[parameters('azureKeyVaultZoneId')]",
+      "[parameters('backupPrivateDnsZoneResourceId')]",
+      "[parameters('blobPrivateDnsZoneResourceId')]",
+      "[parameters('filePrivateDnsZoneResourceId')]",
+      "[parameters('queuePrivateDnsZoneResourceId')]",
+      "[parameters('tablePrivateDnsZoneResourceId')]",
+      "[parameters('vaultPrivateDnsZoneResourceId')]",
       "[parameters('avdFeedZoneId')]",
       "[parameters('avdGlobalFeedZoneId')]",
-      "[parameters('azureWebAppZoneId')]"
+      "[parameters('websitesPrivateDnsZoneResourceId')]"
     ],
     "dedupedExistingPrivateDnsZones": "[union(variables('existingPrivateDnsZones'), variables('existingPrivateDnsZones'))]",
     "_1._2": {
@@ -2516,7 +2516,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.49.2.45890",
-              "templateHash": "8964133074514929807"
+              "templateHash": "8211312750154406165"
             }
           },
           "parameters": {
@@ -2687,7 +2687,7 @@
                     "_generator": {
                       "name": "bicep",
                       "version": "0.49.2.45890",
-                      "templateHash": "12015431321016469171"
+                      "templateHash": "1979535899671667716"
                     }
                   },
                   "parameters": {
@@ -2767,15 +2767,7 @@
                         "count": "[length(variables('hostsSubnetsList'))]",
                         "input": {
                           "name": "[variables('hostsSubnetsList')[copyIndex('snetHosts')].name]",
-                          "properties": {
-                            "addressPrefix": "[variables('hostsSubnetsList')[copyIndex('snetHosts')].addressPrefix]",
-                            "defaultOutboundAccess": false,
-                            "natGateway": "[if(variables('deployNatGateway'), createObject('id', resourceId('Microsoft.Network/natGateways', parameters('natGatewayName'))), null())]",
-                            "routeTable": "[if(equals(parameters('defaultRouting'), 'nva'), createObject('id', resourceId('Microsoft.Network/routeTables', parameters('routeTableName'))), null())]",
-                            "networkSecurityGroup": {
-                              "id": "[resourceId('Microsoft.Network/networkSecurityGroups', parameters('nsgName'))]"
-                            }
-                          }
+                          "properties": "[union(createObject('addressPrefix', variables('hostsSubnetsList')[copyIndex('snetHosts')].addressPrefix, 'defaultOutboundAccess', false(), 'natGateway', if(variables('deployNatGateway'), createObject('id', resourceId('Microsoft.Network/natGateways', parameters('natGatewayName'))), null()), 'routeTable', if(equals(parameters('defaultRouting'), 'nva'), createObject('id', resourceId('Microsoft.Network/routeTables', parameters('routeTableName'))), null()), 'networkSecurityGroup', createObject('id', resourceId('Microsoft.Network/networkSecurityGroups', parameters('nsgName')))), if(contains(variables('hostsSubnetsList')[copyIndex('snetHosts')], 'serviceEndpoints'), createObject('serviceEndpoints', variables('hostsSubnetsList')[copyIndex('snetHosts')].serviceEndpoints), createObject()))]"
                         }
                       }
                     ],
@@ -3430,15 +3422,15 @@
         "description": "Effective private DNS zone resource IDs, whether zones were created by this deployment or supplied as existing resources."
       },
       "value": {
-        "azureBackup": "[if(parameters('createAzureBackupZone'), format('/subscriptions/{0}/resourceGroups/{1}/providers/Microsoft.Network/privateDnsZones/{2}', parameters('privateDNSZonesSubscriptionId'), parameters('privateDNSZonesResourceGroupName'), variables('backupPrivateDnsZone')), parameters('azureBackupZoneId'))]",
-        "azureBlob": "[if(parameters('createAzureBlobZone'), format('/subscriptions/{0}/resourceGroups/{1}/providers/Microsoft.Network/privateDnsZones/{2}', parameters('privateDNSZonesSubscriptionId'), parameters('privateDNSZonesResourceGroupName'), variables('blobPrivateDnsZone')), parameters('azureBlobZoneId'))]",
-        "azureFiles": "[if(parameters('createAzureFilesZone'), format('/subscriptions/{0}/resourceGroups/{1}/providers/Microsoft.Network/privateDnsZones/{2}', parameters('privateDNSZonesSubscriptionId'), parameters('privateDNSZonesResourceGroupName'), variables('filesPrivateDnsZone')), parameters('azureFilesZoneId'))]",
-        "azureQueue": "[if(parameters('createAzureQueueZone'), format('/subscriptions/{0}/resourceGroups/{1}/providers/Microsoft.Network/privateDnsZones/{2}', parameters('privateDNSZonesSubscriptionId'), parameters('privateDNSZonesResourceGroupName'), variables('queuePrivateDnsZone')), parameters('azureQueueZoneId'))]",
-        "azureTable": "[if(parameters('createAzureTableZone'), format('/subscriptions/{0}/resourceGroups/{1}/providers/Microsoft.Network/privateDnsZones/{2}', parameters('privateDNSZonesSubscriptionId'), parameters('privateDNSZonesResourceGroupName'), variables('tablePrivateDnsZone')), parameters('azureTableZoneId'))]",
-        "azureKeyVault": "[if(parameters('createAzureKeyVaultZone'), format('/subscriptions/{0}/resourceGroups/{1}/providers/Microsoft.Network/privateDnsZones/{2}', parameters('privateDNSZonesSubscriptionId'), parameters('privateDNSZonesResourceGroupName'), variables('keyVaultPrivateDnsZone')), parameters('azureKeyVaultZoneId'))]",
+        "backup": "[if(parameters('createAzureBackupZone'), format('/subscriptions/{0}/resourceGroups/{1}/providers/Microsoft.Network/privateDnsZones/{2}', parameters('privateDNSZonesSubscriptionId'), parameters('privateDNSZonesResourceGroupName'), variables('backupPrivateDnsZone')), parameters('backupPrivateDnsZoneResourceId'))]",
+        "blob": "[if(parameters('createAzureBlobZone'), format('/subscriptions/{0}/resourceGroups/{1}/providers/Microsoft.Network/privateDnsZones/{2}', parameters('privateDNSZonesSubscriptionId'), parameters('privateDNSZonesResourceGroupName'), variables('blobPrivateDnsZone')), parameters('blobPrivateDnsZoneResourceId'))]",
+        "file": "[if(parameters('createAzureFilesZone'), format('/subscriptions/{0}/resourceGroups/{1}/providers/Microsoft.Network/privateDnsZones/{2}', parameters('privateDNSZonesSubscriptionId'), parameters('privateDNSZonesResourceGroupName'), variables('filePrivateDnsZone')), parameters('filePrivateDnsZoneResourceId'))]",
+        "queue": "[if(parameters('createAzureQueueZone'), format('/subscriptions/{0}/resourceGroups/{1}/providers/Microsoft.Network/privateDnsZones/{2}', parameters('privateDNSZonesSubscriptionId'), parameters('privateDNSZonesResourceGroupName'), variables('queuePrivateDnsZone')), parameters('queuePrivateDnsZoneResourceId'))]",
+        "table": "[if(parameters('createAzureTableZone'), format('/subscriptions/{0}/resourceGroups/{1}/providers/Microsoft.Network/privateDnsZones/{2}', parameters('privateDNSZonesSubscriptionId'), parameters('privateDNSZonesResourceGroupName'), variables('tablePrivateDnsZone')), parameters('tablePrivateDnsZoneResourceId'))]",
+        "vault": "[if(parameters('createAzureKeyVaultZone'), format('/subscriptions/{0}/resourceGroups/{1}/providers/Microsoft.Network/privateDnsZones/{2}', parameters('privateDNSZonesSubscriptionId'), parameters('privateDNSZonesResourceGroupName'), variables('vaultPrivateDnsZone')), parameters('vaultPrivateDnsZoneResourceId'))]",
         "avdFeed": "[if(parameters('createAvdFeedZone'), format('/subscriptions/{0}/resourceGroups/{1}/providers/Microsoft.Network/privateDnsZones/{2}', parameters('privateDNSZonesSubscriptionId'), parameters('privateDNSZonesResourceGroupName'), variables('avdFeedPrivateDnsZone')), parameters('avdFeedZoneId'))]",
         "avdGlobalFeed": "[if(parameters('createAvdGlobalFeedZone'), format('/subscriptions/{0}/resourceGroups/{1}/providers/Microsoft.Network/privateDnsZones/{2}', parameters('privateDNSZonesSubscriptionId'), parameters('privateDNSZonesResourceGroupName'), variables('avdGlobalFeedPrivateDnsZone')), parameters('avdGlobalFeedZoneId'))]",
-        "azureWebApp": "[if(parameters('createAzureWebAppZone'), format('/subscriptions/{0}/resourceGroups/{1}/providers/Microsoft.Network/privateDnsZones/{2}', parameters('privateDNSZonesSubscriptionId'), parameters('privateDNSZonesResourceGroupName'), variables('webAppPrivateDnsZone')), parameters('azureWebAppZoneId'))]"
+        "websites": "[if(parameters('createAzureWebAppZone'), format('/subscriptions/{0}/resourceGroups/{1}/providers/Microsoft.Network/privateDnsZones/{2}', parameters('privateDNSZonesSubscriptionId'), parameters('privateDNSZonesResourceGroupName'), variables('websitesPrivateDnsZone')), parameters('websitesPrivateDnsZoneResourceId'))]"
       }
     }
   }

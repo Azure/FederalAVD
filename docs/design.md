@@ -385,6 +385,132 @@ any remaining DCR validation error rather than masking it with a fixed delay.
 
 ## Shared module contracts
 
+### Service-family PaaS networking
+
+Standard and Automated Host Pools, Image Management, Shared Services, and Session Host Replacer place networking intent in three sealed typed objects:
+`paasNetworking`, `privateEndpointSubnetResourceIds`, and `privateDnsZoneResourceIds`.
+Their forms default to Private connectivity, offer Restricted public connectivity with separate
+family subnet/IP lists, and puts independent family overrides in Custom configuration.
+Common omitted defaults are private endpoints plus disabled public access. Required private
+placement inputs fail explicitly; no missing configuration silently enables public access.
+Restricted-public Backup connectivity requires an explicit supported vault choice.
+The [typed contracts and migration](parameters.md#typed-networking-solution-rollout)
+document the supported family, ownership and DNS subsets. The shared
+[scenario library](../deployments/shared/modules/orchestration/networking/scenarios.bicep)
+owns normalization; native resource-module interfaces remain unchanged.
+Replacer uses the shared Function App intent resolver, with independent runtime Storage and
+operator app/SCM policies. Private runtime Storage requires a separate outbound integration
+subnet; one shared nondelegated subnet places selected private endpoints. Restricted public
+app/SCM access preserves operator code/file access through explicit sources. Main app and SCM
+rules are shared; private access requires operator routing and both DNS records.
+Other add-ons and Host Pool PoC retain their flat contracts below.
+
+Other add-ons and Host Pool PoC use independent networking policies for Storage, Key Vault, and Function
+App inbound access. Each family has its own public mode, IP/subnet allowlists,
+and private endpoint switch. Host Pools group private endpoint subnet placement
+by ownership; other entries retain service-specific subnet inputs. Public modes default to
+Disabled without deriving a choice from private endpoint deployment. There is no
+global-policy inheritance or cross-service allowlist merging.
+
+One policy applies to all newly created resources of a family: for example, both
+Profile and Office accounts, both artifacts and logs accounts, or credentials and
+encryption vaults. Existing/adopted resources remain owner-managed. Backup,
+monitoring, and AVD control-plane networking retain their separate contracts.
+Function outbound VNet integration is independent of inbound access and does not
+implicitly authorize its integration subnet in runtime Storage.
+
+#### Deployment intent and Azure-shaped inputs
+
+"Azure-shaped" is descriptive shorthand used here, not an official Microsoft term.
+It means resource-level inputs whose names, accepted values, and object structures
+reflect the Azure resource API rather than deployment-level intent. Resource modules
+can still provide convenience inputs and validation; not every input is a literal
+ARM property.
+
+The shared FSLogix composer and Azure Files adapter keep separate Storage-prefixed inputs: `storagePublicNetworkAccess`,
+`storagePermittedIPs`, `storageServiceEndpointSubnetResourceIds`,
+`storagePrivateEndpoint`, and `storagePrivateEndpointSubnetResourceId`.
+These settings govern Azure Files, not NetApp Files or backup vaults. No networking
+object parameter is required.
+
+The Key Vault composer similarly keeps `keyVaultPublicNetworkAccess`,
+`keyVaultPermittedIPs`, `keyVaultServiceEndpointSubnetResourceIds`,
+`keyVaultPrivateEndpoint`, and `keyVaultPrivateEndpointSubnetResourceId` aligned
+for both newly created vaults. Host Pool and Shared Services callers map their ownership
+subnet inputs into the composers' service-specific subnet inputs; other deployments retain
+service-specific subnet contracts. Its resource modules retain
+`publicNetworkAccess`, `networkAcls`, and `subnetResourceId` inputs.
+
+The Azure Files adapter translates that intent into the Storage resource module's
+`publicNetworkAccess` and `networkAcls` inputs. For example,
+`EnabledWithRestrictions` is a deployment mode, not an Azure Storage
+`publicNetworkAccess` value: it becomes `publicNetworkAccess: 'Enabled'` plus
+`networkAcls.defaultAction: 'Deny'`, with explicit IP and virtual-network rules.
+The resource module writes these into the account's corresponding ARM properties.
+Similarly, the private endpoint module accepts `subnetResourceId` and writes it to
+`properties.subnet.id`; its resource-level interface does not need a Storage prefix.
+See the [Storage account API](https://learn.microsoft.com/azure/templates/microsoft.storage/2024-01-01/storageaccounts)
+and the [parameter map](parameters.md#fslogix-module-parameter-alignment).
+
+#### Private DNS namespaces
+
+DNS parameter prefixes identify namespaces, independently of service-family
+networking policies: `file`, `blob`, `queue`, `table`, `vault`, `websites`, and
+`backup`, each ending in `PrivateDnsZoneResourceId`. File is singular; Vault
+identifies Key Vault DNS, and Websites identifies the App Service namespace used
+by Function Apps. Blob and Queue can also serve Recovery Services, and Blob can
+serve managed-disk access. Each deployment accepts one zone ID per applicable
+namespace, reused by its consumers. Selecting that zone does not couple their
+public-access policies or private endpoint switches.
+
+Networking uses the same namespace-based existing-zone inputs and returns matching
+keys in `privateDnsZoneResourceIds`. These are explicit resource IDs, not derived
+zone names, cloud suffixes, regions, or subscriptions; actual Azure zone names
+are unchanged. If future requirements need multiple zones for one namespace in
+one deployment, add purpose/region-qualified inputs then. Different namespaces,
+such as managed HSM or Storage DFS, require their own inputs rather than overloading
+Vault or Blob.
+See Microsoft's [Private Endpoint DNS zone values](https://learn.microsoft.com/azure/private-link/private-endpoint-dns).
+
+The standard host pool resolves separate `paasNetworking.backup.privateEndpoint` and
+`paasNetworking.disk.privateEndpoint` choices; Automated Host
+Pools and Shared Services use `paasNetworking.backup.privateEndpoint`. Automated Host Pools have no
+DiskAccess private-endpoint workflow; their managed-disk deny-export policy remains separate.
+These switches do not control Storage,
+Key Vault, Function App, AVD, or monitoring private endpoints. Managed-disk access
+still requires a Personal host pool with `recoveryServices` enabled, including
+when the Backup vault is adopted rather than created.
+
+Host Pool subnet placement follows ownership, not service type. Both Host Pool entries use
+`privateEndpointSubnetResourceIds.sharedResources` and `.hostPoolResources`, with no implicit subnet.
+The shared slot serves new Key Vaults, FSLogix Backup, workspace feed, and global feed; the host-pool
+slot serves FSLogix Storage and AVD connections. Standard also uses it for Personal VM Backup and
+managed-disk access.
+Sharing a subnet does not couple endpoint flags, public policies, firewall rules,
+or DNS namespaces. Resource-module subnet interfaces remain unchanged.
+See [host-pool subnet placement by ownership](parameters.md#host-pool-subnet-placement-by-ownership).
+
+Shared Services similarly exposes only `privateEndpointSubnetResourceIds.sharedResources`,
+because every endpoint it manages belongs to the shared-resource bucket. Selected Key Vault,
+FSLogix Backup, workspace-feed, and global-feed endpoints all use that subnet. The explicit
+`deployWorkspaceFeedPrivateEndpoint` flag preserves feed opt-in independently of other
+endpoints; `manageGlobalAvdWorkspace` still controls global-feed management. Monitoring's
+existing AMPLS endpoint remains owned by the networking platform, outside this contract.
+Image Management also uses one `sharedResources` slot for both created Storage accounts.
+See [Shared Services subnet placement](parameters.md#shared-services-subnet-placement-by-ownership).
+
+Portal forms use flat sibling private/public/allowlist sections per family.
+Subnet inventory is shared within a step, uses named transformed completion,
+and filters the correct preconfigured service endpoint. Multiline service-endpoint
+options use `VNETName | SubnetName` labels and `Resource Group: ResourceGroupName`
+descriptions. Private DNS dropdowns support search and label-based first-match defaults,
+with empty-inventory guards and namespace filtering. Submitted resource IDs and
+endpoint/public-access choices remain independent. Offline schema
+and expression checks are not a Portal emulator; each adapted form needs a live
+render, populated inventory, and isolated target-cloud connectivity validation.
+See the [networking parameter contract](parameters.md#paas-public-network-access)
+for applicable inputs, breaking changes, exceptions, and operator checks.
+
 ### SHR workbook telemetry boundary
 
 SHR retains Application Insights instrumentation but queries its primary workload workspace
@@ -521,6 +647,7 @@ For capability-level composition, start with the orchestration entry points:
 | Workspace and application-group composition | [AVD workspace](../deployments/shared/modules/orchestration/avdWorkspace/avdWorkspace.bicep) |
 | Customer-managed encryption dependencies | [Customer-managed keys](../deployments/shared/modules/orchestration/customerManagedKeys/customerManagedKeys.bicep) |
 | Profile storage | [FSLogix](../deployments/shared/modules/orchestration/fslogix/fslogix.bicep) |
+| Shared Azure Files backup vault and policy | [FSLogix Backup](../deployments/shared/modules/orchestration/recoveryServices/fslogixBackupVault.bicep) |
 | Credentials and encryption vaults | [Key Vaults](../deployments/shared/modules/orchestration/keyVaults/keyVaults.bicep) |
 | Host monitoring resources | [Monitoring](../deployments/shared/modules/orchestration/monitoring/monitoring.bicep) |
 | Session host deployment | [Session hosts](../deployments/shared/modules/orchestration/sessionHosts/sessionHosts.bicep) |
@@ -530,6 +657,15 @@ Use the [shared naming contract](../deployments/shared/modules/orchestration/nam
 for generated names and the
 [Function App composition contract](../deployments/shared/modules/orchestration/functionApp/README.md)
 for plan ownership, app infrastructure, and function-code deployment.
+
+Backup composition follows the same layering: the shared FSLogix Backup composer coordinates
+vault, policy, and private-endpoint resource modules, while the personal VM Backup composer remains
+solution-local for its VM policy and CMK sequencing. Both accept independent public-access and
+private-endpoint inputs; the underlying vault resource module retains its Azure-shaped interface.
+Recovery Services public access supports `Enabled` and `Disabled`, not Storage/Key Vault-style
+IP or service-endpoint ACLs. Existing entry-point behavior is explicitly preserved at the callers.
+See the [Backup orchestration contract](../deployments/shared/modules/README.md#backup-orchestration)
+for the relocated module path and direct-consumer migration.
 
 Function App infrastructure lives in orchestration because it coordinates runtime storage,
 the app, RBAC, monitoring, and private connectivity. Its

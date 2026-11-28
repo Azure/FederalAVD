@@ -409,12 +409,15 @@ Run post-deployment scripts on session hosts using the `sessionHostCustomization
 
 #### Zero Trust / Security Configuration
 
-> **Portal form:** Zero Trust settings are split across two steps — **Zero Trust → Encryption Key Management** (CMK selectors, existing KV toggle, key rotation, enc KV retention) and **Zero Trust → PaaS Private Endpoints** (private endpoint deploy checkbox, subnet selectors, DNS zones). Secrets Key Vault deploy controls are in the **Identity → Credentials** step.
+> **Portal form:** Zero Trust keeps encryption settings separate from the PaaS connectivity scenario. Private connectivity is the default; restricted public connectivity reveals independent Storage/Key Vault source allowlists; Custom configuration exposes advanced overrides. Secrets Key Vault deploy controls remain in **Identity → Credentials**. See the [typed networking contract](parameters.md#standard-host-pool-typed-networking).
 
 ```json
 {
-  "deployPrivateEndpoints": true,
-  "operationsPrivateEndpointSubnetResourceId": "/subscriptions/xxx/resourceGroups/rg-network/providers/Microsoft.Network/virtualNetworks/vnet-avd/subnets/snet-privateendpoints",
+  "paasNetworking": { "privateEndpoint": true, "publicNetworkAccess": "Disabled" },
+  "privateEndpointSubnetResourceIds": {
+    "sharedResources": "/subscriptions/xxx/resourceGroups/rg-network/providers/Microsoft.Network/virtualNetworks/vnet-avd/subnets/snet-privateendpoints",
+    "hostPoolResources": "/subscriptions/xxx/resourceGroups/rg-network/providers/Microsoft.Network/virtualNetworks/vnet-avd/subnets/snet-privateendpoints"
+  },
   "keyManagementDisks": "CustomerManaged",
   "encryptionAtHost": true,
   "secureBootEnabled": true,

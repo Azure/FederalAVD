@@ -34,16 +34,18 @@ module app '../../deployments/shared/modules/orchestration/functionApp/functionA
     serverFarmId: serverFarmId
     hostPoolResourceId: hostPoolResourceId
     location: location
-    azureBlobPrivateDnsZoneResourceId: ''
-    azureFunctionAppPrivateDnsZoneResourceId: ''
-    azureTablePrivateDnsZoneResourceId: ''
+    blobPrivateDnsZoneResourceId: ''
+    websitesPrivateDnsZoneResourceId: ''
+    tablePrivateDnsZoneResourceId: ''
     encryptionKeyName: ''
     encryptionKeyVaultResourceId: ''
     functionAppDelegatedSubnetResourceId: ''
     functionAppAppSettings: []
     keyManagementStorageAccounts: 'PlatformManaged'
-    privateEndpoint: false
-    privateEndpointSubnetResourceId: ''
+    storagePrivateEndpoint: false
+    storagePrivateEndpointSubnetResourceId: ''
+    functionAppPrivateEndpoint: false
+    functionAppPrivateEndpointSubnetResourceId: ''
     tags: {
       functionApps: {}
       storageAccounts: {}

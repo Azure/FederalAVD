@@ -182,7 +182,7 @@ Describe 'Standard FSLogix Office consumer contracts' {
             $sourceText | Should -Match ('(?m)^param ' + [regex]::Escape($parameter.Name) + ' ')
         }
         $example.parameters.fslogixContainerType.value | Should -Be 'ProfileOfficeContainer'
-        $example.parameters.privateEndpoint.value | Should -BeTrue
-        $example.parameters.paasPublicNetworkAccess.value | Should -Be 'Disabled'
+        $example.parameters.storagePrivateEndpoint.value | Should -BeTrue
+        $example.parameters.storagePublicNetworkAccess.value | Should -Be 'Disabled'
     }
 }

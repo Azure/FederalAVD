@@ -279,8 +279,14 @@
               "constraints": {
                 "required": true,
                 "allowedValues": [
-                  { "label": "SSD (Premium)", "value": "Premium" },
-                  { "label": "HDD (Standard)", "value": "Standard" }
+                  {
+                    "label": "SSD (Premium)",
+                    "value": "Premium"
+                  },
+                  {
+                    "label": "HDD (Standard)",
+                    "value": "Standard"
+                  }
                 ]
               }
             },
@@ -293,8 +299,14 @@
               "constraints": {
                 "required": true,
                 "allowedValues": [
-                  { "label": "Provisioned v2 (recommended)", "value": "ProvisionedV2" },
-                  { "label": "Legacy (HDD pay-as-you-go / SSD provisioned v1)", "value": "Legacy" }
+                  {
+                    "label": "Provisioned v2 (recommended)",
+                    "value": "ProvisionedV2"
+                  },
+                  {
+                    "label": "Legacy (HDD pay-as-you-go / SSD provisioned v1)",
+                    "value": "Legacy"
+                  }
                 ]
               }
             },
@@ -342,6 +354,177 @@
                 "style": "Info",
                 "text": "For simplicity, this disposable PoC fixes the remaining choices: a standalone 10.250.0.0/16 virtual network, a private 10.250.0.0/24 session-host subnet, NAT Gateway outbound access, pooled depth-first load balancing, public AVD routes, Trusted Launch, no availability infrastructure, no scaling plan, no backup, no Private Endpoints, no AVD Private Link, no customer-managed keys, and no runtime customizations. After the demo, delete the consolidated PoC resource group and clean up any related directory or device records. Use a new full AVD Host Pool deployment for a pilot or production environment."
               }
+            },
+            {
+              "name": "serviceEndpointVirtualNetworksApi",
+              "type": "Microsoft.Solutions.ArmApiControl",
+              "condition": "[not(empty(steps('basics').scope.subscription.id))]",
+              "request": {
+                "method": "GET",
+                "path": "[if(empty(steps('basics').scope.subscription.id), '', concat(steps('basics').scope.subscription.id, '/providers/Microsoft.Network/virtualNetworks?api-version=2022-11-01'))]",
+                "transforms": {
+                  "loaded": "`true`",
+                  "vnets": "value",
+                  "subnets": "value[].properties.subnets[]",
+                  "nextLink": "nextLink"
+                }
+              }
+            },
+            {
+              "name": "storagePublicNetworking",
+              "type": "Microsoft.Common.Section",
+              "label": "Storage networking: Public endpoint access",
+              "visible": "[steps('options').deployFSLogixStorage]",
+              "elements": [
+                {
+                  "name": "storagePublicNetworkAccess",
+                  "type": "Microsoft.Common.DropDown",
+                  "label": "Public network access",
+                  "defaultValue": "Disabled",
+                  "toolTip": "Applies to all Storage accounts created by this deployment. Existing or consumed accounts are not reconfigured.",
+                  "constraints": {
+                    "required": true,
+                    "allowedValues": [
+                      {
+                        "label": "Disabled",
+                        "value": "Disabled"
+                      },
+                      {
+                        "label": "Enabled with restrictions",
+                        "value": "EnabledWithRestrictions"
+                      },
+                      {
+                        "label": "Enabled",
+                        "value": "Enabled"
+                      }
+                    ]
+                  }
+                },
+                {
+                  "name": "publicAccessDisabledInfo",
+                  "type": "Microsoft.Common.TextBlock",
+                  "visible": "[equals(steps('options').storagePublicNetworking.storagePublicNetworkAccess, 'Disabled')]",
+                  "options": {
+                    "text": "Public network access is disabled. Ensure private connectivity is available. Existing trusted-service exceptions may still apply."
+                  }
+                },
+                {
+                  "name": "publicAccessEnabledWithRestrictionsInfo",
+                  "type": "Microsoft.Common.TextBlock",
+                  "visible": "[equals(steps('options').storagePublicNetworking.storagePublicNetworkAccess, 'EnabledWithRestrictions')]",
+                  "options": {
+                    "text": "Allow IP addresses, service-endpoint subnets, or both. Other public traffic is denied, subject to existing service exceptions."
+                  }
+                },
+                {
+                  "name": "publicAccessEnabledInfo",
+                  "type": "Microsoft.Common.TextBlock",
+                  "visible": "[equals(steps('options').storagePublicNetworking.storagePublicNetworkAccess, 'Enabled')]",
+                  "options": {
+                    "text": "Public network access is unrestricted. Stored IP and subnet rules do not limit traffic. Authentication is still required."
+                  }
+                },
+                {
+                  "name": "noPrivateConnectivityWarning",
+                  "type": "Microsoft.Common.InfoBox",
+                  "options": {
+                    "style": "Warning",
+                    "text": "The PoC does not deploy Storage private endpoints. Disabled public access blocks the ordinary session-host Storage path. Choose restricted access for its owned host subnet."
+                  },
+                  "visible": "[equals(steps('options').storagePublicNetworking.storagePublicNetworkAccess, 'Disabled')]"
+                }
+              ]
+            },
+            {
+              "name": "storageServiceEndpointAccess",
+              "type": "Microsoft.Common.Section",
+              "label": "Storage networking: Allowed public-endpoint sources",
+              "visible": "[and(steps('options').deployFSLogixStorage, equals(steps('options').storagePublicNetworking.storagePublicNetworkAccess, 'EnabledWithRestrictions'))]",
+              "elements": [
+                {
+                  "name": "requirements",
+                  "type": "Microsoft.Common.InfoBox",
+                  "options": {
+                    "style": "Info",
+                    "text": "Applies to all Storage accounts created by this deployment. Existing or consumed accounts are not reconfigured. Allow IP addresses, service-endpoint subnets, or both. This deployment never enables endpoints on existing subnets. Service endpoints use the public service endpoint, not a private IP. The PoC's new subnet is automatically configured and allowed when restricted Storage access is selected."
+                  }
+                },
+                {
+                  "name": "storagePermittedIPs",
+                  "type": "Microsoft.Common.EditableGrid",
+                  "label": "Permitted public IPv4 addresses or CIDR ranges",
+                  "ariaLabel": "Enter permitted public IPv4 addresses or CIDR ranges",
+                  "visible": "[equals(steps('options').storagePublicNetworking.storagePublicNetworkAccess, 'EnabledWithRestrictions')]",
+                  "constraints": {
+                    "width": "Full",
+                    "rows": {
+                      "count": {
+                        "min": 0,
+                        "max": 100
+                      }
+                    },
+                    "columns": [
+                      {
+                        "id": "ipAddress",
+                        "header": "IPv4 address or CIDR",
+                        "width": "1fr",
+                        "element": {
+                          "type": "Microsoft.Common.TextBox",
+                          "placeholder": "203.0.113.10 or 203.0.113.0/24",
+                          "constraints": {
+                            "required": false,
+                            "regex": "^$|^(?:(?:25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])\\.){3}(?:25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])(?:/(?:[0-9]|[12][0-9]|3[0-2]))?$",
+                            "validationMessage": "Enter an IPv4 address or CIDR range with a prefix from 0 to 32."
+                          }
+                        }
+                      }
+                    ]
+                  }
+                },
+                {
+                  "name": "inventoryStatus",
+                  "type": "Microsoft.Common.InfoBox",
+                  "options": {
+                    "style": "Info",
+                    "text": "The subnet inventory has not loaded. If this persists, check the subscription and Microsoft.Network read permissions."
+                  },
+                  "visible": "[not(equals(steps('options').serviceEndpointVirtualNetworksApi.transformed.loaded, true))]"
+                },
+                {
+                  "name": "inventoryPageWarning",
+                  "type": "Microsoft.Common.InfoBox",
+                  "options": {
+                    "style": "Warning",
+                    "text": "The VNet API returned a partial inventory. Use a parameter-file deployment for subnets on later pages."
+                  },
+                  "visible": "[not(empty(steps('options').serviceEndpointVirtualNetworksApi.transformed.nextLink))]"
+                },
+                {
+                  "name": "storageServiceEndpointSubnets",
+                  "type": "Microsoft.Common.DropDown",
+                  "label": "Storage access subnets",
+                  "multiselect": true,
+                  "selectAll": false,
+                  "filter": true,
+                  "multiLine": true,
+                  "defaultValue": "[parse('[]')]",
+                  "toolTip": "Requires existing Microsoft.Storage in the storage region, or Microsoft.Storage.Global for cross-region access where supported. Applies only to storage accounts created by this deployment; existing topology ACLs remain additive.",
+                  "visible": "[and(steps('options').deployFSLogixStorage, equals(steps('options').storagePublicNetworking.storagePublicNetworkAccess, 'EnabledWithRestrictions'))]",
+                  "constraints": {
+                    "required": false,
+                    "allowedValues": "[if(not(equals(steps('options').serviceEndpointVirtualNetworksApi.transformed.loaded, true)), parse('[{\"label\":\"Loading subnet inventory\",\"value\":\"\"}]'), if(or(empty(steps('options').serviceEndpointVirtualNetworksApi.transformed.vnets), empty(steps('options').serviceEndpointVirtualNetworksApi.transformed.subnets)), parse('[{\"label\":\"No eligible subnets found\",\"value\":\"\"}]'), if(empty(filter(steps('options').serviceEndpointVirtualNetworksApi.transformed.subnets, (snet) => if(empty(snet.properties.serviceEndpoints), false, or(not(empty(filter(snet.properties.serviceEndpoints, (se) => equals(se.service, 'Microsoft.Storage.Global')))), and(not(empty(filter(snet.properties.serviceEndpoints, (se) => equals(se.service, 'Microsoft.Storage')))), contains(map(filter(steps('options').serviceEndpointVirtualNetworksApi.transformed.vnets, (vnet) => equals(vnet.location, steps('basics').scope.location.name)), (vnet) => vnet.id), first(split(snet.id, '/subnets/')))))))), parse('[{\"label\":\"No eligible subnets found\",\"value\":\"\"}]'), map(filter(steps('options').serviceEndpointVirtualNetworksApi.transformed.subnets, (snet) => if(empty(snet.properties.serviceEndpoints), false, or(not(empty(filter(snet.properties.serviceEndpoints, (se) => equals(se.service, 'Microsoft.Storage.Global')))), and(not(empty(filter(snet.properties.serviceEndpoints, (se) => equals(se.service, 'Microsoft.Storage')))), contains(map(filter(steps('options').serviceEndpointVirtualNetworksApi.transformed.vnets, (vnet) => equals(vnet.location, steps('basics').scope.location.name)), (vnet) => vnet.id), first(split(snet.id, '/subnets/'))))))), (snet) => parse(concat('{\"label\":\"', first(skip(split(snet.id, '/'), 8)), ' | ', snet.name, '\",\"description\":\"Resource Group: ', first(skip(split(snet.id, '/'), 4)), '\",\"value\":\"', snet.id, '\"}'))))))]"
+                  }
+                },
+                {
+                  "name": "emptyAllowlistWarning",
+                  "type": "Microsoft.Common.InfoBox",
+                  "options": {
+                    "style": "Warning",
+                    "text": "No ordinary public sources are allowed. Private endpoints still work if reachable; existing service exceptions may apply. Add IP or subnet rules if clients need the public path."
+                  },
+                  "visible": "[and(empty(steps('options').storageServiceEndpointAccess.storagePermittedIPs), empty(if(empty(steps('options').storageServiceEndpointAccess.storageServiceEndpointSubnets), parse('[]'), filter(steps('options').storageServiceEndpointAccess.storageServiceEndpointSubnets, (id) => not(empty(id))))))]"
+                }
+              ]
             }
           ]
         }
@@ -362,7 +545,10 @@
         "deployFSLogixStorage": "[steps('options').deployFSLogixStorage]",
         "fslogixProfileStorageTier": "[if(steps('options').deployFSLogixStorage, steps('options').profileStorageTier, 'Standard')]",
         "fslogixProfileStorageBillingModel": "[if(steps('options').deployFSLogixStorage, steps('options').profileStorageBillingModel, 'Legacy')]",
-        "enableMonitoring": "[steps('options').enableMonitoring]"
+        "enableMonitoring": "[steps('options').enableMonitoring]",
+        "storageServiceEndpointSubnetResourceIds": "[if(steps('options').deployFSLogixStorage, if(empty(steps('options').storageServiceEndpointAccess.storageServiceEndpointSubnets), parse('[]'), filter(steps('options').storageServiceEndpointAccess.storageServiceEndpointSubnets, (id) => not(empty(id)))), parse('[]'))]",
+        "storagePermittedIPs": "[if(steps('options').deployFSLogixStorage, if(empty(steps('options').storageServiceEndpointAccess.storagePermittedIPs), parse('[]'), filter(map(steps('options').storageServiceEndpointAccess.storagePermittedIPs, (item) => item.ipAddress), (ip) => not(empty(ip)))), parse('[]'))]",
+        "storagePublicNetworkAccess": "[if(steps('options').deployFSLogixStorage, steps('options').storagePublicNetworking.storagePublicNetworkAccess, 'Disabled')]"
       }
     }
   }

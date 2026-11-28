@@ -1,4 +1,4 @@
-﻿# AVD Image Management Infrastructure Template
+# AVD Image Management Infrastructure Template
 
 > **📖 User Guides:**
 >
@@ -138,59 +138,28 @@ The Azure identity running this deployment needs:
 
 ### Networking & Security
 
-#### `storageNetworkAccess`
+Image Management uses three sealed typed objects, each defaulting to `{}`:
 
-- **Type:** String
-- **Default:** `PublicEndpoint`
-- **Allowed Values:** `PublicEndpoint`, `PrivateEndpoint`, `ServiceEndpoint`
-- **Description:** Connectivity configuration for both storage accounts. Public access is selected
-  independently with `paasPublicNetworkAccess`.
-  - `PublicEndpoint` - no private endpoints are created.
-  - `PrivateEndpoint` - private endpoints are created; they can coexist with public access.
-  - `ServiceEndpoint` - configures storage subnet ACLs; the template does **not** enable service
-    endpoints on the subnets. Subnet ACLs restrict access only in restricted mode.
+| Parameter | Members |
+| --- | --- |
+| `paasNetworking` | Common `publicNetworkAccess` and `privateEndpoint`, plus optional `storage` overrides with independent `permittedIPs` and `serviceEndpointSubnetResourceIds` arrays |
+| `privateEndpointSubnetResourceIds` | `sharedResources`: one existing subnet for both created Storage accounts |
+| `privateDnsZoneResourceIds` | `blob`: existing zone for optional DNS integration |
 
-#### `paasPublicNetworkAccess`
+Omitted networking fields use **private endpoints and disabled public access**. The form offers
+**Private connectivity** (default), **Restricted public connectivity**, and **Custom configuration**.
+Restricted public access requires an IP/CIDR, an eligible source subnet, or a private endpoint.
+Custom configuration independently controls public mode and private endpoints. Existing
+`AzureServices` bypass is retained for Compute Gallery integration; authentication is still required.
+The gallery and existing encryption Key Vault are not reconfigured.
 
-- **Default:** `Auto` derives public access from private endpoint selection and IP/subnet rules.
-- **Explicit values:** `Disabled`, `EnabledWithRestrictions`, `Enabled`.
-- **Description:** Shared public-access mode for artifacts and logs storage. Disabled retains IP
-  and subnet rules without enabling public access. Restricted mode denies unmatched traffic even
-  when both lists are empty. Enabled allows all networks regardless of stored rules.
-- **Portal default:** Disabled for Private Endpoint, Enabled with restrictions for Service Endpoint,
-  Enabled for Public Endpoint. Each remains explicitly selectable independently of connectivity.
-- **Exceptions:** `AzureServices` bypass is retained for Compute Gallery integration and can still
-  apply when Disabled. See the [shared access-mode contract](../../docs/parameters.md#paas-public-network-access).
-
-#### `privateEndpointSubnetResourceId`
-
-- **Type:** String
-- **Optional**
-- **Description:** Subnet resource ID for private endpoint
-- **Example:** `/subscriptions/{sub}/resourceGroups/{rg}/providers/Microsoft.Network/virtualNetworks/{vnet}/subnets/snet-endpoints`
-- **Use when:** Zero Trust architecture with private endpoints
-
-#### `azureBlobPrivateDnsZoneResourceId`
-
-- **Type:** String
-- **Optional**
-- **Description:** Private DNS zone resource ID for blob storage
-- **Example:** `/subscriptions/{sub}/resourceGroups/{rg}/providers/Microsoft.Network/privateDnsZones/privatelink.blob.core.usgovcloudapi.net`
-- **Required when:** Using private endpoint
-
-#### `storagePermittedIPs`
-
-- **Type:** Array
-- **Optional**
-- **Description:** Allowed IP addresses or CIDR blocks for public endpoint access
-- **Example:** `["203.0.113.0/24", "198.51.100.10"]`
-
-#### `storageServiceEndpointSubnetResourceIds`
-
-- **Type:** Array
-- **Optional**
-- **Description:** Subnet resource IDs for service endpoint access
-- **Example:** `["/subscriptions/{sub}/resourceGroups/{rg}/providers/Microsoft.Network/virtualNetworks/{vnet}/subnets/snet-build"]`
+**Breaking change:** move the former `storagePublicNetworkAccess`, `storagePrivateEndpoint`,
+`storagePermittedIPs`, and `storageServiceEndpointSubnetResourceIds` into `paasNetworking.storage`.
+Move `storagePrivateEndpointSubnetResourceId` into `privateEndpointSubnetResourceIds.sharedResources`,
+and `blobPrivateDnsZoneResourceId` into `privateDnsZoneResourceIds.blob`. There are no legacy aliases.
+Omitted CLI configuration is not a public-connectivity compatibility mode. The basic example explicitly
+opts into unrestricted public access; the Private form scenario and omitted policy remain secure.
+See the [typed contract and migration](../../docs/parameters.md#typed-networking-solution-rollout).
 
 ### Disaster Recovery
 
@@ -452,7 +421,9 @@ New-AzSubscriptionDeployment `
 }
 ```
 
-All defaults: gallery + artifacts storage account, public endpoint. Suitable for PoC or air-gapped environments where a private endpoint is not required.
+With Storage creation enabled, omitted policy requests private endpoints and disabled public access.
+The empty example above therefore requires adding `privateEndpointSubnetResourceIds.sharedResources`.
+For a gallery-only deployment, disable both Storage accounts; no endpoint subnet is required.
 
 ### Private Endpoint (Zero Trust)
 
@@ -461,12 +432,12 @@ All defaults: gallery + artifacts storage account, public endpoint. Suitable for
     "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
     "contentVersion": "1.0.0.0",
     "parameters": {
-        "storageNetworkAccess": { "value": "PrivateEndpoint" },
-        "privateEndpointSubnetResourceId": {
-            "value": "/subscriptions/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/resourceGroups/rg-avd-networking-use2/providers/Microsoft.Network/virtualNetworks/vnet-avd-use2/subnets/privateEndpoints"
+        "paasNetworking": { "value": { "privateEndpoint": true, "publicNetworkAccess": "Disabled" } },
+        "privateEndpointSubnetResourceIds": {
+            "value": { "sharedResources": "/subscriptions/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/resourceGroups/rg-avd-networking-use2/providers/Microsoft.Network/virtualNetworks/vnet-avd-use2/subnets/privateEndpoints" }
         },
-        "azureBlobPrivateDnsZoneResourceId": {
-            "value": "/subscriptions/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/resourceGroups/rg-networking-use2/providers/Microsoft.Network/privateDnsZones/privatelink.blob.core.windows.net"
+        "privateDnsZoneResourceIds": {
+            "value": { "blob": "/subscriptions/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/resourceGroups/rg-networking-use2/providers/Microsoft.Network/privateDnsZones/privatelink.blob.core.windows.net" }
         },
         "deployBuildLogsStorageAccount": { "value": true }
     }
@@ -480,13 +451,18 @@ All defaults: gallery + artifacts storage account, public endpoint. Suitable for
     "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
     "contentVersion": "1.0.0.0",
     "parameters": {
-        "storageNetworkAccess": { "value": "ServiceEndpoint" },
-        "storageServiceEndpointSubnetResourceIds": {
-            "value": [
-                "/subscriptions/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/resourceGroups/rg-avd-networking-use2/providers/Microsoft.Network/virtualNetworks/vnet-avd-use2/subnets/hosts"
-            ]
-        },
-        "storagePermittedIPs": { "value": ["203.0.113.0/24"] }
+        "paasNetworking": {
+            "value": {
+                "privateEndpoint": false,
+                "publicNetworkAccess": "EnabledWithRestrictions",
+                "storage": {
+                    "serviceEndpointSubnetResourceIds": [
+                        "/subscriptions/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/resourceGroups/rg-avd-networking-use2/providers/Microsoft.Network/virtualNetworks/vnet-avd-use2/subnets/hosts"
+                    ],
+                    "permittedIPs": ["203.0.113.0/24"]
+                }
+            }
+        }
     }
 }
 ```
@@ -498,12 +474,12 @@ All defaults: gallery + artifacts storage account, public endpoint. Suitable for
     "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
     "contentVersion": "1.0.0.0",
     "parameters": {
-        "storageNetworkAccess": { "value": "PrivateEndpoint" },
-        "privateEndpointSubnetResourceId": {
-            "value": "/subscriptions/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/resourceGroups/rg-avd-networking-use2/providers/Microsoft.Network/virtualNetworks/vnet-avd-use2/subnets/privateEndpoints"
+        "paasNetworking": { "value": { "privateEndpoint": true, "publicNetworkAccess": "Disabled" } },
+        "privateEndpointSubnetResourceIds": {
+            "value": { "sharedResources": "/subscriptions/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/resourceGroups/rg-avd-networking-use2/providers/Microsoft.Network/virtualNetworks/vnet-avd-use2/subnets/privateEndpoints" }
         },
-        "azureBlobPrivateDnsZoneResourceId": {
-            "value": "/subscriptions/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/resourceGroups/rg-networking-use2/providers/Microsoft.Network/privateDnsZones/privatelink.blob.core.windows.net"
+        "privateDnsZoneResourceIds": {
+            "value": { "blob": "/subscriptions/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/resourceGroups/rg-networking-use2/providers/Microsoft.Network/privateDnsZones/privatelink.blob.core.windows.net" }
         },
         "deployBuildLogsStorageAccount": { "value": true },
         "keyManagementStorageAccounts": { "value": "CustomerManaged" },
@@ -525,21 +501,21 @@ All defaults: gallery + artifacts storage account, public endpoint. Suitable for
 
 ### Storage Account Security
 
-**Public Access (Default)**
+**Restricted Public Access (Explicit Choice)**
 
-- Set `paasPublicNetworkAccess = EnabledWithRestrictions` and use `storagePermittedIPs` to permit approved public IPs
-- In restricted mode, use `storageServiceEndpointSubnetResourceIds` to permit specific subnets with service endpoints enabled
+- Set `paasNetworking.storage.publicNetworkAccess = EnabledWithRestrictions` and use `.permittedIPs` to permit approved public IPs
+- In restricted mode, use `paasNetworking.storage.serviceEndpointSubnetResourceIds` to permit specific subnets with service endpoints enabled
 - Shared key access is disabled by default (`storageAllowSharedKeyAccess = false`)
 
-**Private Endpoint**
+**Private Endpoint (Default)**
 
-- Set `storageNetworkAccess = PrivateEndpoint` and `paasPublicNetworkAccess = Disabled`; entered IP/subnet rules do not enable public access
-- Deploy private endpoint with `privateEndpointSubnetResourceId`
-- Link private DNS zone with `azureBlobPrivateDnsZoneResourceId`
+- Omitted policy uses private endpoints and disabled public access; entered IP/subnet rules do not enable public access
+- Supply `privateEndpointSubnetResourceIds.sharedResources`
+- Link the private DNS zone with `privateDnsZoneResourceIds.blob`
 
 **Private Endpoint + Public IP Allow-list**
 
-- Set `storageNetworkAccess = PrivateEndpoint`, `paasPublicNetworkAccess = EnabledWithRestrictions`, and populate `storagePermittedIPs`
+- Set `paasNetworking.storage.privateEndpoint = true`, `.publicNetworkAccess = EnabledWithRestrictions`, and populate `.permittedIPs`
 - Internal traffic uses the private endpoint; configured public rules and existing trusted-service exceptions remain allowed
 
 ### Identity-Based Access

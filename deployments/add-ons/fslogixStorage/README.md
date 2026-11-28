@@ -20,6 +20,13 @@ Shared Services. Office container shares are never enrolled by the shared FSLogi
 
 ## Deployment
 
+For service-endpoint-only customer networks, set `storagePublicNetworkAccess` to
+`EnabledWithRestrictions` and supply `storageServiceEndpointSubnetResourceIds`.
+This applies to every new Profile and Office Azure Files account; existing subnets
+must already have the appropriate Storage service endpoint enabled. Private
+endpoints remain optional and independently selected. See the
+[subnet allowlist reference](../../../docs/parameters.md#service-endpoint-subnet-allowlists).
+
 Use the Template Spec portal form for the first deployment. Publish the add-on Template Specs with
 [`New-TemplateSpecs.ps1`](../../../tools/New-TemplateSpecs.ps1), then open **Template Specs** in the
 Azure portal and deploy **AVD FSLogix Storage**. On **Review + create**, select **Create**. After the
@@ -35,6 +42,50 @@ permissions, networking, encryption, monitoring, backup, and Azure NetApp Files 
 host-pool FSLogix experience. Encryption key management, private networking, monitoring, and
 recovery are grouped on the Zero Trust Configuration page. Resource tags and optional naming
 overrides are grouped on the final Tags and Naming page.
+
+Azure Files networking uses three adjacent sections before **Monitoring and Recovery**:
+**Storage networking: Private endpoints**, **Storage networking: Public endpoint access**,
+and, for restricted public access, **Storage networking: Allowed public-endpoint sources**.
+Private endpoint deployment and public access are independent. The Portal defaults
+public access to **Disabled**, even when private endpoint deployment is unchecked;
+changing the private endpoint radio choice does not change that default. The form warns when public
+access is disabled without deploying private endpoints. Direct parameter-file deployments
+also default to `Disabled`; there is no legacy `Auto` compatibility mode.
+
+For service-endpoint-only access, select No for private endpoint deployment, choose
+**Enabled with restrictions**, and select **Storage access subnets**; IP rules are
+optional. Restricted access accepts IP rules, subnet rules, or both. Empty allowlists
+deny ordinary public traffic without disabling private connectivity. Trusted Azure
+service exceptions remain configured. Service endpoints reach the public Storage
+endpoint over the Azure backbone, not a private IP. Private endpoint traffic is not
+controlled by these public-path allowlists; DNS determines the path clients use.
+Both allowlists retain selections across public-mode changes.
+
+The subnet selector follows the IP/CIDR grid in the same section and remains
+visible while inventory loads, then lists eligible subnets from multiple VNets.
+Each multiline option uses `VNETName | SubnetName` as its label, with
+`Resource Group: ResourceGroupName` in its description. Different subnets in the same VNet remain
+separate choices identified by their full subnet resource IDs.
+Inventory, regional filtering, and pagination use explicit API transforms rather
+than depending on raw response fields also being exposed. Publish the updated
+form in a new Template Spec version before retesting in the Portal.
+
+The Azure Files private DNS dropdown supports search and automatically defaults to
+the first matching File namespace in the selected DNS subscription. The default is
+the zone's display label; the submitted value remains its full resource ID. Empty or
+unavailable inventories show an empty-value availability option. Review the zone and
+resource group if multiple matches are returned.
+
+Region matching compares each subnet's parent VNet ID with the same-region VNet
+ID list. Keep subnet variables outside nested VNet lambdas: the Portal runtime
+does not resolve the outer `snet` variable there, causing a `startsWith` argument
+type error and preventing input controls from rendering. Offline expression
+tests include this observed lambda-scope limitation; live rendering is still required.
+
+Read named API transform outputs such as `.transformed.subnets`, not the bare
+`.transformed` container. The Portal API-control resolver treats that bare name
+as a raw response property. A constant `loaded` transform marks successful
+inventory completion, including a successfully returned empty inventory.
 
 For Azure Files, the portal form checks the Storage resource provider SKU inventory for the selected
 subscription and region. For Legacy billing it checks `Standard_ZRS` with the `StorageV2` account
@@ -258,10 +309,10 @@ or restore success.
 
 ## Public Network Access
 
-`paasPublicNetworkAccess` selects `Disabled`, `EnabledWithRestrictions`, or `Enabled` for newly
-deployed Azure Files storage independently of `privateEndpoint`. The default `Auto` derives access
-from private endpoint selection and IP rules. The Portal offers the three explicit choices, initially
-Disabled with private endpoints and Enabled otherwise. `permittedIPs` can be staged in Disabled
+`storagePublicNetworkAccess` selects `Disabled` (default), `EnabledWithRestrictions`, or `Enabled` for newly
+deployed Azure Files storage independently of `storagePrivateEndpoint` (default true).
+`storagePrivateEndpointSubnetResourceId` supplies the endpoint subnet; the existing
+`filePrivateDnsZoneResourceId` supplies DNS integration. `storagePermittedIPs` can be staged in Disabled
 mode without enabling public access; restricted mode denies unmatched traffic even with an empty
 list. Existing `AzureServices` exceptions for backup/monitoring remain configured and can still
 apply when public access is Disabled. NetApp Files and existing backup vaults are not reconfigured.

@@ -14,10 +14,32 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $relevantNames = @(
+    'paasNetworking',
+    'privateEndpointSubnetResourceIds',
+    'privateDnsZoneResourceIds',
     'deployMonitoring',
     'enableMonitoring',
-    'deployPrivateEndpoints',
+    'deployBackupAndDiskPrivateEndpoints',
+    'deployBackupPrivateEndpoints',
+    'backupPrivateEndpointSubnetResourceId',
+    'sharedResourcesPrivateEndpointSubnetResourceId',
+    'hostPoolResourcesPrivateEndpointSubnetResourceId',
     'permittedIPs',
+    'storagePublicNetworkAccess',
+    'keyVaultPublicNetworkAccess',
+    'functionAppPublicNetworkAccess',
+    'storagePrivateEndpoint',
+    'keyVaultPrivateEndpoint',
+    'functionAppPrivateEndpoint',
+    'storagePrivateEndpointSubnetResourceId',
+    'keyVaultPrivateEndpointSubnetResourceId',
+    'functionAppPrivateEndpointSubnetResourceId',
+    'storagePermittedIPs',
+    'keyVaultPermittedIPs',
+    'functionAppPermittedIPs',
+    'storageServiceEndpointSubnetResourceIds',
+    'keyVaultServiceEndpointSubnetResourceIds',
+    'functionAppServiceEndpointSubnetResourceIds',
     'hostPoolPublicNetworkAccess',
     'workspaceFeedPublicNetworkAccess',
     'keyExpirationInDays',
@@ -46,7 +68,10 @@ foreach ($path in $ParameterPath) {
     foreach ($name in $relevantNames) {
         $property = $parameters.PSObject.Properties[$name]
         if ($null -eq $property) { continue }
-        $rawValue = if ($null -ne $property.Value.value) { $property.Value.value } else { $property.Value }
+        $rawValue = $property.Value
+        if ($null -ne $property.Value -and $null -ne $property.Value.PSObject.Properties['value']) {
+            $rawValue = $property.Value.value
+        }
         $displayValue = if ($name -match '(?i)password|secret|token|credential') {
             '<redacted>'
         } elseif ($null -eq $rawValue) {
@@ -54,7 +79,7 @@ foreach ($path in $ParameterPath) {
         } elseif ($rawValue -is [string] -or $rawValue -is [ValueType]) {
             [string]$rawValue
         } else {
-            $rawValue | ConvertTo-Json -Depth 20 -Compress
+            ConvertTo-Json -InputObject $rawValue -Depth 20 -Compress
         }
 
         $evidence.Add([pscustomobject]@{

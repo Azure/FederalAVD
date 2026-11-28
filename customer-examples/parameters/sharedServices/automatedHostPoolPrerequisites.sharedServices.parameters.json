@@ -22,8 +22,23 @@
         "deployEncryptionKeyVault": {
             "value": false
         },
-        "privateEndpoint": {
-            "value": false
+        "paasNetworking": {
+            "value": {
+                "privateEndpoint": true,
+                "publicNetworkAccess": "Disabled",
+                // Existing source subnets need Microsoft.KeyVault; select EnabledWithRestrictions to enforce them.
+                "keyVault": { "permittedIPs": [], "serviceEndpointSubnetResourceIds": [] }
+            }
+        },
+        "privateEndpointSubnetResourceIds": {
+            "value": {
+                "sharedResources": "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-network/providers/Microsoft.Network/virtualNetworks/vnet-avd/subnets/private-endpoints"
+            }
+        },
+        "privateDnsZoneResourceIds": {
+            "value": {
+                "vault": "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-network/providers/Microsoft.Network/privateDnsZones/privatelink.vaultcore.azure.net"
+            }
         },
         "deployMonitoring": {
             "value": false

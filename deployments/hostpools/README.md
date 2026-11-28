@@ -1,4 +1,4 @@
-﻿# AVD Host Pool Deployment Template
+# AVD Host Pool Deployment Template
 
 FSLogix `ShardOSS` requires supported AD-domain-joined session hosts. Current
 `EntraKerberos-Hybrid` describes synchronized users on Entra-only joined hosts; use `ShardPerms`,
@@ -634,26 +634,35 @@ appears only for `All` routes when no existing global-feed workspace is detected
 integration emits no zone IDs for that endpoint group. Hidden inactive PaaS selections do not
 submit endpoint flags, subnets, or DNS zone IDs.
 
-#### `permittedIPs`
+#### Scenario-based typed networking
 
-- **Type:** Array
-- **Optional**
-- **Description:** Public IP/CIDR allowlist for newly deployed Azure Files storage and Key Vaults.
-  Rules are retained when public access is Disabled and do not enable it. Existing trusted-service
-  exceptions remain configured.
-- **Example:** `["203.0.113.10", "198.51.100.0/24"]`
+The standard Host Pool uses three sealed object parameters:
 
-#### `paasPublicNetworkAccess`
+- `paasNetworking`: common private-endpoint/public-access defaults, independent Storage and
+  Key Vault subnet/IP allowlists, and optional Storage, Key Vault, Backup, and disk overrides.
+- `privateEndpointSubnetResourceIds`: `sharedResources` for shared Key Vaults, FSLogix Backup
+  and AVD feeds; `hostPoolResources` for FSLogix Storage, VM Backup, managed disks and AVD connections.
+- `privateDnsZoneResourceIds`: `file`, `vault`, `backup`, `blob`, `queue`, `avdFeed`, `avdGlobalFeed`.
 
-- **Default:** `Auto` derives public access from private endpoint selection and IP rules.
-- **Explicit values:** `Disabled`, `EnabledWithRestrictions`, `Enabled`.
-- **Scope:** One choice for newly deployed Azure Files storage and Key Vaults, independent of
-  private endpoint creation. It does not configure adopted resources, backup vaults, monitoring or
-  AVD access settings. Restricted mode denies unmatched traffic even with an empty IP list.
-- **Portal:** Exposes the three explicit choices, initially Disabled with private endpoints and
-  Enabled otherwise. IP rules can be staged in Disabled mode.
-- **Exceptions:** Existing `AzureServices` bypass remains configured and can still apply when public
-  access is Disabled; see the [shared access-mode contract](../../docs/parameters.md#paas-public-network-access).
+Omitted settings mean private endpoints and disabled public access for newly created PaaS.
+Missing required placement IDs fail explicitly; no endpoint is automatically placed in the
+session-host subnet. Existing/adopted resource networking is not changed.
+
+The form defaults to **Private connectivity**. **Restricted public connectivity** exposes separate
+service-endpoint subnet selectors and IP/CIDR grids for each applicable Storage/Key Vault family.
+The source subnets must already have the correct service endpoints. **Custom configuration**
+exposes independent family public/endpoint settings, including mixed connectivity and explicitly
+unrestricted public access. Authentication and existing service exceptions still apply.
+
+Backup does not support IP/subnet firewall rules. When restricted connectivity creates a new
+vault, the form requires an explicit private-versus-public Backup choice and explains the public
+network exception. Adopted vaults do not trigger that choice. DNS controls remain namespace-based;
+AVD routing/public access and AMPLS remain independent of the PaaS scenario.
+
+**Breaking contract/default change:** migrate the former eighteen flat inputs before deployment.
+Other solutions, including Automated Host Pool, keep their current interfaces in this first rollout.
+See the [typed contract and migration table](../../docs/parameters.md#standard-host-pool-typed-networking)
+and [ownership-based subnet placement](../../docs/parameters.md#host-pool-subnet-placement-by-ownership).
 
 ### Security & Encryption
 
@@ -759,9 +768,11 @@ New-AzSubscriptionDeployment `
   -Location "usgovvirginia" `
   -TemplateFile ".\hostpool.json" `
   -TemplateParameterFile "..\..\customer\parameters\hostpools\secure.parameters.json" `
-  -deployPrivateEndpoints $true `
-  -hostPoolResourcesPrivateEndpointSubnetResourceId "/subscriptions/{sub}/resourceGroups/{rg}/providers/Microsoft.Network/virtualNetworks/{vnet}/subnets/snet-endpoints" `
-  -operationsPrivateEndpointSubnetResourceId "/subscriptions/{sub}/resourceGroups/{rg}/providers/Microsoft.Network/virtualNetworks/{vnet}/subnets/snet-endpoints" `
+  -paasNetworking @{ privateEndpoint = $true; publicNetworkAccess = 'Disabled' } `
+  -privateEndpointSubnetResourceIds @{
+    hostPoolResources = "/subscriptions/{sub}/resourceGroups/{rg}/providers/Microsoft.Network/virtualNetworks/{vnet}/subnets/snet-endpoints"
+    sharedResources = "/subscriptions/{sub}/resourceGroups/{rg}/providers/Microsoft.Network/virtualNetworks/{vnet}/subnets/snet-endpoints"
+  } `
   -Name "avd-hostpool-secure-$(Get-Date -Format 'yyyyMMddHHmm')"
 ```
 
@@ -812,21 +823,21 @@ are references and a fallback when the Template Spec UI is unavailable.
         "virtualMachineSubnetResourceId": {
             "value": "/subscriptions/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/resourceGroups/rg-avd-networking-use2/providers/Microsoft.Network/virtualNetworks/vnet-avd-use2/subnets/hosts"
         },
-        "deployPrivateEndpoints": { "value": true },
-        "hostPoolResourcesPrivateEndpointSubnetResourceId": {
-            "value": "/subscriptions/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/resourceGroups/rg-avd-networking-use2/providers/Microsoft.Network/virtualNetworks/vnet-avd-use2/subnets/privateEndpoints"
+        "paasNetworking": {
+            "value": { "privateEndpoint": true, "publicNetworkAccess": "Disabled" }
         },
-        "operationsPrivateEndpointSubnetResourceId": {
-            "value": "/subscriptions/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/resourceGroups/rg-avd-networking-use2/providers/Microsoft.Network/virtualNetworks/vnet-avd-use2/subnets/privateEndpoints"
+        "privateEndpointSubnetResourceIds": {
+            "value": {
+                "hostPoolResources": "/subscriptions/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/resourceGroups/rg-avd-networking-use2/providers/Microsoft.Network/virtualNetworks/vnet-avd-use2/subnets/privateEndpoints",
+                "sharedResources": "/subscriptions/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/resourceGroups/rg-avd-networking-use2/providers/Microsoft.Network/virtualNetworks/vnet-avd-use2/subnets/privateEndpoints"
+            }
         },
-        "azureBlobPrivateDnsZoneResourceId": {
-            "value": "/subscriptions/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/resourceGroups/rg-networking-use2/providers/Microsoft.Network/privateDnsZones/privatelink.blob.core.windows.net"
-        },
-        "azureFilesPrivateDnsZoneResourceId": {
-            "value": "/subscriptions/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/resourceGroups/rg-networking-use2/providers/Microsoft.Network/privateDnsZones/privatelink.file.core.windows.net"
-        },
-        "azureKeyVaultPrivateDnsZoneResourceId": {
-            "value": "/subscriptions/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/resourceGroups/rg-networking-use2/providers/Microsoft.Network/privateDnsZones/privatelink.vaultcore.azure.net"
+        "privateDnsZoneResourceIds": {
+            "value": {
+                "blob": "/subscriptions/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/resourceGroups/rg-networking-use2/providers/Microsoft.Network/privateDnsZones/privatelink.blob.core.windows.net",
+                "file": "/subscriptions/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/resourceGroups/rg-networking-use2/providers/Microsoft.Network/privateDnsZones/privatelink.file.core.windows.net",
+                "vault": "/subscriptions/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/resourceGroups/rg-networking-use2/providers/Microsoft.Network/privateDnsZones/privatelink.vaultcore.azure.net"
+            }
         },
         "deployFSLogixStorage": { "value": true },
         "enableMonitoring": { "value": true }

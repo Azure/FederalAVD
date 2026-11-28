@@ -40,6 +40,14 @@ HDD and legacy billing remain selectable. Existing parameter files that omit
 pay-as-you-go. The PoC remains Profile-only; advanced sizing and existing-resource adoption
 belong in the full host-pool deployment or FSLogix Storage add-on.
 
+FSLogix storage supports Disabled, Enabled with restrictions, and Enabled public
+access. Parameter files retain Auto by default. Restricted access enables
+`Microsoft.Storage` on the newly created PoC host subnet and authorizes that subnet
+on the new storage account. Additional existing subnets can be selected across
+VNets with `storageServiceEndpointSubnetResourceIds`; they must already have
+Storage service endpoints. The selectors do not adopt or modify those networks.
+See the [subnet allowlist reference](../../../docs/parameters.md#service-endpoint-subnet-allowlists).
+
 ## Fixed network configuration
 
 | Setting | Value |
@@ -83,3 +91,14 @@ Copy the example from
 
 After validation, tear the PoC down and start a new pilot or production design with the full AVD
 Host Pool deployment.
+
+## Storage-family network policy
+
+`storagePublicNetworkAccess` defaults `Disabled` and independently accepts
+`EnabledWithRestrictions` or `Enabled`. `storagePermittedIPs` and
+`storageServiceEndpointSubnetResourceIds` apply only to newly created FSLogix storage.
+The owned PoC topology has no private endpoints and exposes no PE flags. Restricted
+mode enables Microsoft.Storage on the owned host subnet and includes that subnet in
+the Storage allowlist; external customer subnets are not modified. Public mode is never
+inferred from allowlists. Key Vault, Function App, AVD, and monitoring are not part of
+this family's policy. The former global mode and IP input are removed.

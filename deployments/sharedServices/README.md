@@ -23,7 +23,7 @@ required; they do not embed this standalone entry template:
 - Optional private endpoints for the deployed Key Vaults and Recovery Services vault
 
 Shared Services is not a separate prerequisite for every host pool. The standard and automated
-entry orchestrators call the same Shared Services template. The Standard PoC uses host-pool-specific
+entry orchestrators reuse the same lower-level capability modules. The Standard PoC uses host-pool-specific
 naming overrides; the full production forms use shared naming by default. Deploy the standalone
 Shared Services Template Spec first when
 enterprise resources must exist independently and be reused by one or more consumers, including:
@@ -89,13 +89,13 @@ when private endpoints are disabled.
 | Operations resource group | When an operations resource is deployed | Contains Key Vaults and the optional FSLogix backup vault |
 | Secrets Key Vault | `deploySecretsKeyVault = true` | Standard SKU; RBAC authorization; ARM template deployment enabled |
 | Encryption Key Vault | `deployEncryptionKeyVault = true` | Premium SKU; soft delete and purge protection enabled |
-| Key Vault private endpoints | `privateEndpoint = true` and the applicable vault is deployed | Uses the supplied subnet; DNS integration is optional in Bicep but normally required operationally |
+| Key Vault private endpoints | Resolved `paasNetworking.keyVault.privateEndpoint` is true and the applicable vault is created | Uses the supplied shared subnet; DNS integration is optional in Bicep but normally required operationally |
 | Monitoring resource group, workspace, DCR, and DCE | `deployMonitoring = true` | Can be placed in the operations subscription or another selected subscription |
 | Shared AVD workspace | `manageAvdWorkspace = true` | Creates a workspace in a dedicated control-plane resource group or updates any selected existing workspace |
-| Workspace feed private endpoint | Shared workspace managed and `workspaceFeedPrivateEndpointSubnetResourceId` supplied | Creates or updates the deterministic endpoint name; arbitrary differently named endpoints are not adopted |
+| Workspace feed private endpoint | Shared workspace managed, `deployWorkspaceFeedPrivateEndpoint = true`, and shared subnet supplied | Creates or updates the deterministic endpoint name; arbitrary differently named endpoints are not adopted |
 | Global-feed workspace and private endpoint | `manageGlobalAvdWorkspace = true` | Creates or updates the workspace and creates or updates its deterministic global endpoint |
 | Recovery Services vault and Azure Files policy | `deployFSLogixBackupVault = true` | Snapshot data remains in each storage account; the vault maintains backup policy and metadata |
-| Recovery Services private endpoint | Backup vault deployed, `privateEndpoint = true`, and private endpoint/DNS inputs supplied | Requires the Azure Backup, Blob, and Queue private DNS zones for complete DNS integration |
+| Recovery Services private endpoint | Backup vault created, resolved `paasNetworking.backup.privateEndpoint` is true, and shared subnet/DNS inputs supplied | Requires the Azure Backup, Blob, and Queue private DNS zones for complete DNS integration |
 
 ## Deployment Order
 
@@ -143,8 +143,11 @@ grant their deployment identity **Key Vault Crypto Officer** on this vault. `Own
 
 ### Private Connectivity
 
-When `privateEndpoint` is enabled, provide an existing private endpoint subnet without service
-delegations. Provide the cloud-appropriate private DNS zones:
+When any private endpoint is selected, provide `privateEndpointSubnetResourceIds.sharedResources`
+for one existing subnet without service delegations. All selected Key Vault, FSLogix Backup,
+workspace-feed, and global-feed endpoints use this subnet. Their enable flags, public-access
+policies, firewall allowlists, and DNS inputs remain independent. Provide the cloud-appropriate
+private DNS zones:
 
 - Key Vault: `privatelink.vaultcore.azure.net` or the cloud-specific equivalent
 - Azure Backup: `privatelink.<region>.backup.windowsazure.com` or the cloud-specific equivalent
@@ -163,13 +166,12 @@ private DNS zones, AMPLS private endpoints, or DNS links.
 | `existingAvdWorkspaceResourceId` | Empty | Existing workspace selected for update |
 | `avdWorkspaceFriendlyName` | Empty | Friendly name for a newly created workspace |
 | `avdWorkspacePublicNetworkAccess` | `Enabled` | Managed public-network setting for the shared workspace |
-| `workspaceFeedPrivateEndpointSubnetResourceId` | Empty | Existing subnet for the workspace `feed` endpoint; empty disables the endpoint |
-| `avdPrivateDnsZoneResourceId` | Empty | Optional private DNS zone associated with the feed endpoint |
+| `deployWorkspaceFeedPrivateEndpoint` | `false` | Manage the workspace `feed` endpoint in the shared subnet when `manageAvdWorkspace` is true |
+| `privateDnsZoneResourceIds.avdFeed` | Empty | Optional private DNS zone associated with the feed endpoint |
 | `manageGlobalAvdWorkspace` | `false` | Manage a global-feed workspace and endpoint |
 | `globalAvdWorkspaceMode` | `Create` | Create or update the global-feed workspace |
 | `existingGlobalAvdWorkspaceResourceId` | Empty | Existing global-feed workspace selected for update |
-| `globalFeedPrivateEndpointSubnetResourceId` | Empty | Required subnet for the global endpoint |
-| `globalFeedPrivateDnsZoneResourceId` | Empty | Optional private DNS zone associated with the global endpoint |
+| `privateDnsZoneResourceIds.avdGlobalFeed` | Empty | Optional private DNS zone associated with the global endpoint |
 
 Update mode modifies an existing workspace only when management is explicitly requested. Shared
 Services preserves all existing `applicationGroupReferences`, as well as the workspace name,
@@ -187,11 +189,12 @@ if another endpoint uses a different name, it remains separately owned. Re-runni
 creates or updates only the endpoint derived from the established workspace/VNet naming
 convention.
 
-The feed and global endpoint subnets can be in different subscriptions, resource groups, regions,
-or in the same VNet. The deployment reads each selected VNet to obtain its actual location and
-deduplicates a VNet used by both endpoints. A newly created global-feed workspace uses the selected
-global endpoint VNet location. Global-feed management can be enabled independently when the shared
-regional workspace is owned elsewhere.
+The feed and global endpoints use the same shared-resource subnet as the selected Key Vault and
+Backup endpoints. This subnet can be in a different subscription, resource group, or region from
+the managed resources; the deployment reads its VNet to determine endpoint locations. The workspace
+composer deduplicates the VNet reference when both AVD endpoints are selected. A newly created
+global-feed workspace uses that VNet's location. Global-feed management can be enabled independently
+when the shared regional workspace is owned elsewhere.
 
 ## Parameters
 
@@ -218,30 +221,40 @@ Do not commit secret values to parameter files.
 
 | Parameter | Default | Purpose |
 | --- | --- | --- |
-| `privateEndpoint` | `false` | Deploy private endpoints for selected Key Vaults and the FSLogix backup vault |
-| `privateEndpointSubnetResourceId` | Empty | Existing subnet used by private endpoints |
-| `azureKeyVaultPrivateDnsZoneResourceId` | Empty | Key Vault private DNS zone integration |
-| `azureBackupPrivateDnsZoneResourceId` | Empty | Azure Backup private DNS zone integration |
-| `azureBlobPrivateDnsZoneResourceId` | Empty | Blob private DNS zone integration for Azure Backup |
-| `azureQueuePrivateDnsZoneResourceId` | Empty | Queue private DNS zone integration for Azure Backup |
-| `permittedIPs` | `[]` | Public IP/CIDR allowlist applied to both Key Vaults |
-| `paasPublicNetworkAccess` | `Auto` | Key Vault public-access mode: `Disabled`, `EnabledWithRestrictions`, or `Enabled`; `Auto` derives the mode from private endpoint selection and IP rules |
-| `existingLogAnalyticsWorkspaceResourceId` | Empty | Existing workspace used only for Key Vault and backup-vault diagnostics when new monitoring is not deployed |
+| `paasNetworking` | `{}` | Common secure defaults and optional `keyVault`/`backup` overrides |
+| `privateEndpointSubnetResourceIds` | `{}` | `sharedResources`: one existing subnet for every selected private endpoint, including AVD |
+| `privateDnsZoneResourceIds` | `{}` | `vault`, `backup`, `blob`, `queue`, `avdFeed`, and `avdGlobalFeed` namespace IDs |
+| `existingLogAnalyticsWorkspaceResourceId` | Empty | Diagnostic workspace when new monitoring is not deployed |
 
-Select public access independently of private endpoints. Disabled retains supplied IP rules;
-restricted mode denies unmatched traffic even with an empty list; Enabled allows all networks.
-In the Portal form, **Operations Resources > Network Access** groups the **Public Endpoint / Private
-Endpoint** selector with **Key Vault public network access** and the restricted-mode IP list.
-Public Endpoint is the default. Selecting Private Endpoint reveals the subnet and private DNS
-settings and defaults Key Vault public access to Disabled; public access remains independently
-selectable. The selector maps to the existing `privateEndpoint` boolean, so automation parameter
-files and the deployment contract are unchanged. Service Endpoint is not offered by this form.
-The existing trusted-service bypass remains configured and can still apply when public access is
-Disabled. With `Auto`, private endpoints without IPs disable public access; IPs enable restricted
-access; without either, all networks are allowed. See the
-[shared access-mode contract](../../docs/parameters.md#paas-public-network-access).
-The Recovery Services vault retains its separate behavior: its private endpoint option disables
-public access.
+The form offers **Private connectivity** (default), **Restricted public connectivity**, and
+**Custom configuration**. Omitted policy uses private endpoints and disabled public access.
+`paasNetworking.keyVault` accepts independent public/PE overrides, `permittedIPs`, and
+`serviceEndpointSubnetResourceIds`. Restricted public connectivity without a Key Vault private
+endpoint requires at least one allowed source. Backup accepts independent `Enabled`/`Disabled`
+public mode and a PE switch, but no IP/subnet ACLs. Restricted common intent requires an explicit
+Private or Public choice for a newly created Backup vault; adopted vaults do not trigger that choice.
+New Backup private endpoints require `privateDnsZoneResourceIds.backup`.
+
+**Breaking change:** move the former Key Vault public/PE/IP/subnet inputs into `paasNetworking.keyVault`,
+`deployBackupPrivateEndpoints` into `paasNetworking.backup.privateEndpoint`, and the shared subnet into
+`privateEndpointSubnetResourceIds.sharedResources`. Move all six DNS inputs into their corresponding
+namespace members. For Backup, explicitly preserve its former public mode when migrating:
+`Disabled` with a PE or `Enabled` without one. There is no implicit legacy public fallback.
+For older service-specific placement inputs, first choose one shared subnet; there are no
+per-service placement overrides or legacy aliases.
+Set `deployWorkspaceFeedPrivateEndpoint = true` when migrating a previously supplied workspace-feed
+subnet. Placement alone does not enable that endpoint. Global feed retains `manageGlobalAvdWorkspace`.
+
+The Portal's Private Endpoint Networking step provides one network subscription, VNet, and subnet
+selection, required only when a selected endpoint needs it. Monitoring's existing AMPLS connectivity
+remains platform-managed and does not use this subnet input.
+
+Public mode and PE deployment are independent. Disabled retains IP/subnet rules without
+enabling public access; restricted mode denies unmatched traffic;
+Enabled allows all networks. Existing trusted-service bypass remains configured and can
+still apply when Disabled. Adopted vaults are not reconfigured. The former global public
+mode/IP inputs are removed. Backup policy remains independent within the typed object; AVD and
+monitoring retain separate controls. See the [typed contract and migration](../../docs/parameters.md#typed-networking-solution-rollout).
 
 ### Central Monitoring
 

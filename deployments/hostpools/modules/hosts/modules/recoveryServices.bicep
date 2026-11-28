@@ -35,6 +35,13 @@ var crossRegionRestoreEnabled = storageRedundancy == 'GeoRedundant'
 @description('Optional. Resource ID of the Log Analytics workspace for vault diagnostics.')
 param logAnalyticsWorkspaceResourceId string = ''
 
+@description('Required. Public access for a newly created vault: Enabled or Disabled, independent of privateEndpoint. Existing vault networking is owner-managed. Recovery Services vaults do not expose IP or service-endpoint subnet allowlists.')
+@allowed([
+  'Enabled'
+  'Disabled'
+])
+param publicNetworkAccess string
+
 @description('Required. Whether to deploy private endpoints for the vault.')
 param privateEndpoint bool
 
@@ -42,13 +49,13 @@ param privateEndpoint bool
 param privateEndpointSubnetResourceId string = ''
 
 @description('Optional. Resource ID of the Azure Backup private DNS zone.')
-param azureBackupPrivateDnsZoneResourceId string = ''
+param backupPrivateDnsZoneResourceId string = ''
 
 @description('Optional. Resource ID of the Azure Blob private DNS zone (needed for backup PE).')
-param azureBlobPrivateDnsZoneResourceId string = ''
+param blobPrivateDnsZoneResourceId string = ''
 
 @description('Optional. Resource ID of the Azure Queue private DNS zone (needed for backup PE).')
-param azureQueuePrivateDnsZoneResourceId string = ''
+param queuePrivateDnsZoneResourceId string = ''
 
 @description('Required. Name convention for private endpoints.')
 param privateEndpointNameConv string
@@ -93,9 +100,9 @@ param keyExpirationInDays int = 180
 // ─────────────────────────────────────────────────────────────────────────────
 
 var backupPrivateDnsZoneResourceIds = filter([
-  azureBackupPrivateDnsZoneResourceId
-  azureBlobPrivateDnsZoneResourceId
-  azureQueuePrivateDnsZoneResourceId
+  backupPrivateDnsZoneResourceId
+  blobPrivateDnsZoneResourceId
+  queuePrivateDnsZoneResourceId
 ], z => !empty(z))
 
 // When createVault = false, derive vault coordinates from the provided resource ID.
@@ -165,7 +172,7 @@ module recoveryServicesVaultInit '../../../../shared/modules/resourceModules/rec
     name: vaultName
     location: location
     diagnosticSettings: !empty(logAnalyticsWorkspaceResourceId) ? { workspaceId: logAnalyticsWorkspaceResourceId } : null
-    publicNetworkAccess: privateEndpoint ? 'Disabled' : 'Enabled'
+    publicNetworkAccess: publicNetworkAccess
     storageType: storageRedundancy
     crossRegionRestoreFlag: crossRegionRestoreEnabled
     tags: tags[?'Microsoft.RecoveryServices/vaults'] ?? {}
@@ -200,7 +207,7 @@ module recoveryServicesVaultCmk '../../../../shared/modules/resourceModules/reco
     name: vaultName
     location: location
     diagnosticSettings: !empty(logAnalyticsWorkspaceResourceId) ? { workspaceId: logAnalyticsWorkspaceResourceId } : null
-    publicNetworkAccess: privateEndpoint ? 'Disabled' : 'Enabled'
+    publicNetworkAccess: publicNetworkAccess
     storageType: storageRedundancy
     crossRegionRestoreFlag: crossRegionRestoreEnabled
     tags: tags[?'Microsoft.RecoveryServices/vaults'] ?? {}
@@ -218,7 +225,7 @@ module recoveryServicesVault '../../../../shared/modules/resourceModules/recover
     name: vaultName
     location: location
     diagnosticSettings: !empty(logAnalyticsWorkspaceResourceId) ? { workspaceId: logAnalyticsWorkspaceResourceId } : null
-    publicNetworkAccess: privateEndpoint ? 'Disabled' : 'Enabled'
+    publicNetworkAccess: publicNetworkAccess
     storageType: storageRedundancy
     crossRegionRestoreFlag: crossRegionRestoreEnabled
     tags: tags[?'Microsoft.RecoveryServices/vaults'] ?? {}
@@ -264,7 +271,7 @@ module vmBackupPolicy '../../../../shared/modules/resourceModules/recoveryServic
 
 // ─── Vault Private Endpoint ───────────────────────────────────────────────────
 // Only created alongside a new vault (Complete). Existing vaults already have their PE.
-module vaultPrivateEndpoint '../../../../shared/modules/resourceModules/network/privateEndpoints/deploy.bicep' = if (createVault && privateEndpoint && !empty(privateEndpointSubnetResourceId) && !empty(azureBackupPrivateDnsZoneResourceId)) {
+module vaultPrivateEndpoint '../../../../shared/modules/resourceModules/network/privateEndpoints/deploy.bicep' = if (createVault && privateEndpoint && !empty(privateEndpointSubnetResourceId) && !empty(backupPrivateDnsZoneResourceId)) {
   scope: resourceGroup(resourceGroupHosts)
   params: {
     name: replace(

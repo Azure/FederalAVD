@@ -302,15 +302,15 @@ created subnets and is not configurable.
 
 If zones already exist, provide their resource IDs:
 
-- `azureBlobZoneId`
-- `azureFilesZoneId`
-- `azureQueueZoneId`
-- `azureTableZoneId`
-- `azureKeyVaultZoneId`
+- `blobPrivateDnsZoneResourceId`
+- `filePrivateDnsZoneResourceId`
+- `queuePrivateDnsZoneResourceId`
+- `tablePrivateDnsZoneResourceId`
+- `vaultPrivateDnsZoneResourceId`
 - `avdFeedZoneId`
 - `avdGlobalFeedZoneId`
-- `azureBackupZoneId`
-- `azureWebAppZoneId`
+- `backupPrivateDnsZoneResourceId`
+- `websitesPrivateDnsZoneResourceId`
 
 #### `linkPrivateDnsZonesToNewVnet`
 
@@ -495,10 +495,13 @@ when `deployVnet` is `false`. Select records by `purpose` (`hosts`, `privateEndp
 ### `privateDnsZoneResourceIds`
 
 Object containing the effective private DNS zone resource IDs, whether each zone was created by
-this deployment or supplied as an existing zone. Properties are `azureBackup`, `azureBlob`,
-`azureFiles`, `azureQueue`, `azureTable`, `azureKeyVault`, `avdFeed`, `avdGlobalFeed`, and
-`azureWebApp`. Pass these values to the corresponding private DNS parameters in AVD Shared
-Services, Image Management, Host Pool, and add-on deployments.
+this deployment or supplied as an existing zone. Properties are `backup`, `blob`,
+`file`, `queue`, `table`, `vault`, `avdFeed`, `avdGlobalFeed`, and `websites`.
+Pass each namespace value to its matching `*PrivateDnsZoneResourceId` input in
+AVD Shared Services, Image Management, Host Pool, and add-on deployments; for example,
+`privateDnsZoneResourceIds.blob` maps to `blobPrivateDnsZoneResourceId`.
+One Blob zone can serve Storage, Backup, and managed-disk consumers without coupling
+their networking policies. See the [DNS naming migration](../../docs/parameters.md#private-dns-parameter-names).
 
 - **Type:** String
 - **Description:** Resource ID of the deployed virtual network

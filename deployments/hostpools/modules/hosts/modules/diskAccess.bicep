@@ -9,7 +9,7 @@ param deployPrivateEndpoint bool
 param privateEndpointSubnetResourceId string = ''
 param privateEndpointNameConv string
 param privateEndpointNICNameConv string
-param azureBlobPrivateDnsZoneResourceId string = ''
+param blobPrivateDnsZoneResourceId string = ''
 
 module diskAccessResource '../../../../shared/modules/resourceModules/compute/diskAccesses/deploy.bicep' = {
   scope: resourceGroup(resourceGroupHosts)
@@ -29,7 +29,7 @@ module diskAccessPrivateEndpoint '../../../../shared/modules/resourceModules/net
     subnetResourceId: privateEndpointSubnetResourceId
     privateLinkServiceId: diskAccessResource.outputs.resourceId
     groupId: 'disks'
-    privateDNSZoneIds: !empty(azureBlobPrivateDnsZoneResourceId) ? [azureBlobPrivateDnsZoneResourceId] : []
+    privateDNSZoneIds: !empty(blobPrivateDnsZoneResourceId) ? [blobPrivateDnsZoneResourceId] : []
     tags: tags[?'Microsoft.Network/privateEndpoints'] ?? {}
   }
 }

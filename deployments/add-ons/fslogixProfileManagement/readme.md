@@ -25,9 +25,24 @@ The host needs HTTPS connectivity to Resource Manager, Azure Files, and, for dis
 
 For private Function App networking, the portal's outbound subnet dropdown includes only subnets delegated to `Microsoft.Web/serverFarms`. It checks every delegation, ignores service-name casing, and excludes subnets with no delegations.
 
-Private and service modes require `functionAppDelegatedSubnetResourceId` for outbound VNet integration and `subnetResourceId` for private endpoints or service-endpoint configuration. Private mode also requires the blob, Function App, and Key Vault private DNS zone IDs, with the zones linked to the integration VNet. Resource naming placeholders in the Portal form include the `fpm` purpose suffix; replace the placeholders with valid names before deployment.
+Supply `functionAppDelegatedSubnetResourceId` when outbound VNet routing is needed to reach private or restricted runtime/profile storage. Each enabled family PE requires its own subnet and cloud-specific DNS zone, with links to the client/integration VNet. Public access and PE choices do not enable outbound integration. Resource naming placeholders in the Portal form include the `fpm` purpose suffix; replace the placeholders with valid names before deployment.
 
 **When using service endpoints, every target FSLogix storage account must trust the Function App's outbound VNet integration subnet** (`functionAppDelegatedSubnetResourceId`) in its networking configuration. Enable the appropriate Azure Storage service endpoint on that subnet and add it to the storage account's allowed virtual networks under **Networking**. Allowing only the session-host subnet or enabling the trusted Azure services exception is not a substitute for this subnet rule; managed-identity permissions alone do not bypass the storage firewall.
+
+The Portal also exposes separate subnet selectors for this add-on's runtime storage,
+encryption vault, and inbound Function App access. These configure only newly
+managed resources, not the existing profile accounts discovered by cleanup.
+Each new service family has its own `storagePublicNetworkAccess`,
+`keyVaultPublicNetworkAccess`, or `functionAppPublicNetworkAccess` policy, default
+`Disabled`, and its own `${service}PermittedIPs` list. Each independently accepts
+`Disabled`, `EnabledWithRestrictions`, or `Enabled`. The corresponding
+`${service}PrivateEndpoint` flag defaults true and uses its own
+`${service}PrivateEndpointSubnetResourceId`. The former `endpointType` and
+`subnetResourceId` inputs are removed; outbound integration uses only
+`functionAppDelegatedSubnetResourceId`, independently of inbound access. No integration
+or PE subnet is implicitly added to an allowlist. Existing cloud-specific DNS IDs are
+required only for the corresponding enabled PE. See the
+[service endpoint reference](../../../docs/parameters.md#service-endpoint-subnet-allowlists).
 
 Monitoring is optional through `logAnalyticsWorkspaceResourceId`. The Portal form also requires an Azure Monitor Private Link Scope when monitoring is enabled in private mode; direct template deployments permit omitting it, which leaves Application Insights ingestion and query endpoints public. The [workbook](workbook/fslogix-profile-management.workbook) remains a separate import, not a deployed resource.
 

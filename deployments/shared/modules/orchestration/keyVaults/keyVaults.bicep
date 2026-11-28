@@ -2,7 +2,7 @@ metadata name = 'Shared Key Vault orchestration'
 metadata description = 'Deploys optional credential and encryption vaults in an existing resource group, with optional credential secrets, diagnostics, firewall allowances, and private endpoints.'
 
 targetScope = 'subscription'
-import { publicNetworkAccessMode, resolveNetworkAccess } from '../networking/functions.bicep'
+import { servicePublicNetworkAccessMode, resolveNetworkAccess, serviceEndpointSubnetIds } from '../networking/functions.bicep'
 
 // Shared module: deploys AVD Secrets Key Vault and/or Encryption Key Vault into an existing resource group.
 // Called by both the standalone Security deployment and the hostpool inline fallback.
@@ -12,7 +12,7 @@ param resourceGroupName string
 @description('Required. Azure region for both vaults, independent of resource group metadata location. Private endpoints use their subnet virtual network region.')
 param location string
 @description('Optional. Resource ID of an existing Key Vault private DNS zone; empty omits the private endpoint DNS zone group.')
-param azureKeyVaultPrivateDnsZoneResourceId string = ''
+param vaultPrivateDnsZoneResourceId string = ''
 @description('Optional. Whether to deploy the credential vault and any supplied nonempty credential secrets.')
 param deploySecretsKeyVault bool = true
 @description('Required. Name of the credential vault to create when deploySecretsKeyVault is true.')
@@ -33,10 +33,10 @@ param secretsKeyVaultRetentionInDays int = 90
 
 @description('Optional. Resource ID of an existing Log Analytics workspace; empty omits optional diagnostic settings.')
 param logAnalyticsWorkspaceResourceId string = ''
-@description('Optional. Whether to create private endpoints. Public access is controlled separately by paasPublicNetworkAccess.')
-param privateEndpoint bool = false
+@description('Optional. Whether to create Key Vault private endpoints. Public access is controlled separately by keyVaultPublicNetworkAccess.')
+param keyVaultPrivateEndpoint bool = false
 @description('Optional. Resource ID of the existing subnet for private endpoints; required when endpoint creation is selected.')
-param privateEndpointSubnetResourceId string = ''
+param keyVaultPrivateEndpointSubnetResourceId string = ''
 @description('Optional. Private endpoint name pattern using RESOURCE, SUBRESOURCE, and VNETID substitution tokens.')
 param privateEndpointNameConv string = ''
 @description('Optional. Private endpoint NIC name pattern using RESOURCE, SUBRESOURCE, and VNETID substitution tokens.')
@@ -60,13 +60,16 @@ param encryptionKeyVaultName string
 param encryptionKeyVaultRetentionInDays int = secretsKeyVaultRetentionInDays
 
 @description('Optional. Array of permitted IP addresses or CIDR blocks allowed through the firewall of all Key Vaults deployed by this module.')
-param permittedIPs array = []
+param keyVaultPermittedIPs array = []
 
-@description('Optional. Public-access mode for both vaults. Auto preserves legacy behavior; configured IP rules and AzureServices bypass are retained in all modes.')
-param paasPublicNetworkAccess publicNetworkAccessMode = 'Auto'
+@description('Optional. Allowed subnet IDs for both new vaults with existing Microsoft.KeyVault service endpoints. Does not modify subnets.')
+param keyVaultServiceEndpointSubnetResourceIds string[] = []
 
-var privateEndpointVnetName = !empty(privateEndpointSubnetResourceId) && privateEndpoint
-  ? split(privateEndpointSubnetResourceId, '/')[8]
+@description('Optional. One explicit public-access policy for both newly created vaults. IP/subnet rules and AzureServices bypass are retained in all modes.')
+param keyVaultPublicNetworkAccess servicePublicNetworkAccessMode = 'Disabled'
+
+var privateEndpointVnetName = !empty(keyVaultPrivateEndpointSubnetResourceId) && keyVaultPrivateEndpoint
+  ? split(keyVaultPrivateEndpointSubnetResourceId, '/')[8]
   : ''
 import { privateEndpointName } from '../naming/internal.bicep'
 
@@ -84,38 +87,42 @@ var secretList = union(
 )
 
 var deploySecretsKv = deploySecretsKeyVault
-var deploySecretsKvPe = deploySecretsKv && privateEndpoint && !empty(privateEndpointSubnetResourceId)
-var deployEncryptionKvPe = deployEncryptionKeyVault && privateEndpoint && !empty(privateEndpointSubnetResourceId)
+var deploySecretsKvPe = deploySecretsKv && keyVaultPrivateEndpoint && !empty(keyVaultPrivateEndpointSubnetResourceId)
+var deployEncryptionKvPe = deployEncryptionKeyVault && keyVaultPrivateEndpoint && !empty(keyVaultPrivateEndpointSubnetResourceId)
 var deployKeyVaultPrivateEndpoint = deploySecretsKvPe || deployEncryptionKvPe
 
 resource privateEndpointVirtualNetwork 'Microsoft.Network/virtualNetworks@2024-05-01' existing = if (deployKeyVaultPrivateEndpoint) {
-  name: split(privateEndpointSubnetResourceId, '/')[8]
+  name: split(keyVaultPrivateEndpointSubnetResourceId, '/')[8]
   scope: resourceGroup(
-    split(privateEndpointSubnetResourceId, '/')[2],
-    split(privateEndpointSubnetResourceId, '/')[4]
+    split(keyVaultPrivateEndpointSubnetResourceId, '/')[2],
+    split(keyVaultPrivateEndpointSubnetResourceId, '/')[4]
   )
 }
 
 // AzureServices bypass supports template deployment and encryption integrations. It remains
 // configured even with public access disabled; Disabled is not a private-only guarantee for trusted services.
-var effectivePermittedIPs = filter(permittedIPs, ip => !empty(trim(ip)))
-var networkAccess = resolveNetworkAccess(paasPublicNetworkAccess, privateEndpoint, !empty(effectivePermittedIPs))
+var effectivePermittedIPs = filter(keyVaultPermittedIPs, ip => !empty(trim(ip)))
+var keyVaultSubnetIds = serviceEndpointSubnetIds(keyVaultServiceEndpointSubnetResourceIds)
+var networkAccess = resolveNetworkAccess(keyVaultPublicNetworkAccess, keyVaultPrivateEndpoint, !empty(effectivePermittedIPs) || !empty(keyVaultSubnetIds))
 var secretsKvPublicNetworkAccess = networkAccess.publicNetworkAccess
 var encryptionKvPublicNetworkAccess = networkAccess.publicNetworkAccess
 
 var ipRules = [for ip in effectivePermittedIPs: { value: ip, action: 'Allow' }]
+var keyVaultVnetRules = [for id in keyVaultSubnetIds: { id: id, ignoreMissingVnetServiceEndpoint: false }]
 
 // Secrets KV uses AzureServices bypass because enabledForTemplateDeployment is true.
 var secretsKvNetworkAcls = {
   bypass: 'AzureServices'
   defaultAction: networkAccess.defaultAction
   ipRules: ipRules
+  virtualNetworkRules: keyVaultVnetRules
 }
 
 var encryptionKvNetworkAcls = {
   bypass: 'AzureServices'
   defaultAction: networkAccess.defaultAction
   ipRules: ipRules
+  virtualNetworkRules: keyVaultVnetRules
 }
 
 // ─── Secrets Key Vault ─────────────────────────────────────────────────────────
@@ -146,10 +153,10 @@ module secretsKeyVault_pe '../../resourceModules/network/privateEndpoints/deploy
     customNetworkInterfaceName: privateEndpointName(privateEndpointNICNameConv, secretsKeyVaultName, 'vault', privateEndpointVnetName)
     tags: tags[?'Microsoft.Network/privateEndpoints'] ?? {}
     location: privateEndpointVirtualNetwork!.location
-    subnetResourceId: privateEndpointSubnetResourceId
+    subnetResourceId: keyVaultPrivateEndpointSubnetResourceId
     privateLinkServiceId: secretsKeyVault!.outputs.resourceId
     groupId: 'vault'
-    privateDNSZoneIds: !empty(azureKeyVaultPrivateDnsZoneResourceId) ? [azureKeyVaultPrivateDnsZoneResourceId] : []
+    privateDNSZoneIds: !empty(vaultPrivateDnsZoneResourceId) ? [vaultPrivateDnsZoneResourceId] : []
   }
 }
 
@@ -193,10 +200,10 @@ module encryptionKeyVault_pe '../../resourceModules/network/privateEndpoints/dep
     customNetworkInterfaceName: privateEndpointName(privateEndpointNICNameConv, encryptionKeyVaultName, 'vault', privateEndpointVnetName)
     tags: tags[?'Microsoft.Network/privateEndpoints'] ?? {}
     location: privateEndpointVirtualNetwork!.location
-    subnetResourceId: privateEndpointSubnetResourceId
+    subnetResourceId: keyVaultPrivateEndpointSubnetResourceId
     privateLinkServiceId: encryptionKeyVault!.outputs.resourceId
     groupId: 'vault'
-    privateDNSZoneIds: !empty(azureKeyVaultPrivateDnsZoneResourceId) ? [azureKeyVaultPrivateDnsZoneResourceId] : []
+    privateDNSZoneIds: !empty(vaultPrivateDnsZoneResourceId) ? [vaultPrivateDnsZoneResourceId] : []
   }
 }
 

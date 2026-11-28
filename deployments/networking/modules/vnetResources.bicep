@@ -165,7 +165,7 @@ var faSubnetsList = filter(subnets, s => s.purpose == 'functionApp')
 
 var snetHosts = [for subnet in hostsSubnetsList: {
   name: subnet.name
-  properties: {
+  properties: union({
     addressPrefix: subnet.addressPrefix
     defaultOutboundAccess: false
     natGateway: deployNatGateway
@@ -181,7 +181,7 @@ var snetHosts = [for subnet in hostsSubnetsList: {
     networkSecurityGroup: {
       id: nsg.id
     }
-  }
+  }, contains(subnet, 'serviceEndpoints') ? { serviceEndpoints: subnet.serviceEndpoints } : {})
 }]
 
 var snetPrivateEndpoints = !empty(peSubnetsList)

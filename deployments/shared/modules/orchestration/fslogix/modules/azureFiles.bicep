@@ -1,14 +1,14 @@
 metadata name = 'FSLogix Azure Files orchestration'
 metadata description = 'Creates indexed storage accounts, SMB shares, optional private endpoints, administrator RBAC, and identity-dependent configuration through an existing deployment helper VM.'
 
-import { publicNetworkAccessMode, resolveNetworkAccess } from '../../networking/functions.bicep'
+import { servicePublicNetworkAccessMode, resolveNetworkAccess, serviceEndpointSubnetIds } from '../../networking/functions.bicep'
 import { resolveFilesConfiguration } from '../../../resourceModules/storage/storageAccounts/deploy.bicep'
 
 @description('Required. Resource ID of the storage application update identity attached to the helper VM; empty skips application manifest and consent commands.')
 param appUpdateUserAssignedIdentityResourceId string
 
 @description('Required. Resource ID of an existing Azure Files private DNS zone; empty omits the private endpoint DNS zone group.')
-param azureFilePrivateDnsZoneResourceId string
+param filePrivateDnsZoneResourceId string
 @description('Required. Client ID of the identity attached to the helper VM and authorized for storage configuration.')
 param deploymentUserAssignedIdentityClientId string
 @description('Required. Name of the existing deployment helper VM used to execute storage or cleanup Run Commands.')
@@ -43,14 +43,14 @@ param location string
 param logAnalyticsWorkspaceId string
 @description('Required. Distinguished name of the target organizational unit for selected domain operations; empty uses the domain default.')
 param ouPath string
-@description('Required. Whether to create private endpoints. Public access is controlled separately by paasPublicNetworkAccess.')
-param privateEndpoint bool
+@description('Required. Whether to create Azure Files private endpoints. Public access is controlled separately by storagePublicNetworkAccess.')
+param storagePrivateEndpoint bool
 @description('Required. Private endpoint name pattern using RESOURCE, SUBRESOURCE, and VNETID substitution tokens.')
 param privateEndpointNameConv string
 @description('Required. Private endpoint NIC name pattern using RESOURCE, SUBRESOURCE, and VNETID substitution tokens.')
 param privateEndpointNICNameConv string
 @description('Required. Resource ID of the existing subnet for private endpoints; required when endpoint creation is selected.')
-param privateEndpointSubnetResourceId string
+param storagePrivateEndpointSubnetResourceId string
 @description('Required. Name of the existing helper VM resource group for storage configuration Run Commands.')
 param deploymentResourceGroupName string
 @description('Required. Name of the existing storage resource group in this subscription.')
@@ -102,10 +102,13 @@ param officeProvisionedThroughputMiBps int = 0
 @description('Required. Tag bags keyed by Azure resource type; each bag is applied to resources of that type.')
 param tags object
 @description('Optional. Array of permitted IP addresses or CIDR blocks for the FSLogix storage account firewall.')
-param permittedIPs array = []
+param storagePermittedIPs array = []
 
-@description('Optional. Storage public-access mode. Auto preserves legacy behavior; IP rules and AzureServices bypass remain configured in all modes.')
-param paasPublicNetworkAccess publicNetworkAccessMode = 'Auto'
+@description('Optional. Allowed Azure Files subnet IDs with existing Microsoft.Storage or Microsoft.Storage.Global service endpoints. Does not modify subnets.')
+param storageServiceEndpointSubnetResourceIds string[] = []
+
+@description('Optional. Explicit Storage public-access policy. IP/subnet rules and AzureServices bypass remain configured in all modes.')
+param storagePublicNetworkAccess servicePublicNetworkAccessMode = 'Disabled'
 
 @description('Optional. Number of days to retain deleted file shares (1–365).')
 @minValue(1)
@@ -116,15 +119,15 @@ var adminRoleDefinitionId = '69566ab7-960f-475b-8e7c-b3118f30c6bd' // Storage Fi
 
 var defaultSharePermission = 'StorageFileDataSmbShareContributor'
 
-var privateEndpointVnetName = !empty(privateEndpointSubnetResourceId) && privateEndpoint
-  ? split(privateEndpointSubnetResourceId, '/')[8]
+var privateEndpointVnetName = !empty(storagePrivateEndpointSubnetResourceId) && storagePrivateEndpoint
+  ? split(storagePrivateEndpointSubnetResourceId, '/')[8]
   : ''
 
 import { privateEndpointName } from '../../naming/internal.bicep'
 
-resource privateEndpointVirtualNetwork 'Microsoft.Network/virtualNetworks@2024-05-01' existing = if (privateEndpoint && !empty(privateEndpointSubnetResourceId)) {
+resource privateEndpointVirtualNetwork 'Microsoft.Network/virtualNetworks@2024-05-01' existing = if (storagePrivateEndpoint && !empty(storagePrivateEndpointSubnetResourceId)) {
   name: privateEndpointVnetName
-  scope: resourceGroup(split(privateEndpointSubnetResourceId, '/')[2], split(privateEndpointSubnetResourceId, '/')[4])
+  scope: resourceGroup(split(storagePrivateEndpointSubnetResourceId, '/')[2], split(storagePrivateEndpointSubnetResourceId, '/')[4])
 }
 
 var smbSettingsValues = {
@@ -189,14 +192,16 @@ var accountConfigurations = flatten(map(
 
 // Network ACLs for FSLogix storage accounts.
 // AzureServices bypass is required for Azure Files backup and monitoring.
-var effectivePermittedIPs = filter(permittedIPs, ip => !empty(trim(ip)))
-var networkAccess = resolveNetworkAccess(paasPublicNetworkAccess, privateEndpoint, !empty(effectivePermittedIPs))
+var effectivePermittedIPs = filter(storagePermittedIPs, ip => !empty(trim(ip)))
+var storageSubnetIds = serviceEndpointSubnetIds(storageServiceEndpointSubnetResourceIds)
+var networkAccess = resolveNetworkAccess(storagePublicNetworkAccess, storagePrivateEndpoint, !empty(effectivePermittedIPs) || !empty(storageSubnetIds))
 var storageIpRules = [for ip in effectivePermittedIPs: { value: ip, action: 'Allow' }]
+var storageVnetRules = [for id in storageSubnetIds: { id: id, action: 'Allow' }]
 var storageNetworkAcls = {
   bypass: 'AzureServices'
   defaultAction: networkAccess.defaultAction
   ipRules: storageIpRules
-  virtualNetworkRules: []
+  virtualNetworkRules: storageVnetRules
 }
 
 var parentResourceTags = !empty(hostPoolResourceId) ? { 'cm-resource-parent': hostPoolResourceId } : {}
@@ -230,7 +235,7 @@ module storageAccounts '../../../resourceModules/storage/storageAccounts/deploy.
       kind: account.configuration.kind
       skuName: account.configuration.skuName
       tags: union(parentResourceTags, tags[?'Microsoft.Storage/storageAccounts'] ?? {})
-      allowedCopyScope: privateEndpoint ? 'PrivateLink' : 'AAD'
+      allowedCopyScope: storagePrivateEndpoint ? 'PrivateLink' : 'AAD'
       allowSharedKeyAccess: identitySolution == 'EntraId' ? true : false
       supportsHttpsTrafficOnly: true
       minimumTlsVersion: 'TLS1_2'
@@ -296,7 +301,7 @@ module shares '../../../resourceModules/storage/storageAccounts/fileServices/sha
 
 // ─── Private Endpoints ─────────────────────────────────────────────────────────
 module privateEndpoints '../../../resourceModules/network/privateEndpoints/deploy.bicep' = [
-  for (account, i) in accountConfigurations: if (privateEndpoint) {
+  for (account, i) in accountConfigurations: if (storagePrivateEndpoint) {
     name: 'fslogix-${toLower(account.roleName)}-${account.name}-endpoint-${deploymentNameSuffix}'
     params: {
       name: privateEndpointName(privateEndpointNameConv, account.name, 'file', privateEndpointVnetName)
@@ -308,10 +313,10 @@ module privateEndpoints '../../../resourceModules/network/privateEndpoints/deplo
       )
       tags: union(parentResourceTags, tags[?'Microsoft.Network/privateEndpoints'] ?? {})
       location: privateEndpointVirtualNetwork!.location
-      subnetResourceId: privateEndpointSubnetResourceId
+      subnetResourceId: storagePrivateEndpointSubnetResourceId
       privateLinkServiceId: storageAccounts[i].outputs.resourceId
       groupId: 'file'
-      privateDNSZoneIds: !empty(azureFilePrivateDnsZoneResourceId) ? [azureFilePrivateDnsZoneResourceId] : []
+      privateDNSZoneIds: !empty(filePrivateDnsZoneResourceId) ? [filePrivateDnsZoneResourceId] : []
     }
     // File service config and share creation both mutate the storage account; private endpoint
     // creation also acquires an exclusive lock on it. Serialise by waiting for all storage
@@ -415,7 +420,7 @@ module configureEntraKerberosWithDomainInfo '../../../resourceModules/compute/vi
 // This must happen BEFORE NTFS permissions are set so authentication works through private endpoints
 @batchSize(1)
 module updateStorageApplicationsManifest '../../../resourceModules/compute/virtualMachines/runCommands/deploy.bicep' = [
-  for role in storageRoles: if (((identitySolution == 'EntraKerberos-Hybrid' && privateEndpoint) || (identitySolution == 'EntraKerberos-CloudOnly')) && !empty(appUpdateUserAssignedIdentityResourceId)) {
+  for role in storageRoles: if (((identitySolution == 'EntraKerberos-Hybrid' && storagePrivateEndpoint) || (identitySolution == 'EntraKerberos-CloudOnly')) && !empty(appUpdateUserAssignedIdentityResourceId)) {
     name: 'fslogix-${toLower(role.roleName)}-${shardRange}-manifest-${deploymentNameSuffix}'
     scope: resourceGroup(deploymentResourceGroupName)
     params: {
@@ -429,7 +434,7 @@ module updateStorageApplicationsManifest '../../../resourceModules/compute/virtu
         { name: 'StorageIndex', value: string(storageIndex) }
         { name: 'ClientId', value: appUpdateUai!.properties.clientId }
         { name: 'GraphEndpoint', value: graphEndpoint }
-        { name: 'PrivateEndpoint', value: string(privateEndpoint) }
+        { name: 'PrivateEndpoint', value: string(storagePrivateEndpoint) }
         { name: 'EnableCloudGroupSids', value: string(identitySolution == 'EntraKerberos-CloudOnly') }
       ]
       treatFailureAsDeploymentFailure: true
@@ -495,7 +500,7 @@ module SetNTFSPermissions '../../../resourceModules/compute/virtualMachines/runC
 // This must happen AFTER NTFS permissions are set
 @batchSize(1)
 module grantStorageApplicationsConsent '../../../resourceModules/compute/virtualMachines/runCommands/deploy.bicep' = [
-  for role in storageRoles: if (((identitySolution == 'EntraKerberos-Hybrid' && privateEndpoint) || (identitySolution == 'EntraKerberos-CloudOnly')) && !empty(appUpdateUserAssignedIdentityResourceId)) {
+  for role in storageRoles: if (((identitySolution == 'EntraKerberos-Hybrid' && storagePrivateEndpoint) || (identitySolution == 'EntraKerberos-CloudOnly')) && !empty(appUpdateUserAssignedIdentityResourceId)) {
     name: 'fslogix-${toLower(role.roleName)}-${shardRange}-consent-${deploymentNameSuffix}'
     scope: resourceGroup(deploymentResourceGroupName)
     params: {

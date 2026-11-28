@@ -1,11 +1,14 @@
 BeforeDiscovery {
     $formCases = @(
-        @{ Directory = 'sharedServices'; Entry = 'sharedServices' }
-        @{ Directory = 'imageManagement'; Entry = 'imageManagement' }
-        @{ Directory = 'hostpools'; Entry = 'hostpool' }
-        @{ Directory = 'automatedHostPools'; Entry = 'automatedHostPool' }
-        @{ Directory = 'add-ons\fslogixStorage'; Entry = 'main' }
-        @{ Directory = 'add-ons\sessionHostReplacer'; Entry = 'main' }
+        @{ Directory = 'sharedServices'; Entry = 'sharedServices'; Step = 'operations'; Services = @('keyVault') }
+        @{ Directory = 'imageManagement'; Entry = 'imageManagement'; Step = 'storageAccounts'; Services = @('storage') }
+        @{ Directory = 'hostpools'; Entry = 'hostpool'; Step = 'zeroTrust'; Services = @('storage', 'keyVault') }
+        @{ Directory = 'automatedHostPools'; Entry = 'automatedHostPool'; Step = 'zeroTrust'; Services = @('storage', 'keyVault') }
+        @{ Directory = 'add-ons\fslogixStorage'; Entry = 'main'; Step = 'zeroTrust'; Services = @('storage') }
+        @{ Directory = 'add-ons\sessionHostReplacer'; Entry = 'main'; Step = 'infrastructure'; Services = @('storage', 'functionApp') }
+        @{ Directory = 'add-ons\imageValidation'; Entry = 'main'; Step = 'functionApp'; Services = @('storage', 'keyVault', 'functionApp') }
+        @{ Directory = 'add-ons\fslogixProfileManagement'; Entry = 'main'; Step = 'functionApp'; Services = @('storage', 'keyVault', 'functionApp') }
+        @{ Directory = 'hostpoolPoc'; Entry = 'hostpoolPoc'; Step = 'options'; Services = @('storage') }
     )
     $matrixCases = @(0..31 | ForEach-Object {
         @{
@@ -21,12 +24,15 @@ BeforeDiscovery {
 BeforeAll {
     $repoRoot = Split-Path -Parent $PSScriptRoot
     $formCases = @(
-        @{ Directory = 'sharedServices'; Entry = 'sharedServices' }
-        @{ Directory = 'imageManagement'; Entry = 'imageManagement' }
-        @{ Directory = 'hostpools'; Entry = 'hostpool' }
-        @{ Directory = 'automatedHostPools'; Entry = 'automatedHostPool' }
-        @{ Directory = 'add-ons\fslogixStorage'; Entry = 'main' }
-        @{ Directory = 'add-ons\sessionHostReplacer'; Entry = 'main' }
+        @{ Directory = 'sharedServices'; Entry = 'sharedServices'; Step = 'operations'; Services = @('keyVault') }
+        @{ Directory = 'imageManagement'; Entry = 'imageManagement'; Step = 'storageAccounts'; Services = @('storage') }
+        @{ Directory = 'hostpools'; Entry = 'hostpool'; Step = 'zeroTrust'; Services = @('storage', 'keyVault') }
+        @{ Directory = 'automatedHostPools'; Entry = 'automatedHostPool'; Step = 'zeroTrust'; Services = @('storage', 'keyVault') }
+        @{ Directory = 'add-ons\fslogixStorage'; Entry = 'main'; Step = 'zeroTrust'; Services = @('storage') }
+        @{ Directory = 'add-ons\sessionHostReplacer'; Entry = 'main'; Step = 'infrastructure'; Services = @('storage', 'functionApp') }
+        @{ Directory = 'add-ons\imageValidation'; Entry = 'main'; Step = 'functionApp'; Services = @('storage', 'keyVault', 'functionApp') }
+        @{ Directory = 'add-ons\fslogixProfileManagement'; Entry = 'main'; Step = 'functionApp'; Services = @('storage', 'keyVault', 'functionApp') }
+        @{ Directory = 'hostpoolPoc'; Entry = 'hostpoolPoc'; Step = 'options'; Services = @('storage') }
     )
     $matrixCases = @(0..31 | ForEach-Object {
         @{
@@ -37,151 +43,172 @@ BeforeAll {
             HasSubnets = ($_ % 2 -eq 1)
         }
     })
-    function Get-PublicAccessControlReference($Directory) {
-        switch ($Directory) {
-            'sharedServices' { "steps('operations').permittedIPsSection.paasPublicNetworkAccess" }
-            'imageManagement' { "steps('storageAccounts').storageSettings.paasPublicNetworkAccess" }
-            'hostpools' { "steps('zeroTrust').permittedIPsSection.paasPublicNetworkAccess" }
-            'automatedHostPools' { "steps('zeroTrust').permittedIPsSection.paasPublicNetworkAccess" }
-            'add-ons\fslogixStorage' { "steps('zeroTrust').privateNetworking.paasPublicNetworkAccess" }
-            'add-ons\sessionHostReplacer' { "steps('infrastructure').paasPublicNetworkAccess" }
-            default { throw "No public-access control reference defined for '$Directory'." }
+
+}
+
+Describe 'Service-family public-access Portal contracts' {
+    It 'exposes independent explicit modes, allowlists, and valid template outputs in <Directory>' -TestCases $formCases {
+        param($Directory, $Entry, $Step, $Services)
+        $directoryPath = Join-Path $repoRoot "deployments\$Directory"
+        $form = Get-Content -LiteralPath (Join-Path $directoryPath 'uiFormDefinition.json') -Raw | ConvertFrom-Json -AsHashtable
+        $template = Get-Content -LiteralPath (Join-Path $directoryPath "$Entry.json") -Raw | ConvertFrom-Json -AsHashtable
+        $stepControl = $form.view.properties.steps | Where-Object name -eq $Step
+        foreach ($service in $Services) {
+            $public = $stepControl.elements | Where-Object name -eq "${service}PublicNetworking"
+            $allowed = $stepControl.elements | Where-Object name -eq "${service}ServiceEndpointAccess"
+            $control = $public.elements | Where-Object name -eq "${service}PublicNetworkAccess"
+            $control.type | Should -Be 'Microsoft.Common.DropDown'
+            ($control.constraints.allowedValues.value -join ',') | Should -Be 'Disabled,EnabledWithRestrictions,Enabled'
+            ($control.constraints.allowedValues.label -join ',') | Should -Be 'Disabled,Enabled with restrictions,Enabled'
+            $control.defaultValue | Should -Be 'Disabled'
+            $control.constraints.required | Should -BeTrue
+            if ($Directory -in @('hostpools', 'automatedHostPools', 'imageManagement', 'sharedServices', 'add-ons\sessionHostReplacer')) {
+                $paas = $template.definitions[$template.parameters.paasNetworking.'$ref'.Replace('#/definitions/', '')]
+                $family = $template.definitions[$paas.properties[$service].'$ref'.Replace('#/definitions/', '')]
+                $family.properties.permittedIPs.type | Should -Be 'array'
+                $form.view.outputs.parameters.ContainsKey('paasNetworking') | Should -BeTrue
+                $form.view.outputs.parameters.ContainsKey("${service}PublicNetworkAccess") | Should -BeFalse
+                $form.view.outputs.parameters.ContainsKey("${service}PermittedIPs") | Should -BeFalse
+            } else {
+                $template.parameters["${service}PublicNetworkAccess"].defaultValue | Should -Be 'Disabled'
+                $template.parameters["${service}PermittedIPs"].type | Should -Be 'array'
+            }
+            $grid = $allowed.elements | Where-Object name -eq "${service}PermittedIPs"
+            if ($Directory -in @('hostpools', 'automatedHostPools', 'imageManagement', 'sharedServices', 'add-ons\sessionHostReplacer')) {
+                $grid.visible | Should -Match 'Restricted|EnabledWithRestrictions'
+            } else {
+                $grid.visible | Should -Be "[equals(steps('$Step').${service}PublicNetworking.${service}PublicNetworkAccess, 'EnabledWithRestrictions')]"
+            }
+            $grid.ContainsKey('defaultValue') | Should -BeFalse
+            $form.view.outputs.parameters["${service}PermittedIPs"] | Should -Not -Match 'PublicNetworkAccess|PrivateEndpoint'
+            $form.view.outputs.parameters["${service}ServiceEndpointSubnetResourceIds"] | Should -Not -Match 'PublicNetworkAccess|PrivateEndpoint'
+            $modeRef = "steps('$Step').${service}PublicNetworking.${service}PublicNetworkAccess"
+            if ($Directory -in @('hostpools', 'automatedHostPools', 'imageManagement', 'sharedServices', 'add-ons\sessionHostReplacer')) {
+                $modeRef = "if(equals(steps('$Step').paasConnectivity.scenario, 'Custom'), $modeRef, if(equals(steps('$Step').paasConnectivity.scenario, 'Restricted'), 'EnabledWithRestrictions', 'Disabled'))"
+            }
+            foreach ($mode in @('Disabled', 'EnabledWithRestrictions', 'Enabled')) {
+                $text = $public.elements | Where-Object name -eq "publicAccess${mode}Info"
+                $expectedType = if ($Directory -in @('hostpools', 'automatedHostPools', 'imageManagement', 'sharedServices', 'add-ons\sessionHostReplacer') -and $mode -eq 'Enabled') {
+                    'Microsoft.Common.InfoBox'
+                } else {
+                    'Microsoft.Common.TextBlock'
+                }
+                $text.type | Should -Be $expectedType
+                $text.visible | Should -Be "[equals($modeRef, '$mode')]"
+                $text.options.text | Should -Not -Match '^\['
+                $text.options.text.Length | Should -BeLessThan 180
+            }
+        }
+        $template.parameters.ContainsKey('paasPublicNetworkAccess') | Should -BeFalse
+        $template.parameters.ContainsKey('permittedIPs') | Should -BeFalse
+        foreach ($name in $form.view.outputs.parameters.Keys) {
+            $template.parameters.ContainsKey($name) | Should -BeTrue -Because "$name must be an entry-template parameter in $Directory"
+        }
+    }
+
+    It 'creates Image Management private endpoints independently of public access' {
+        $template = Get-Content -LiteralPath (Join-Path $repoRoot 'deployments\imageManagement\imageManagement.json') -Raw | ConvertFrom-Json
+        foreach ($name in @('assetsStoragePrivateEndpoint', 'logsStoragePrivateEndpoint')) {
+            $template.resources.$name.condition | Should -Match "variables\('storagePrivateEndpoint'\)"
+            $template.resources.$name.condition | Should -Not -Match 'PublicNetworkAccess|storageNetworkAccess'
+        }
+    }
+
+    It 'routes automated-host-pool IP allowlists independently without merging families' {
+        $template = Get-Content -LiteralPath (Join-Path $repoRoot 'deployments\automatedHostPools\automatedHostPool.json') -Raw | ConvertFrom-Json
+        $template.resources.sharedKeyVaults.properties.parameters.keyVaultPermittedIPs.value | Should -Be "[variables('keyVaultPermittedIPs')]"
+        $template.resources.fslogixStorage.properties.parameters.storagePermittedIPs.value | Should -Be "[variables('storagePermittedIPs')]"
+        $template.parameters.PSObject.Properties.Name | Should -Not -Contain 'fslogixPermittedIPs'
+    }
+
+    It 'keeps AVD connections on the host-pool resource subnet in both entry templates' {
+        foreach ($case in @(
+            @{ Directory = 'hostpools'; Entry = 'hostpool' }
+            @{ Directory = 'automatedHostPools'; Entry = 'automatedHostPool' }
+        )) {
+            $directoryPath = Join-Path $repoRoot "deployments\$($case.Directory)"
+            $template = Get-Content -LiteralPath (Join-Path $directoryPath "$($case.Entry).json") -Raw | ConvertFrom-Json
+            $template.parameters.PSObject.Properties.Name | Should -Not -Contain 'hostPoolPrivateEndpointSubnetResourceId'
+            $template.resources.controlPlane.properties.parameters.hostPoolPrivateEndpointSubnetResourceId.value |
+                Should -BeExactly "[variables('hostPoolResourcesPrivateEndpointSubnetResourceId')]"
         }
     }
 }
 
-Describe 'PaaS public-access Portal contracts' {
-    It 'exposes three explicit choices and maps the mode in <Directory>' -TestCases $formCases {
-        param($Directory, $Entry)
-
-        $directoryPath = Join-Path $repoRoot "deployments\$Directory"
-        $form = Get-Content -LiteralPath (Join-Path $directoryPath 'uiFormDefinition.json') -Raw | ConvertFrom-Json
-        $template = Get-Content -LiteralPath (Join-Path $directoryPath "$Entry.json") -Raw | ConvertFrom-Json
-        function Find-NetworkControl($Elements) {
-            foreach ($element in $Elements) {
-                if ($element.name -eq 'paasPublicNetworkAccess') { $element }
-                if ($element.elements) { Find-NetworkControl $element.elements }
-            }
+Describe 'Service-family compliance parameter evidence' {
+    BeforeAll {
+        $evidenceParameters = @{}
+        foreach ($service in @('storage', 'keyVault', 'functionApp')) {
+            $evidenceParameters["${service}PublicNetworkAccess"] = @{ value = 'Disabled' }
+            $evidenceParameters["${service}PrivateEndpoint"] = @{ value = $true }
+            $evidenceParameters["${service}PrivateEndpointSubnetResourceId"] = @{ value = '/private/endpoint-subnet' }
+            $evidenceParameters["${service}PermittedIPs"] = @{ value = @() }
+            $evidenceParameters["${service}ServiceEndpointSubnetResourceIds"] = @{ value = @('/allowed/client-subnet') }
         }
-        $controls = @(foreach ($step in $form.view.properties.steps) { Find-NetworkControl $step.elements })
-        $controls.Count | Should -Be 1
-        $control = $controls[0]
-        $control.type | Should -Be 'Microsoft.Common.DropDown'
-        ($control.constraints.allowedValues.value -join ',') | Should -Be 'Disabled,EnabledWithRestrictions,Enabled'
-        ($control.constraints.allowedValues.label -join ',') | Should -Be 'Disabled,Enabled with restrictions,Enabled'
-        $control.constraints.required | Should -Be $true
-        $control.defaultValue | Should -Match "'Disabled'"
-        $control.defaultValue | Should -Match "'Enabled'"
-        $control.defaultValue | Should -Not -Match '\.(?:permittedIPs|storagePermittedIPs)\b'
-        $form.view.outputs.parameters.paasPublicNetworkAccess | Should -Match '\.paasPublicNetworkAccess'
-        $template.parameters.paasPublicNetworkAccess.defaultValue | Should -Be 'Auto'
-        $modeType = $template.definitions.publicNetworkAccessMode
-        @(
-            Compare-Object @('Auto', 'Disabled', 'EnabledWithRestrictions', 'Enabled') @($modeType.allowedValues)
-        ) | Should -BeNullOrEmpty
-        foreach ($name in $form.view.outputs.parameters.PSObject.Properties.Name) {
-            ($template.parameters.PSObject.Properties.Name -contains $name) | Should -Be $true
-        }
+        $evidenceFixture = Join-Path $TestDrive 'network-evidence.parameters.json'
+        $evidenceCsv = Join-Path $TestDrive 'network-evidence.csv'
+        [IO.File]::WriteAllText($evidenceFixture, (@{ parameters = $evidenceParameters } | ConvertTo-Json -Depth 10))
     }
 
-    It 'shows IP rules only in restricted mode without gating rule outputs on the access mode' -TestCases $formCases {
-        param($Directory, $Entry)
-
-        $form = Get-Content -LiteralPath (Join-Path $repoRoot "deployments\$Directory\uiFormDefinition.json") -Raw | ConvertFrom-Json
-        function Find-NetworkGrid($Elements) {
-            foreach ($element in $Elements) {
-                if ($element.name -in @('permittedIPs', 'storagePermittedIPs')) { $element }
-                if ($element.elements) { Find-NetworkGrid $element.elements }
-            }
+    It 'collects every independent networking input without implying deployed compliance' {
+        & (Join-Path $repoRoot '.github\skills\federalavd-compliance-review\scripts\Get-ComplianceParameterEvidence.ps1') `
+            -ParameterPath $evidenceFixture -CsvPath $evidenceCsv | Out-Null
+        $evidence = @(Import-Csv -LiteralPath $evidenceCsv)
+        $evidence.Count | Should -Be 15
+        foreach ($name in $evidenceParameters.Keys) {
+            @($evidence | Where-Object Parameter -eq $name).Count | Should -Be 1
         }
-        $grids = @(foreach ($step in $form.view.properties.steps) { Find-NetworkGrid $step.elements })
-        $grids.Count | Should -Be 1
-        $modeReference = Get-PublicAccessControlReference $Directory
-        $grids[0].visible | Should -Be "[equals($modeReference, 'EnabledWithRestrictions')]"
-        ($null -eq $grids[0].PSObject.Properties['defaultValue']) | Should -Be $true
-        $expectedColumn = if ($Directory -eq 'add-ons\fslogixStorage') { 'value' } else { 'ipAddress' }
-        $grids[0].constraints.columns[0].id | Should -Be $expectedColumn
-        $outputName = if ($Directory -eq 'imageManagement') { 'storagePermittedIPs' } else { 'permittedIPs' }
-        $form.view.outputs.parameters.$outputName | Should -Not -Match 'paasPublicNetworkAccess|configureZeroTrustNetworking'
+        ($evidence | Where-Object Parameter -eq storagePermittedIPs).Value | Should -Be '[]'
+        ($evidence | Where-Object Parameter -eq storageServiceEndpointSubnetResourceIds).Value | Should -Be '["/allowed/client-subnet"]'
+        ($evidence | Where-Object Parameter -eq keyVaultPublicNetworkAccess).Value | Should -Be 'Disabled'
     }
 
-    It 'shows one concise literal explanation per mode and gates the IP heading in <Directory>' -TestCases $formCases {
-        param($Directory, $Entry)
-
-        $form = Get-Content -LiteralPath (Join-Path $repoRoot "deployments\$Directory\uiFormDefinition.json") -Raw | ConvertFrom-Json
-        function Find-NetworkExplanation($Elements) {
-            foreach ($element in $Elements) {
-                if ($element.name -in @('permittedIPsDisabledInfo', 'permittedIPsRestrictedInfo', 'permittedIPsEnabledInfo', 'permittedIPsInfo')) {
-                    $element
-                }
-                if ($element.elements) { Find-NetworkExplanation $element.elements }
-            }
+    It 'collects the explicitly scoped Backup and disk endpoint inputs' {
+        $parameters = @{
+            deployBackupAndDiskPrivateEndpoints = @{ value = $true }
+            deployBackupPrivateEndpoints = @{ value = $false }
+            backupPrivateEndpointSubnetResourceId = @{ value = '/backup/endpoint-subnet' }
+            sharedResourcesPrivateEndpointSubnetResourceId = @{ value = '/shared/endpoint-subnet' }
+            hostPoolResourcesPrivateEndpointSubnetResourceId = @{ value = '/host-pool/endpoint-subnet' }
         }
-        $controls = @(foreach ($step in $form.view.properties.steps) { Find-NetworkExplanation $step.elements })
-        $modeReference = Get-PublicAccessControlReference $Directory
-        $explanations = @($controls | Where-Object { $_.name -ne 'permittedIPsInfo' })
-        $explanations.Count | Should -Be 3
-        foreach ($mode in @(
-            @{ Name = 'permittedIPsDisabledInfo'; Value = 'Disabled' }
-            @{ Name = 'permittedIPsRestrictedInfo'; Value = 'EnabledWithRestrictions' }
-            @{ Name = 'permittedIPsEnabledInfo'; Value = 'Enabled' }
-        )) {
-            $explanation = @($explanations | Where-Object { $_.name -eq $mode.Name })
-            $explanation.Count | Should -Be 1
-            $explanation[0].type | Should -Be 'Microsoft.Common.TextBlock'
-            $explanation[0].visible | Should -Be "[equals($modeReference, '$($mode.Value)')]"
-            $explanation[0].options.text | Should -Not -Match '^\['
-            $explanation[0].options.text.Length | Should -BeLessThan 180
-        }
-        foreach ($heading in @($controls | Where-Object { $_.name -eq 'permittedIPsInfo' })) {
-            $heading.visible | Should -Be "[equals($modeReference, 'EnabledWithRestrictions')]"
-        }
+        $fixture = Join-Path $TestDrive 'backup-network-evidence.parameters.json'
+        $csv = Join-Path $TestDrive 'backup-network-evidence.csv'
+        [IO.File]::WriteAllText($fixture, (@{ parameters = $parameters } | ConvertTo-Json -Depth 5))
+        & (Join-Path $repoRoot '.github\skills\federalavd-compliance-review\scripts\Get-ComplianceParameterEvidence.ps1') `
+            -ParameterPath $fixture -CsvPath $csv | Out-Null
+        $evidence = @(Import-Csv -LiteralPath $csv)
+        $evidence.Count | Should -Be 5
+        ($evidence | Where-Object Parameter -eq deployBackupAndDiskPrivateEndpoints).Value | Should -Be 'True'
+        ($evidence | Where-Object Parameter -eq deployBackupPrivateEndpoints).Value | Should -Be 'False'
+        ($evidence | Where-Object Parameter -eq backupPrivateEndpointSubnetResourceId).Value | Should -Be '/backup/endpoint-subnet'
+        ($evidence | Where-Object Parameter -eq sharedResourcesPrivateEndpointSubnetResourceId).Value | Should -Be '/shared/endpoint-subnet'
+        ($evidence | Where-Object Parameter -eq hostPoolResourcesPrivateEndpointSubnetResourceId).Value | Should -Be '/host-pool/endpoint-subnet'
     }
 
-    It 'preserves subnet restrictions in the initial Service Endpoint selection' {
-        $form = Get-Content -LiteralPath (Join-Path $repoRoot 'deployments\imageManagement\uiFormDefinition.json') -Raw | ConvertFrom-Json
-        $section = ($form.view.properties.steps | Where-Object { $_.name -eq 'storageAccounts' }).elements |
-            Where-Object { $_.name -eq 'storageSettings' }
-        ($section.elements | Where-Object { $_.name -eq 'storageNetworkAccess' }).defaultValue |
-            Should -Be 'Public Endpoint'
-        ($section.elements | Where-Object { $_.name -eq 'paasPublicNetworkAccess' }).defaultValue |
-            Should -Match "'ServiceEndpoint'\), 'Enabled with restrictions'"
-    }
-
-    It 'keeps Image Management private endpoint creation independent of public access mode' {
-        $template = Get-Content -LiteralPath (Join-Path $repoRoot 'deployments\imageManagement\imageManagement.json') -Raw | ConvertFrom-Json
-        $template.resources.assetsStoragePrivateEndpoint.condition |
-            Should -Be "[and(parameters('deployArtifactsStorageAccount'), equals(parameters('storageNetworkAccess'), 'PrivateEndpoint'))]"
-        $template.resources.logsStoragePrivateEndpoint.condition |
-            Should -Be "[and(parameters('deployBuildLogsStorageAccount'), equals(parameters('storageNetworkAccess'), 'PrivateEndpoint'))]"
-    }
-
-    It 'retains the automated-host-pool legacy Azure Files allowlist while adding a shared list' {
-        $template = Get-Content -LiteralPath (Join-Path $repoRoot 'deployments\automatedHostPools\automatedHostPool.json') -Raw | ConvertFrom-Json
-        $template.parameters.fslogixPermittedIPs.defaultValue.Count | Should -Be 0
-        $template.parameters.permittedIPs.defaultValue.Count | Should -Be 0
-        $template.resources.sharedKeyVaults.properties.parameters.permittedIPs.value | Should -Be "[parameters('permittedIPs')]"
-        $template.resources.fslogixStorage.properties.parameters.permittedIPs.value |
-            Should -Be "[union(parameters('fslogixPermittedIPs'), parameters('permittedIPs'))]"
-    }
-
-    It 'does not read hidden access controls when no managed PaaS resource is selected' -TestCases @(
-        @{ Directory = 'hostpools'; Step = 'zeroTrust'; Section = 'permittedIPsSection' }
-        @{ Directory = 'automatedHostPools'; Step = 'zeroTrust'; Section = 'permittedIPsSection' }
-        @{ Directory = 'imageManagement'; Step = 'storageAccounts'; Section = 'storageSettings' }
-    ) {
-        param($Directory, $Step, $Section)
-
-        $form = Get-Content -LiteralPath (Join-Path $repoRoot "deployments\$Directory\uiFormDefinition.json") -Raw | ConvertFrom-Json
-        $sectionControl = ($form.view.properties.steps | Where-Object { $_.name -eq $Step }).elements |
-            Where-Object { $_.name -eq $Section }
-        $condition = $sectionControl.visible.Substring(1, $sectionControl.visible.Length - 2)
-        $form.view.outputs.parameters.paasPublicNetworkAccess |
-            Should -Be "[if($condition, steps('$Step').$Section.paasPublicNetworkAccess, 'Auto')]"
-        if ($Directory -eq 'automatedHostPools') {
-            $form.view.outputs.parameters.permittedIPs |
-                Should -Be "[if($condition, filter(map(steps('zeroTrust').permittedIPsSection.permittedIPs, (item) => item.ipAddress), (ip) => not(empty(ip))), parse('[]'))]"
+    It 'records typed networking objects without losing false overrides or independent allowlists' {
+        $parameters = @{
+            paasNetworking = @{ value = @{
+                publicNetworkAccess = 'Disabled'
+                privateEndpoint = $true
+                storage = @{ privateEndpoint = $false; permittedIPs = @('203.0.113.0/24'); serviceEndpointSubnetResourceIds = @('/storage-source') }
+                keyVault = @{ permittedIPs = @('198.51.100.0/24'); serviceEndpointSubnetResourceIds = @('/vault-source') }
+            } }
+            privateEndpointSubnetResourceIds = @{ value = @{ sharedResources = '/shared-placement'; hostPoolResources = '/host-placement' } }
+            privateDnsZoneResourceIds = @{ value = @{ file = '/file-zone'; vault = '/vault-zone' } }
         }
+        $fixture = Join-Path $TestDrive 'typed-network-evidence.parameters.json'
+        $csv = Join-Path $TestDrive 'typed-network-evidence.csv'
+        [IO.File]::WriteAllText($fixture, (@{ parameters = $parameters } | ConvertTo-Json -Depth 10))
+        & (Join-Path $repoRoot '.github\skills\federalavd-compliance-review\scripts\Get-ComplianceParameterEvidence.ps1') `
+            -ParameterPath $fixture -CsvPath $csv | Out-Null
+        $evidence = @(Import-Csv -LiteralPath $csv)
+        $evidence.Count | Should -Be 3
+        $networking = ($evidence | Where-Object Parameter -eq paasNetworking).Value | ConvertFrom-Json
+        $networking.storage.privateEndpoint | Should -Be $false
+        $networking.storage.permittedIPs | Should -Be @('203.0.113.0/24')
+        $networking.keyVault.permittedIPs | Should -Be @('198.51.100.0/24')
+        $networking.storage.serviceEndpointSubnetResourceIds | Should -Be @('/storage-source')
+        $networking.keyVault.serviceEndpointSubnetResourceIds | Should -Be @('/vault-source')
     }
 }
 
@@ -197,19 +224,48 @@ Describe 'Expanded service public-access matrix' {
         # Snapshot expansion rejects the existing recursive naming helpers. Isolate the actual
         # compiled storage modules and networking input graph from naming and other dependencies.
         $networkVariables = @{}
-        foreach ($name in @('effectiveStoragePermittedIPs', 'networkAccess', 'storageNetworkAcls')) {
+        foreach ($name in @(
+            'effectiveStoragePermittedIPs', 'storageSubnetIds', 'networkAccess', 'storageNetworkAcls',
+            'storageCreated', 'resolvedNetworking', 'storagePublicNetworkAccess', 'storagePrivateEndpoint',
+            'storagePermittedIPs', 'storageServiceEndpointSubnetResourceIds'
+        )) {
             if (-not $image.variables.ContainsKey($name)) { throw "Missing compiled networking variable: $name" }
             $networkVariables[$name] = $image.variables[$name]
         }
         $networkVariables.copy = @($image.variables.copy | Where-Object { $_.name -in @('storageIpRules', 'storageVnetRules') })
         if ($networkVariables.copy.Count -ne 2) { throw 'Missing compiled IP/subnet rule loops.' }
         $image.variables = $networkVariables
-        $networkFunctions = @($image.functions | Where-Object { $_.members.ContainsKey('resolveNetworkAccess') })
-        if ($networkFunctions.Count -ne 1) { throw 'Cannot locate the compiled network resolver.' }
-        $image.functions = @(@{
-            namespace = $networkFunctions[0].namespace
-            members = @{ resolveNetworkAccess = $networkFunctions[0].members.resolveNetworkAccess }
-        })
+        $compiledFunctions = @{}
+        foreach ($namespace in $image.functions) {
+            foreach ($member in $namespace.members.GetEnumerator()) {
+                $compiledFunctions["$($namespace.namespace).$($member.Key)"] = $member.Value
+            }
+        }
+        $pendingFunctions = [Collections.Generic.Queue[string]]::new()
+        $neededFunctions = [Collections.Generic.HashSet[string]]::new()
+        $functionCalls = '[A-Za-z_][A-Za-z0-9_.]*(?=\()'
+        foreach ($call in [regex]::Matches(($networkVariables | ConvertTo-Json -Depth 100), $functionCalls)) {
+            if ($compiledFunctions.ContainsKey($call.Value)) { $pendingFunctions.Enqueue($call.Value) }
+        }
+        while ($pendingFunctions.Count) {
+            $name = $pendingFunctions.Dequeue()
+            if (-not $neededFunctions.Add($name)) { continue }
+            foreach ($call in [regex]::Matches(($compiledFunctions[$name] | ConvertTo-Json -Depth 100), $functionCalls)) {
+                if ($compiledFunctions.ContainsKey($call.Value)) { $pendingFunctions.Enqueue($call.Value) }
+            }
+        }
+        if (-not $neededFunctions.Count) { throw 'Cannot locate compiled networking functions.' }
+        $image.functions = @(
+            foreach ($namespace in $image.functions) {
+                $members = @{}
+                foreach ($member in $namespace.members.GetEnumerator()) {
+                    if ($neededFunctions.Contains("$($namespace.namespace).$($member.Key)")) {
+                        $members[$member.Key] = $member.Value
+                    }
+                }
+                if ($members.Count) { @{ namespace = $namespace.namespace; members = $members } }
+            }
+        )
         $storageModules = @{}
         foreach ($name in @('assetsStorageAccount', 'logsStorageAccount')) {
             $module = $image.resources[$name]
@@ -266,16 +322,17 @@ Describe 'Expanded service public-access matrix' {
     It 'resolves storage/vault access for case <Index>: <Mode>, PE=<PrivateEndpoint>, IP=<HasIPs>, subnet=<HasSubnets>' -TestCases $matrixCases {
         param($Index, $Mode, $PrivateEndpoint, $HasIPs, $HasSubnets)
 
-        $services = @('images')
-        if ($Index % 2 -eq 0) { $services += @('vaults', 'files', 'apps') }
+        $services = @('images', 'vaults', 'files', 'apps')
         foreach ($service in $services) {
-            $hasRules = $HasIPs -or ($service -eq 'images' -and $HasSubnets)
+            $hasRules = $HasIPs -or $HasSubnets
             $expectedPublic = if ($Mode -eq 'Disabled' -or ($Mode -eq 'Auto' -and $PrivateEndpoint -and -not $hasRules)) { 'Disabled' } else { 'Enabled' }
             $expectedDefault = if ($Mode -eq 'Enabled' -or ($Mode -eq 'Auto' -and -not $PrivateEndpoint -and -not $hasRules)) { 'Allow' } else { 'Deny' }
             $matchingResources = @($resources | Where-Object {
                 $_.tags.networkCase -eq "$service$Index" -and $_.type -in @('Microsoft.Storage/storageAccounts', 'Microsoft.KeyVault/vaults')
             })
-            $matchingResources.Count | Should -Be $(if ($service -in @('images', 'vaults')) { 2 } else { 1 })
+            $invalidImageIntent = $service -eq 'images' -and $Mode -eq 'EnabledWithRestrictions' -and
+                -not $PrivateEndpoint -and -not $hasRules
+            $matchingResources.Count | Should -Be $(if ($invalidImageIntent) { 0 } elseif ($service -in @('images', 'vaults')) { 2 } else { 1 })
             foreach ($resource in $matchingResources) {
                 $resource.properties.publicNetworkAccess | Should -Be $expectedPublic
                 $resource.properties.networkAcls.defaultAction | Should -Be $expectedDefault
@@ -289,14 +346,41 @@ Describe 'Expanded service public-access matrix' {
                         $ipRules[2].value | Should -Be '192.0.2.10'
                     }
                 }
-                if ($service -eq 'images') {
-                    @($resource.properties.networkAcls.virtualNetworkRules).Count | Should -Be $(if ($HasSubnets) { 1 } else { 0 })
+                $expectedSubnets = if ($HasSubnets) { 2 } else { 0 }
+                @($resource.properties.networkAcls.virtualNetworkRules).Count | Should -Be $expectedSubnets
+                if ($HasSubnets) {
+                    @($resource.properties.networkAcls.virtualNetworkRules.id) | Should -Contain '/subscriptions/11111111-2222-3333-4444-555555555555/resourcegroups/other-network/providers/microsoft.network/virtualnetworks/other/subnets/clients'
+                    if ($service -eq 'vaults') {
+                        foreach ($rule in $resource.properties.networkAcls.virtualNetworkRules) {
+                            $rule.ignoreMissingVnetServiceEndpoint | Should -Be $false
+                        }
+                    }
                 }
             }
         }
     }
 
-    It 'pairs Function App storage DNS groups with their private endpoints for case <Index>' -TestCases @($matrixCases | Where-Object { $_.Index % 2 -eq 0 }) {
+    It 'rejects Image Management restricted connectivity without an endpoint or approved sources' {
+        $negativePath = Join-Path $testOutputDirectory 'invalid-image-network.bicepparam'
+        [IO.File]::WriteAllText($negativePath, @'
+using './image-network-slice.json'
+param paasNetworking = {
+  storage: {
+    publicNetworkAccess: 'EnabledWithRestrictions'
+    privateEndpoint: false
+  }
+}
+param namingConvention = { workload: 'invalidnetwork' }
+'@)
+        $output = (& $bicepCommand snapshot $negativePath --mode Overwrite `
+            --subscription-id 00000000-1111-2222-3333-444444444444 `
+            --tenant-id 11111111-2222-3333-4444-555555555555 `
+            --location eastus --deployment-name network-tests 2>&1 | Out-String)
+        $LASTEXITCODE | Should -Not -Be 0
+        $output | Should -Match 'Storage restricted public connectivity requires permittedIPs, serviceEndpointSubnetResourceIds, or a private endpoint'
+    }
+
+    It 'pairs Function App storage DNS groups with their private endpoints for case <Index>' -TestCases $matrixCases {
         param($Index, $PrivateEndpoint)
 
         $groups = @($resources | Where-Object {
@@ -319,26 +403,43 @@ Describe 'Expanded service public-access matrix' {
         }
     }
 
-    It 'resolves Function App and SCM rules for case <Index>: <Mode>, PE=<PrivateEndpoint>, IP=<HasIPs>' -TestCases @($matrixCases | Where-Object { $_.Index % 2 -eq 0 }) {
-        param($Index, $Mode, $PrivateEndpoint, $HasIPs)
+    It 'keeps inbound and runtime-storage subnet authorization independent in case <Index>' -TestCases @(
+        @{ Index = 32; StorageRules = 2; InboundRules = 0; StorageDefault = 'Deny'; InboundDefault = 'Allow' }
+        @{ Index = 33; StorageRules = 0; InboundRules = 2; StorageDefault = 'Allow'; InboundDefault = 'Deny' }
+    ) {
+        param($Index, $StorageRules, $InboundRules, $StorageDefault, $InboundDefault)
+        $storage = @($resources | Where-Object { $_.type -eq 'Microsoft.Storage/storageAccounts' -and $_.tags.networkCase -eq "apps$Index" })
+        $app = @($resources | Where-Object { $_.type -eq 'Microsoft.Web/sites' -and $_.tags.networkCase -eq "apps$Index" })
+        $storage.Count | Should -Be 1
+        $app.Count | Should -Be 1
+        $storage[0].properties.networkAcls.defaultAction | Should -Be $StorageDefault
+        @($storage[0].properties.networkAcls.virtualNetworkRules).Count | Should -Be $StorageRules
+        $app[0].properties.siteConfig.ipSecurityRestrictionsDefaultAction | Should -Be $InboundDefault
+        @($app[0].properties.siteConfig.ipSecurityRestrictions | Where-Object vnetSubnetResourceId).Count | Should -Be $InboundRules
+    }
+
+    It 'resolves Function App and SCM rules for case <Index>: <Mode>, PE=<PrivateEndpoint>, IP=<HasIPs>, subnet=<HasSubnets>' -TestCases $matrixCases {
+        param($Index, $Mode, $PrivateEndpoint, $HasIPs, $HasSubnets)
 
         $matchingResources = @($resources | Where-Object { $_.type -eq 'Microsoft.Web/sites' -and $_.tags.networkCase -eq "apps$Index" })
         $matchingResources.Count | Should -Be 1
         $app = $matchingResources[0]
-        $expectedPublic = if ($Mode -eq 'Disabled' -or ($Mode -eq 'Auto' -and $PrivateEndpoint -and -not $HasIPs)) { 'Disabled' } else { 'Enabled' }
-        $restrict = $Mode -in @('Disabled', 'EnabledWithRestrictions') -or ($Mode -eq 'Auto' -and ($PrivateEndpoint -or $HasIPs))
-        $expectedDefault = if ($restrict) { 'Deny' } elseif ($Mode -eq 'Auto') { $null } else { 'Allow' }
+        $expectedPublic = if ($Mode -eq 'Disabled' -or ($Mode -eq 'Auto' -and $PrivateEndpoint -and -not ($HasIPs -or $HasSubnets))) { 'Disabled' } else { 'Enabled' }
+        $restrict = $Mode -in @('Disabled', 'EnabledWithRestrictions') -or ($Mode -eq 'Auto' -and ($PrivateEndpoint -or $HasIPs -or $HasSubnets))
+        $expectedDefault = if ($restrict) { 'Deny' } else { 'Allow' }
         $app.properties.publicNetworkAccess | Should -Be $expectedPublic
         $site = $app.properties.siteConfig
         $site.publicNetworkAccess | Should -Be $expectedPublic
         $site.ipSecurityRestrictionsDefaultAction | Should -Be $expectedDefault
         $site.scmIpSecurityRestrictionsDefaultAction | Should -Be $expectedDefault
-        if ($Mode -ne 'Auto' -or $restrict) { $site.scmIpSecurityRestrictionsUseMain | Should -Be $true }
+        $site.scmIpSecurityRestrictionsUseMain | Should -Be $true
         $rules = @($site.ipSecurityRestrictions | Where-Object { $null -ne $_ })
-        $rules.Count | Should -Be ($(if ($HasIPs) { 3 } else { 0 }) + $(if ($restrict) { 2 } elseif ($HasIPs) { 1 } else { 0 }))
+        $subnetCount = if ($HasSubnets) { 2 } else { 0 }
+        @($rules | Where-Object { $_.vnetSubnetResourceId }).Count | Should -Be $subnetCount
+        $rules.Count | Should -Be ($(if ($HasIPs) { 3 } else { 0 }) + $subnetCount + $(if ($restrict) { 2 } elseif ($HasIPs -or $HasSubnets) { 1 } else { 0 }))
         @($rules | Where-Object { $_.action -eq 'Deny' }).Count | Should -Be $(if ($restrict) { 1 } else { 0 })
         @($site.scmIpSecurityRestrictions | Where-Object { $_.action -eq 'Deny' }).Count | Should -Be $(if ($restrict) { 1 } else { 0 })
-        if ($restrict -or $HasIPs) {
+        if ($restrict -or $HasIPs -or $HasSubnets) {
             ($rules | Where-Object { $_.name -eq 'AzureCloud' }).ipAddress | Should -Be 'AzureCloud'
             ($rules | Where-Object { $_.name -eq 'AzureCloud' }).tag | Should -Be 'ServiceTag'
         }
@@ -349,7 +450,7 @@ Describe 'Expanded service public-access matrix' {
         }
     }
 
-    It 'creates private endpoints only from their own flag in case <Index>: <Mode>, PE=<PrivateEndpoint>' -TestCases @($matrixCases | Where-Object { $_.Index % 2 -eq 0 }) {
+    It 'creates private endpoints only from their own flag in case <Index>: <Mode>, PE=<PrivateEndpoint>' -TestCases $matrixCases {
         param($Index, $Mode, $PrivateEndpoint)
 
         $targets = @(

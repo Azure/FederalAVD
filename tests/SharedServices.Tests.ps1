@@ -6,40 +6,46 @@ BeforeAll {
     $workspaceModulePath = Join-Path $repoRoot 'deployments\shared\modules\orchestration\avdWorkspace\avdWorkspace.bicep'
     $keyVaultModulePath = Join-Path $repoRoot 'deployments\shared\modules\orchestration\keyVaults\keyVaults.bicep'
     $azureFilesModulePath = Join-Path $repoRoot 'deployments\shared\modules\orchestration\fslogix\modules\azureFiles.bicep'
-    $backupVaultModulePath = Join-Path $repoRoot 'deployments\shared\modules\resourceModules\recoveryServices\fslogixBackupVault.bicep'
+    $backupVaultModulePath = Join-Path $repoRoot 'deployments\shared\modules\orchestration\recoveryServices\fslogixBackupVault.bicep'
     $readmePath = Join-Path $repoRoot 'deployments\sharedServices\README.md'
 }
 
 Describe 'Shared Services Portal network access' {
     BeforeAll {
         . (Join-Path $PSScriptRoot 'NamingTestHelpers.ps1')
+        . (Join-Path $PSScriptRoot 'UiFormTestHelpers.ps1')
         $form = Get-Content -LiteralPath $formPath -Raw | ConvertFrom-Json
         $operations = $form.view.properties.steps | Where-Object name -eq 'operations'
-        $access = $operations.elements | Where-Object name -eq 'permittedIPsSection'
-        $network = $operations.elements | Where-Object name -eq 'networkSection'
+        $access = $operations.elements | Where-Object name -eq 'backupNetworking'
+        $networkStep = $form.view.properties.steps | Where-Object name -eq 'privateNetworking'
+        $network = $networkStep.elements | Where-Object name -eq 'privateEndpointSubnets'
         $dns = $operations.elements | Where-Object name -eq 'privateDnsSection'
         $outputs = $form.view.outputs.parameters
     }
 
-    It 'groups endpoint and public-access selectors before private subnet and DNS settings' {
-        $selector = $access.elements | Where-Object name -eq 'networkAccess'
+    It 'keeps Backup endpoint and DNS controls separate from shared subnet placement and Key Vault public access' {
+        $selector = $access.elements | Where-Object name -eq 'backupConnectivity'
         $selector.type | Should -Be 'Microsoft.Common.DropDown'
-        $selector.defaultValue | Should -Be 'Public Endpoint'
+        $selector.defaultValue | Should -Be 'Select Backup connectivity'
         $selector.constraints.required | Should -Be $true
-        ($selector.constraints.allowedValues.label -join ',') | Should -Be 'Public Endpoint,Private Endpoint'
-        ($selector.constraints.allowedValues.value -join ',') | Should -Be 'PublicEndpoint,PrivateEndpoint'
-        @($access.elements | Where-Object name -eq 'paasPublicNetworkAccess').Count | Should -Be 1
+        ($selector.constraints.allowedValues.label -join ',') | Should -Be 'Select Backup connectivity,Private connectivity,Public connectivity'
+        ($selector.constraints.allowedValues.value -join ',') | Should -Be ',Private,Public'
+        @($access.elements | Where-Object name -eq 'paasPublicNetworkAccess').Count | Should -Be 0
+        (($operations.elements | Where-Object name -eq 'keyVaultPublicNetworking').elements |
+            Where-Object name -eq 'keyVaultPublicNetworkAccess').defaultValue | Should -Be 'Disabled'
         @($operations.elements | Where-Object name -eq 'privateEndpoint').Count | Should -Be 0
         $names = @($operations.elements.name)
-        [array]::IndexOf($names, 'permittedIPsSection') | Should -BeLessThan ([array]::IndexOf($names, 'networkSection'))
-        [array]::IndexOf($names, 'permittedIPsSection') | Should -BeLessThan ([array]::IndexOf($names, 'privateDnsSection'))
+        $names | Should -Not -Contain 'networkSection'
+        [array]::IndexOf($names, 'backupNetworking') | Should -BeLessThan ([array]::IndexOf($names, 'privateDnsSection'))
+        $stepNames = @($form.view.properties.steps.name)
+        [array]::IndexOf($stepNames, 'avdControlPlane') | Should -BeLessThan ([array]::IndexOf($stepNames, 'privateNetworking'))
     }
 
     It 'preserves native outputs and independent public access for <Mode>' -TestCases @(
-        @{ Mode = 'PublicEndpoint'; Private = $false; DefaultPublic = 'Enabled' }
-        @{ Mode = 'PrivateEndpoint'; Private = $true; DefaultPublic = 'Disabled' }
+        @{ Mode = 'PublicEndpoint'; Private = $false }
+        @{ Mode = 'PrivateEndpoint'; Private = $true }
     ) {
-        param($Mode, $Private, $DefaultPublic)
+        param($Mode, $Private)
 
         foreach ($public in @('Disabled', 'EnabledWithRestrictions', 'Enabled')) {
             foreach ($integrateDns in @($false, $true)) {
@@ -52,36 +58,63 @@ Describe 'Shared Services Portal network access' {
                 )) {
                     $steps = @{
                         operations = @{
-                            permittedIPsSection = @{ networkAccess = $Mode; paasPublicNetworkAccess = $public }
-                            networkSection = @{ privateEndpointSubnet = 'subnet-id' }
+                            paasConnectivity = @{ scenario = 'Custom' }
+                            backupNetworking = @{
+                                backupPrivateEndpoint = $Private
+                                backupPublicNetworkAccess = $(if ($Private) { 'Disabled' } else { 'Enabled' })
+                            }
+                            keyVaultPublicNetworking = @{ keyVaultPublicNetworkAccess = $public }
+                            keyVaultPrivateNetworking = @{
+                                keyVaultPrivateEndpoint = $true
+                                enablePrivateDNSIntegration = $integrateDns
+                                vaultPrivateDnsZone = 'keyvault-dns'
+                            }
                             privateDnsSection = @{
                                 enablePrivateDNSIntegration = $integrateDns
-                                keyVaultPrivateDnsZone = 'keyvault-dns'
-                                azureBackupPrivateDnsZone = 'backup-dns'
-                                azureBlobPrivateDnsZone = 'blob-dns'
-                                azureQueuePrivateDnsZone = 'queue-dns'
+                                vaultPrivateDnsZone = 'keyvault-dns'
+                                backupPrivateDnsZone = 'backup-dns'
+                                blobPrivateDnsZone = 'blob-dns'
+                                queuePrivateDnsZone = 'queue-dns'
                             }
                             resources = $resources
                         }
+                        avdControlPlane = @{
+                            sharedWorkspace = @{ manageWorkspace = $false }
+                            workspaceFeedEndpoint = @{ manageFeedEndpoint = $false }
+                            globalFeed = @{ manageGlobalWorkspace = $false }
+                        }
+                        privateNetworking = @{
+                            privateEndpointSubnets = @{ subnet = @{ id = 'subnet-id' } }
+                        }
                     }
-                    $endpoint = Invoke-TestNamingFormExpression $outputs.privateEndpoint $steps
-                    $endpoint | Should -BeOfType ([bool])
-                    $endpoint | Should -Be $Private
-                    Invoke-TestNamingFormExpression $network.visible $steps | Should -Be $Private
-                    Invoke-TestNamingFormExpression $dns.visible $steps | Should -Be $Private
-                    Invoke-TestNamingFormExpression $outputs.privateEndpointSubnetResourceId $steps |
-                        Should -Be $(if ($Private) { 'subnet-id' } else { '' })
-                    Invoke-TestNamingFormExpression $outputs.paasPublicNetworkAccess $steps | Should -Be $public
-                    $publicControl = $access.elements | Where-Object name -eq 'paasPublicNetworkAccess'
-                    Invoke-TestNamingFormExpression $publicControl.defaultValue $steps | Should -Be $DefaultPublic
-                    Invoke-TestNamingFormExpression $outputs.azureKeyVaultPrivateDnsZoneResourceId $steps |
-                        Should -Be $(if ($Private -and $integrateDns -and ($resources.deploySecretsKeyVault -or $resources.deployEncryptionKeyVault)) { 'keyvault-dns' } else { '' })
+                    $paas = Invoke-CuiExpression $outputs.paasNetworking $steps
+                    $placements = Invoke-CuiExpression $outputs.privateEndpointSubnetResourceIds $steps
+                    $zoneIds = Invoke-CuiExpression $outputs.privateDnsZoneResourceIds $steps
+                    $backupPrivate = $Private -and $resources.deployFSLogixBackupVault
+                    if ($resources.deployFSLogixBackupVault) {
+                        $paas.backup.privateEndpoint | Should -BeOfType ([bool])
+                        $paas.backup.privateEndpoint | Should -Be $backupPrivate
+                    } else {
+                        $paas.backup.Count | Should -Be 0
+                    }
+                    $sharedPrivate = $backupPrivate -or $resources.deploySecretsKeyVault -or $resources.deployEncryptionKeyVault
+                    Invoke-CuiExpression $network.visible $steps | Should -Be $sharedPrivate
+                    Invoke-CuiExpression $dns.visible $steps | Should -Be $backupPrivate
+                    $placements.sharedResources |
+                        Should -Be $(if ($sharedPrivate) { 'subnet-id' } else { '' })
+                    if ($resources.deploySecretsKeyVault -or $resources.deployEncryptionKeyVault) {
+                        $paas.keyVault.publicNetworkAccess | Should -Be $public
+                    } else {
+                        $paas.keyVault.Count | Should -Be 0
+                    }
+                    $zoneIds.vault |
+                        Should -Be $(if ($integrateDns -and ($resources.deploySecretsKeyVault -or $resources.deployEncryptionKeyVault)) { 'keyvault-dns' } else { '' })
                     foreach ($zone in @(
-                        @{ Parameter = 'azureBackupPrivateDnsZoneResourceId'; Value = 'backup-dns' }
-                        @{ Parameter = 'azureBlobPrivateDnsZoneResourceId'; Value = 'blob-dns' }
-                        @{ Parameter = 'azureQueuePrivateDnsZoneResourceId'; Value = 'queue-dns' }
+                        @{ Parameter = 'backup'; Value = 'backup-dns' }
+                        @{ Parameter = 'blob'; Value = 'blob-dns' }
+                        @{ Parameter = 'queue'; Value = 'queue-dns' }
                     )) {
-                        Invoke-TestNamingFormExpression $outputs.($zone.Parameter) $steps |
+                        $zoneIds.($zone.Parameter) |
                             Should -Be $(if ($Private -and $integrateDns -and $resources.deployFSLogixBackupVault) { $zone.Value } else { '' })
                     }
                 }
@@ -96,18 +129,30 @@ Describe 'Shared Services Portal network access' {
         foreach ($mode in @('PublicEndpoint', 'PrivateEndpoint')) {
             foreach ($selected in @($false, $true)) {
                 $steps = @{
-                    basics = @{ subscription = $(if ($selected) { @{ id = 'subscription-id' } } else { $null }) }
                     operations = @{
-                        permittedIPsSection = @{ networkAccess = $mode }
-                        networkSection = @{ virtualNetwork = $(if ($selected) { @{ id = 'vnet-id' } } else { $null }) }
+                        paasConnectivity = @{ scenario = 'Custom' }
+                        resources = @{ deploySecretsKeyVault = $false; deployEncryptionKeyVault = $false; deployFSLogixBackupVault = $true }
+                        keyVaultPrivateNetworking = @{ keyVaultPrivateEndpoint = $false }
+                        backupNetworking = @{ backupPrivateEndpoint = ($mode -eq 'PrivateEndpoint') }
                         privateDnsSection = @{
                             enablePrivateDNSIntegration = $selected
                             privateDNSZonesSubscription = $(if ($selected) { @{ id = 'dns-subscription-id' } } else { $null })
                         }
                     }
+                    avdControlPlane = @{
+                        sharedWorkspace = @{ manageWorkspace = $false }
+                        workspaceFeedEndpoint = @{ manageFeedEndpoint = $false }
+                        globalFeed = @{ manageGlobalWorkspace = $false }
+                    }
+                    privateNetworking = @{
+                        privateEndpointSubnets = @{
+                            networkSubscription = $(if ($selected) { @{ id = 'subscription-id' } } else { $null })
+                            virtualNetwork = $(if ($selected) { @{ id = 'vnet-id' } } else { $null })
+                        }
+                    }
                 }
                 foreach ($condition in @($vnetApi.condition, $subnetApi.condition, $dnsApi.condition)) {
-                    Invoke-TestNamingFormExpression $condition $steps | Should -Be ($mode -eq 'PrivateEndpoint' -and $selected)
+                    Invoke-CuiExpression $condition $steps | Should -Be ($mode -eq 'PrivateEndpoint' -and $selected)
                 }
             }
         }
@@ -116,6 +161,7 @@ Describe 'Shared Services Portal network access' {
 
 Describe 'Shared Services AVD workspace ownership' {
     BeforeAll {
+        . (Join-Path $PSScriptRoot 'UiFormTestHelpers.ps1')
         $bicep = Get-Content -LiteralPath $bicepPath -Raw
         $form = Get-Content -LiteralPath $formPath -Raw | ConvertFrom-Json
         $formJson = Get-Content -LiteralPath $formPath -Raw
@@ -134,6 +180,31 @@ Describe 'Shared Services AVD workspace ownership' {
         $bicep | Should -Match 'output workspaceFeedPrivateEndpointResourceId string'
         $bicep | Should -Match 'output globalFeedWorkspaceResourceId string'
         $bicep | Should -Match 'output globalFeedPrivateEndpointResourceId string'
+    }
+
+    It 'exposes one shared subnet and routes every endpoint through it without enabling unselected AVD endpoints' {
+        $template = Get-Content -LiteralPath $armPath -Raw | ConvertFrom-Json -Depth 100
+        $names = @($template.parameters.PSObject.Properties.Name)
+        @($names | Where-Object { $_ -like '*PrivateEndpointSubnetResourceId' }).Count | Should -Be 0
+        $placementSchema = $template.definitions.($template.parameters.privateEndpointSubnetResourceIds.'$ref'.Replace('#/definitions/', ''))
+        $placementSchema.properties.PSObject.Properties.Name | Should -Be 'sharedResources'
+        $placementSchema.additionalProperties | Should -BeFalse
+        $template.parameters.deployWorkspaceFeedPrivateEndpoint.type | Should -Be 'bool'
+        $template.parameters.deployWorkspaceFeedPrivateEndpoint.defaultValue | Should -BeFalse
+        foreach ($oldName in @('keyVaultPrivateEndpointSubnetResourceId', 'backupPrivateEndpointSubnetResourceId',
+            'workspaceFeedPrivateEndpointSubnetResourceId', 'globalFeedPrivateEndpointSubnetResourceId')) {
+            $names | Should -Not -Contain $oldName
+            $form.view.outputs.parameters.PSObject.Properties.Name | Should -Not -Contain $oldName
+        }
+        $template.resources.keyVaults.properties.parameters.keyVaultPrivateEndpointSubnetResourceId.value |
+            Should -Be "[variables('sharedResourcesPrivateEndpointSubnetResourceId')]"
+        $template.resources.fslogixBackupVault.properties.parameters.privateEndpointSubnetResourceId.value |
+            Should -Be "[variables('sharedResourcesPrivateEndpointSubnetResourceId')]"
+        $template.resources.avdWorkspace.properties.parameters.workspaceFeedPrivateEndpointSubnetResourceId |
+            Should -Be "[if(and(parameters('manageAvdWorkspace'), parameters('deployWorkspaceFeedPrivateEndpoint')), createObject('value', variables('sharedResourcesPrivateEndpointSubnetResourceId')), createObject('value', ''))]"
+        $template.resources.avdWorkspace.properties.parameters.globalFeedPrivateEndpointSubnetResourceId |
+            Should -Be "[if(parameters('manageGlobalAvdWorkspace'), createObject('value', variables('sharedResourcesPrivateEndpointSubnetResourceId')), createObject('value', ''))]"
+        $template.variables.globalAvdWorkspaceConfigurationIsValid | Should -Match "not\(empty\(variables\('sharedResourcesPrivateEndpointSubnetResourceId'\)\)\)"
     }
 
     It 'returns effective IDs for created or adopted shared resources' {
@@ -239,7 +310,7 @@ Describe 'Shared Services AVD workspace ownership' {
     It 'uses the subnet virtual network region only inside the conditional backup private endpoint' {
         $endpointStart = $backupVaultModule.IndexOf('module vaultPrivateEndpoint ')
         $endpointBlock = $backupVaultModule.Substring($endpointStart)
-        $endpointBlock | Should -Match 'if \(createVault && privateEndpoint && !empty\(privateEndpointSubnetResourceId\) && !empty\(azureBackupPrivateDnsZoneResourceId\)\)'
+        $endpointBlock | Should -Match 'if \(createVault && privateEndpoint && !empty\(privateEndpointSubnetResourceId\) && !empty\(backupPrivateDnsZoneResourceId\)\)'
         $endpointBlock | Should -Match 'location: privateEndpointVirtualNetwork!\.location'
     }
 
@@ -273,14 +344,15 @@ Describe 'Shared Services AVD workspace ownership' {
 
     It 'limits workspace public access to feed endpoint management and supports shared DNS zones' {
         $outputs = $form.view.outputs.parameters
+        $globalFeedDns = Get-CuiObjectBinding $outputs.privateDnsZoneResourceIds 'avdGlobalFeed'
 
         $outputs.avdWorkspacePublicNetworkAccess |
             Should -Match "workspaceFeedEndpoint\.manageFeedEndpoint"
-        $outputs.globalFeedPrivateDnsZoneResourceId |
+        $globalFeedDns |
             Should -Match "reuseFeedPrivateDnsZoneForGlobalFeed"
-        $outputs.globalFeedPrivateDnsZoneResourceId |
+        $globalFeedDns |
             Should -Match "privateDns\.feedPrivateDnsZone\.id"
-        $outputs.globalFeedPrivateDnsZoneResourceId |
+        $globalFeedDns |
             Should -Match "privateDns\.globalPrivateDnsZone\.id"
     }
 

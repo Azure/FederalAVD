@@ -101,15 +101,17 @@ param encryptionKeyName string = ''
 @minValue(7)
 param keyExpirationInDays int = 180
 @description('Optional. Whether to deploy a private endpoint for the vault.')
-param deployPrivateEndpoints bool = false
+param deployBackupPrivateEndpoints bool = false
+@description('Optional. Public access for a newly created VM Backup vault, independent of endpoint creation. Omitted values preserve the legacy adapter behavior for existing callers.')
+param vaultPublicNetworkAccess ('Enabled' | 'Disabled') = deployBackupPrivateEndpoints ? 'Disabled' : 'Enabled'
 @description('Optional. Resource ID of the subnet for the vault private endpoint.')
 param vaultPrivateEndpointSubnetResourceId string = ''
 @description('Optional. Resource ID of the Azure Backup private DNS zone.')
-param azureBackupPrivateDnsZoneResourceId string = ''
+param backupPrivateDnsZoneResourceId string = ''
 @description('Optional. Resource ID of the Azure Blob private DNS zone (needed for backup PE).')
-param azureBlobPrivateDnsZoneResourceId string = ''
+param blobPrivateDnsZoneResourceId string = ''
 @description('Optional. Resource ID of the Azure Queue private DNS zone (needed for backup PE).')
-param azureQueuePrivateDnsZoneResourceId string = ''
+param queuePrivateDnsZoneResourceId string = ''
 @description('Optional. Name convention for private endpoints.')
 param privateEndpointNameConv string = ''
 @description('Optional. Name convention for private endpoint NICs.')
@@ -130,11 +132,12 @@ module recoveryServicesModule 'modules/recoveryServices.bicep' = if (deployRecov
     location: location
     storageRedundancy: vaultStorageRedundancy
     logAnalyticsWorkspaceResourceId: logAnalyticsWorkspaceResourceId
-    privateEndpoint: deployPrivateEndpoints
+    publicNetworkAccess: vaultPublicNetworkAccess
+    privateEndpoint: deployBackupPrivateEndpoints
     privateEndpointSubnetResourceId: vaultPrivateEndpointSubnetResourceId
-    azureBackupPrivateDnsZoneResourceId: azureBackupPrivateDnsZoneResourceId
-    azureBlobPrivateDnsZoneResourceId: azureBlobPrivateDnsZoneResourceId
-    azureQueuePrivateDnsZoneResourceId: azureQueuePrivateDnsZoneResourceId
+    backupPrivateDnsZoneResourceId: backupPrivateDnsZoneResourceId
+    blobPrivateDnsZoneResourceId: blobPrivateDnsZoneResourceId
+    queuePrivateDnsZoneResourceId: queuePrivateDnsZoneResourceId
     privateEndpointNameConv: privateEndpointNameConv
     privateEndpointNICNameConv: privateEndpointNICNameConv
     tags: tags

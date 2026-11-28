@@ -147,39 +147,32 @@
         // ── Zero Trust / Private Endpoints ─────────────────────────────────────
         //    All management and storage resources communicate over private endpoints.
         //    DNS zones must be linked to your hub VNet and pre-created.
-        "deployPrivateEndpoints": {
-            "value": true
+        "paasNetworking": {
+            "value": {
+                "publicNetworkAccess": "Disabled",
+                "privateEndpoint": true
+            }
         },
-        "operationsPrivateEndpointSubnetResourceId": {
-            "value": "/subscriptions/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/resourceGroups/rg-avd-networking-usgva/providers/Microsoft.Network/virtualNetworks/vnet-avd-usgva/subnets/snet-avd-privateendpoints"
+        "privateEndpointSubnetResourceIds": {
+            "value": {
+                "sharedResources": "/subscriptions/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/resourceGroups/rg-avd-networking-usgva/providers/Microsoft.Network/virtualNetworks/vnet-avd-usgva/subnets/snet-avd-privateendpoints",
+                "hostPoolResources": "/subscriptions/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/resourceGroups/rg-avd-networking-usgva/providers/Microsoft.Network/virtualNetworks/vnet-avd-usgva/subnets/snet-avd-privateendpoints"
+            }
         },
-        "hostPoolResourcesPrivateEndpointSubnetResourceId": {
-            "value": "/subscriptions/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/resourceGroups/rg-avd-networking-usgva/providers/Microsoft.Network/virtualNetworks/vnet-avd-usgva/subnets/snet-avd-privateendpoints"
-        },
-        "azureFilesPrivateDnsZoneResourceId": {
-            "value": "/subscriptions/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/resourceGroups/rg-avd-networking-usgva/providers/Microsoft.Network/privateDnsZones/privatelink.file.core.usgovcloudapi.net"
-        },
-        "azureKeyVaultPrivateDnsZoneResourceId": {
-            "value": "/subscriptions/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/resourceGroups/rg-avd-networking-usgva/providers/Microsoft.Network/privateDnsZones/privatelink.vaultcore.usgovcloudapi.net"
-        },
-        "azureBlobPrivateDnsZoneResourceId": {
-            "value": "/subscriptions/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/resourceGroups/rg-avd-networking-usgva/providers/Microsoft.Network/privateDnsZones/privatelink.blob.core.usgovcloudapi.net"
-        },
-        "azureQueuePrivateDnsZoneResourceId": {
-            "value": "/subscriptions/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/resourceGroups/rg-avd-networking-usgva/providers/Microsoft.Network/privateDnsZones/privatelink.queue.core.usgovcloudapi.net"
+        "privateDnsZoneResourceIds": {
+            "value": {
+                // Replace <geo> with the region code of your existing Azure Backup private DNS zone.
+                "backup": "/subscriptions/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/resourceGroups/rg-avd-networking-usgva/providers/Microsoft.Network/privateDnsZones/privatelink.<geo>.backup.windowsazure.us",
+                "file": "/subscriptions/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/resourceGroups/rg-avd-networking-usgva/providers/Microsoft.Network/privateDnsZones/privatelink.file.core.usgovcloudapi.net",
+                "vault": "/subscriptions/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/resourceGroups/rg-avd-networking-usgva/providers/Microsoft.Network/privateDnsZones/privatelink.vaultcore.usgovcloudapi.net",
+                "blob": "/subscriptions/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/resourceGroups/rg-avd-networking-usgva/providers/Microsoft.Network/privateDnsZones/privatelink.blob.core.usgovcloudapi.net",
+                "queue": "/subscriptions/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/resourceGroups/rg-avd-networking-usgva/providers/Microsoft.Network/privateDnsZones/privatelink.queue.core.usgovcloudapi.net",
+                "avdFeed": "/subscriptions/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/resourceGroups/rg-avd-networking-usgva/providers/Microsoft.Network/privateDnsZones/privatelink.wvd.microsoft.us"
+            }
         },
         // ── AVD Private Link ───────────────────────────────────────────────────
         "avdPrivateLinkPrivateRoutes": {
             "value": "FeedAndHostPool"
-        },
-        "hostpoolPrivateEndpointSubnetResourceId": {
-            "value": "/subscriptions/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/resourceGroups/rg-avd-networking-usgva/providers/Microsoft.Network/virtualNetworks/vnet-avd-usgva/subnets/snet-avd-privateendpoints"
-        },
-        "avdPrivateDnsZoneResourceId": {
-            "value": "/subscriptions/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/resourceGroups/rg-avd-networking-usgva/providers/Microsoft.Network/privateDnsZones/privatelink.wvd.microsoft.us"
-        },
-        "workspaceFeedPrivateEndpointSubnetResourceId": {
-            "value": "/subscriptions/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/resourceGroups/rg-avd-networking-usgva/providers/Microsoft.Network/virtualNetworks/vnet-avd-usgva/subnets/snet-avd-privateendpoints"
         },
         "hostPoolPublicNetworkAccess": {
             "value": "EnabledForClientsOnly"

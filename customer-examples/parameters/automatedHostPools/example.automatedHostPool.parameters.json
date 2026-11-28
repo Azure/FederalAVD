@@ -7,6 +7,26 @@
     "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentParameters.json#",
     "contentVersion": "1.0.0.0",
     "parameters": {
+        // Networking is intentionally private by default. Existing/adopted resources remain owner-managed.
+        // Restricted public connectivity: set publicNetworkAccess to EnabledWithRestrictions and
+        // privateEndpoint to false, then supply independent storage/keyVault IP or service-endpoint lists.
+        // If creating a Backup vault in Restricted mode, explicitly choose Disabled/true or Enabled/false.
+        "paasNetworking": {
+            "value": {}
+        },
+        // Placement is mandatory for selected consumers and never defaults to the session-host subnet.
+        "privateEndpointSubnetResourceIds": {
+            "value": {
+                "sharedResources": "/subscriptions/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/resourceGroups/rg-network/providers/Microsoft.Network/virtualNetworks/vnet-avd/subnets/snet-privateendpoints",
+                "hostPoolResources": "/subscriptions/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/resourceGroups/rg-network/providers/Microsoft.Network/virtualNetworks/vnet-avd/subnets/snet-privateendpoints"
+            }
+        },
+        "privateDnsZoneResourceIds": {
+            "value": {
+                "vault": "/subscriptions/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/resourceGroups/rg-dns/providers/Microsoft.Network/privateDnsZones/privatelink.vaultcore.azure.net",
+                "file": "/subscriptions/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/resourceGroups/rg-dns/providers/Microsoft.Network/privateDnsZones/privatelink.file.core.windows.net"
+            }
+        },
         "identifier": {
             "value": "autodev"
         },
@@ -138,12 +158,6 @@
         },
         "fslogixExistingRemoteOfficeStorageAccountResourceIds": {
             "value": []
-        },
-        "fslogixPrivateEndpoint": {
-            "value": true
-        },
-        "azureFilePrivateDnsZoneResourceId": {
-            "value": "/subscriptions/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/resourceGroups/rg-dns/providers/Microsoft.Network/privateDnsZones/privatelink.file.core.windows.net"
         },
         "enableMonitoring": {
             "value": false

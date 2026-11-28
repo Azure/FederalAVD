@@ -68,6 +68,7 @@ Describe 'Generated ARM and Template Spec size budgets' {
         if ($payloadBytes + 16384 -gt 2000000) {
             throw "$Name and its Portal form serialize to $payloadBytes bytes using the normal SDK serializer, exceeding the 2,000,000-byte budget including a 16,384-byte metadata allowance."
         }
+        Write-Host "$Name ARM headroom: $(4000000 - $armBytes) bytes; Template Spec headroom including form, linked artifacts and 16 KiB envelope: $(2000000 - $payloadBytes - 16384) bytes."
     }
 
     It 'preserves all non-annotation content in <Name>' -TestCases $sizeCases {
@@ -414,15 +415,16 @@ Describe 'Networking Template Spec form parameter contract' {
         $networkTemplate.resources.routeTable.condition | Should -Be "[equals(parameters('defaultRouting'), 'nva')]"
         $hosts = $networkTemplate.variables.copy | Where-Object { $_.name -eq 'snetHosts' }
         $attachment = "[if(equals(parameters('defaultRouting'), 'nva'), createObject('id', resourceId('Microsoft.Network/routeTables', parameters('routeTableName'))), null())]"
-        $hosts.input.properties.routeTable | Should -Be $attachment
+        $hosts.input.properties |
+            Should -Match ([regex]::Escape("'routeTable', $($attachment.Trim('[', ']'))"))
         $networkTemplate.variables.snetFunctionApp |
             Should -Match ([regex]::Escape("'routeTable', $($attachment.Trim('[', ']'))"))
     }
 
     It 'explicitly disables implicit outbound access on every created subnet purpose' {
         $hosts = $networkTemplate.variables.copy | Where-Object { $_.name -eq 'snetHosts' }
-        ($hosts.input.properties.PSObject.Properties.Name -contains 'defaultOutboundAccess') | Should -Be $true
-        $hosts.input.properties.defaultOutboundAccess | Should -Be $false
+        $hosts.input.properties |
+            Should -Match ([regex]::Escape("'defaultOutboundAccess', false()"))
         $networkTemplate.variables.snetPrivateEndpoints |
             Should -Match ([regex]::Escape("'defaultOutboundAccess', false()"))
         $networkTemplate.variables.snetFunctionApp |

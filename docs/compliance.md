@@ -2,9 +2,9 @@
 
 # Compliance Control Mapping
 
-This page maps Federal AVD solution capabilities to security control requirements across common federal compliance frameworks. It is intended as an authorization artifact — a starting point for documenting control implementation in a System Security Plan (SSP) or for review by an ISSO/AO.
+This page maps Federal AVD solution capabilities to security control requirements across common federal compliance frameworks. It is engineering implementation guidance — a starting point for documenting control implementation in a System Security Plan (SSP) or for review by an ISSO/AO, not an attestation or authorization.
 
-> **Scope:** This mapping covers workload-layer controls implemented by this solution's Bicep templates. Azure platform-level controls (physical security, hypervisor isolation, SOC 2 / FedRAMP platform authorization) are inherited from Microsoft's Azure Government authorization package and are not repeated here. See [Azure compliance documentation](https://learn.microsoft.com/en-us/azure/compliance/) for the platform inheritance baseline.
+> **Scope:** This mapping covers workload-layer capabilities available in this solution's Bicep templates. Platform-level controls may be inherited from the applicable Azure cloud and service authorization package; verify the service's audit scope and shared responsibilities rather than assuming every deployment inherits the same Azure Government baseline. See [Azure compliance documentation](https://learn.microsoft.com/en-us/azure/compliance/).
 
 See [Secure Endpoint Architecture](secure-endpoint-architecture.md) for the control-layer,
 shared-responsibility, lifecycle, and evidence model behind these mappings. Neither that architecture
@@ -15,31 +15,77 @@ evidence, assessment, and authorization.
 
 ## How Controls Are Implemented
 
-Controls fall into two categories:
+The implementation types describe capabilities in the selected deployment path, not proof that an entire control is satisfied:
 
 | Category | Meaning |
 | --- | --- |
-| **Automatic** | Implemented unconditionally — no parameter configuration required. Active in every deployment of this solution. |
-| **Configurable** | Implemented when specific parameters are set. The default value is a functional minimum; the compliant value must be explicitly set for the target framework. |
+| **Automatic** | Applied by the relevant deployment path without an additional feature switch; verify that the resource and path are actually used. |
+| **Configurable** | Applied when the relevant feature and parameters are selected. Defaults are deployment choices, not a determination of compliance with a framework. |
+| **Partial** | Provides some implementation evidence; additional technical or organizational controls are needed. |
+| **External / Organizational** | Requires configuration or procedures outside these templates. |
+| **Inherited** | Relies on the applicable platform control and its authorization evidence. |
 
 ---
 
-## Always-On Controls (No Configuration Required)
+## Built-In and Default Security Capabilities
 
-The following security capabilities are active in every deployment regardless of parameter values.
+The following capabilities apply to the relevant resources and deployment paths. Monitoring,
+credential storage, private connectivity, and VM security features can be conditional or configurable.
+Adopted resources require separate configuration evidence; their existence does not prove these settings.
 
 | Capability | What It Does | Relevant Controls |
 | --- | --- | --- |
-| **Infrastructure double encryption** | All storage accounts are deployed with `requireInfrastructureEncryption: true` — data is encrypted at rest with two independent encryption layers using platform-managed keys at the infrastructure level. | SC-28, SC-28(1) |
+| **Infrastructure encryption** | Where `requireInfrastructureEncryption: true` is configured, Azure Storage adds an independent infrastructure encryption layer to service-level encryption. This is separate from selecting CMK and from managed-disk double encryption. | SC-28, SC-28(1) |
 | **Managed Identities (no stored credentials)** | All Azure service-to-service access (image build, FSLogix storage RBAC, Key Vault access, automation) uses system-assigned or user-assigned managed identities. No passwords or connection strings are stored in code or parameter files. | IA-5(1), IA-5(7) |
-| **Key Vault for secrets** | Domain join credentials and VM admin credentials are stored in Azure Key Vault, not in parameter files or environment variables. | IA-5(1), SC-12 |
-| **RBAC least-privilege assignments** | Role assignments are scoped to the minimum required resource (storage share, Key Vault key, resource group). No Owner or broad Contributor assignments are made by the solution. | AC-3, AC-6 |
+| **Key Vault for secrets** | Key Vault credential paths keep domain join and VM admin credentials out of parameter values. Other supported credential paths require separate handling and evidence. | IA-5(1), SC-12 |
+| **Scoped RBAC assignments** | Resource, key, share, resource-group, and subscription scopes are used according to the workflow. Some orchestration paths require Contributor or RBAC administration roles; review the exact grants rather than assuming every assignment is resource-level least privilege. | AC-3, AC-6 |
 | **Trusted Launch (default)** | Session host VMs default to `securityType: TrustedLaunch` — enables vTPM, Secure Boot, and integrity monitoring. Prevents boot-level rootkits and unauthorized firmware modifications. | SI-3, SI-7 |
 | **Encryption at Host** | `encryptionAtHost: true` is the default. Encrypts the VM temp disk and OS/data disk host cache at the physical host before data reaches Azure Storage. | SC-28(1) |
 | **Key Vault and RSV audit logs** | All Key Vaults and the Recovery Services Vault emit diagnostic logs (AuditEvent, resource logs) to Log Analytics when `enableMonitoring: true` (the default). | AU-2, AU-3, AU-12 |
 | **AVD Insights Data Collection** | The Azure Monitor Agent (AMA) extension and AVD Insights DCR are deployed directly to each session host VM at provisioning time. The DCR collects TerminalServices session events (connect/disconnect), System events (all levels), FSLogix operational events, Application errors/warnings, and AVD-specific performance counters. Sent to Log Analytics via the Data Collection Endpoint. **Does not collect Windows Security event log** — see gap note below. | AU-2, AU-12, SI-4 |
 | **TLS in transit** | All AVD session traffic uses RDP over TLS 1.2+. All Azure PaaS endpoints (storage, Key Vault) enforce HTTPS-only. | SC-8, SC-8(1) |
-| **Private DNS Zones** | When private endpoints are deployed, DNS resolution for all PaaS resources is handled through private DNS zones rather than public DNS — preventing data exfiltration via DNS. | SC-20, SC-21 |
+| **Private DNS Zones** | Private DNS supports resolution of private endpoint addresses when zones, links, and client resolvers are configured correctly. It does not by itself prevent DNS exfiltration or implement DNSSEC. | SC-20, SC-21 (partial) |
+
+---
+
+## Encryption Requirements, Policy Mappings, and Configuration Choices
+
+Keep three layers separate when selecting encryption settings:
+
+1. **Framework controls:** NIST SP 800-53 Rev. 5 SC-12, SC-13, and SC-28 address
+   key management and cryptographic protection using organization-defined requirements.
+   They do not universally mandate Azure customer-managed keys, double encryption, or a
+   particular Key Vault SKU. Applicable baselines, contracts, and authorization conditions
+   can impose additional requirements.
+2. **Microsoft mappings:** Defender for Cloud and Azure Policy map specific Azure
+   configuration checks to broader controls. A mapped recommendation is not the literal
+   text of the control, and a policy compliance result is only part of the evidence.
+3. **Assigned policy behavior:** Findings and enforcement depend on the assigned initiative
+   version, cloud, scope, parameters, effect, and exemptions. A recommendation's existence
+   does not mean that it is enabled or required for every workload.
+
+Managed disks and Azure Storage are encrypted at rest with platform-managed keys by default.
+CMK provides customer control of key management; choose CMK, double encryption, and HSM
+protection according to the applicable requirements or a deliberate security design.
+Do not assume either that CMK is universally mandatory or that platform-managed keys satisfy
+every applicable authorization or policy.
+
+For example, policy **"Managed disks should be double encrypted with both platform-managed
+and customer-managed keys"** (`ca91455f-eace-4f96-be59-e6e2c35b4816`) checks
+`Microsoft.Compute/diskEncryptionSets/encryptionType` for
+`EncryptionAtRestWithPlatformAndCustomerKeys`. It does not inspect every managed disk or
+establish full encryption compliance. The reviewed NIST SP 800-53 Rev. 5 and FedRAMP High
+built-in definitions map it to **SC-12** and default its effect to **Audit**; the actual
+assignment may differ. Confidential VM encryption types do not satisfy this double-encryption
+check merely by using HSM-backed CMK; review applicability and any approved exemption separately.
+
+**Sources checked 2026-11-28:** [NIST control catalog](https://csrc.nist.gov/projects/risk-management/sp800-53-controls),
+[Microsoft's NIST mapping guidance](https://learn.microsoft.com/en-us/azure/compliance/offerings/offering-nist-800-53),
+[Defender data recommendations](https://learn.microsoft.com/en-us/azure/defender-for-cloud/recommendations-reference-data),
+[disk double-encryption policy](https://github.com/Azure/azure-policy/blob/master/built-in-policies/policyDefinitions/Compute/DoubleEncryptionRequired_Deny.json),
+[NIST initiative](https://github.com/Azure/azure-policy/blob/master/built-in-policies/policySetDefinitions/Regulatory%20Compliance/NIST_SP_800-53_R5.json),
+and [FedRAMP High initiative](https://github.com/Azure/azure-policy/blob/master/built-in-policies/policySetDefinitions/Regulatory%20Compliance/FedRAMP_H_audit.json).
+Recheck the assigned definitions and deployed resources when preparing assessment evidence.
 
 ---
 
@@ -65,8 +111,8 @@ recommendation is implementation guidance, not an authorization or certification
 | Control | Title | Implementation | Type | Parameter / Feature |
 | --- | --- | --- | --- | --- |
 | AC-3 | Access Enforcement | RBAC role assignments scoped to minimum required resources (Storage File Data SMB Share Contributor, Key Vault Crypto Service Encryption User, etc.) | Automatic | Built-in |
-| AC-6 | Least Privilege | No broad Contributor or Owner assignments. All identities receive only the roles required for their specific function. | Automatic | Built-in |
-| AC-17 | Remote Access | AVD session traffic is brokered through Azure Virtual Desktop control plane — direct RDP port exposure to session hosts is not required. Combined with private endpoints, no session host ports need to be internet-accessible. | Configurable | `deployPrivateEndpoints: true` |
+| AC-6 | Least Privilege | Workflow-specific RBAC assignments provide access-control evidence. Review resource-group and subscription grants, including deployment-helper Contributor/RBAC administration permissions, against the approved least-privilege design. | Automatic (partial) | Built-in role assignments; selected orchestration path |
+| AC-17 | Remote Access | AVD session traffic is brokered through Azure Virtual Desktop control plane — direct RDP port exposure to session hosts is not required. Combined with private endpoints, no session host ports need to be internet-accessible. | Configurable | AVD Private Link inputs; independent of Backup/disk endpoints |
 
 ### Audit and Accountability (AU)
 
@@ -92,16 +138,16 @@ recommendation is implementation guidance, not an authorization or certification
 
 | Control | Title | Implementation | Type | Parameter / Feature |
 | --- | --- | --- | --- | --- |
-| SC-7 | Boundary Protection | Private endpoints restrict PaaS access to the virtual network. No public internet path to storage accounts or Key Vaults when `deployPrivateEndpoints: true` and no `permittedIPs` are specified. | Configurable | `deployPrivateEndpoints: true` |
-| SC-7(5) | Boundary Protection — Deny by Default | When private endpoints are deployed with no permitted IPs, `publicNetworkAccess: Disabled` is set on all PaaS resources — deny-by-default posture. | Configurable | `deployPrivateEndpoints: true`, no `permittedIPs` |
+| SC-7 | Boundary Protection | Deploy private endpoints and independently disable ordinary public endpoint access for each created service family. Storage/Key Vault retain documented trusted-service exceptions; verify client DNS and connectivity rather than treating private endpoint creation as a public-access restriction. | Configurable | `paasNetworking.privateEndpoint: true`, `paasNetworking.publicNetworkAccess: Disabled`, with explicit family overrides where needed; see [networking inputs](parameters.md#paas-public-network-access). |
+| SC-7(5) | Boundary Protection — Deny by Default | An explicit family public mode of `Disabled` resolves to `publicNetworkAccess: Disabled` and firewall `defaultAction: Deny`, independently of private endpoint flags and stored IP/subnet rules. Trusted-service exceptions remain applicable. | Configurable | `paasNetworking.storage.publicNetworkAccess: Disabled`, `paasNetworking.keyVault.publicNetworkAccess: Disabled`, as applicable. |
 | SC-8 | Transmission Confidentiality | All AVD session traffic uses TLS 1.2+. AVD workspace and host pool can be configured with private link to prevent feed URL traversal over public internet. | Configurable | `hostPoolPublicNetworkAccess`, `workspaceFeedPublicNetworkAccess` |
 | SC-8(1) | Cryptographic Protection | All Azure PaaS endpoints enforce HTTPS-only. Storage accounts reject HTTP. Key Vaults enforce TLS. | Automatic | Built-in |
-| SC-12 | Cryptographic Key Establishment | Encryption keys are stored in Azure Key Vault (Standard or Premium/HSM). Key rotation policy is enforced with configurable expiration period (`keyExpirationInDays`, default 180 days). | Automatic | `keyExpirationInDays` |
-| SC-20 | Secure Name/Address Resolution | Private DNS zones resolve PaaS hostnames to private IP addresses within the VNet, preventing public DNS resolution of internal resources. | Configurable | `deployPrivateEndpoints: true` + DNS zone parameters |
-| SC-28 | Protection of Information at Rest — VM disks | Session host OS and data disks are encrypted using a Disk Encryption Set with customer-managed keys in Key Vault. The built-in NIST SP 800-53 Rev 5 / FedRAMP High policy initiative includes the policy **"Managed disks should be double encrypted with both platform-managed and customer-managed keys"** (Policy ID `ca91455f-eace-4f96-be59-e6e2c35b4816`), requiring both a platform-managed infrastructure encryption layer and a customer-managed disk encryption layer. Use `PlatformManagedAndCustomerManaged` or `PlatformManagedAndCustomerManagedHSM` to satisfy this policy. Note: double encryption options do not apply to Confidential VMs — use `CustomerManagedHSM` with `securityType: ConfidentialVM`. | Configurable | `keyManagementDisks: PlatformManagedAndCustomerManaged` or `PlatformManagedAndCustomerManagedHSM` |
-| SC-28 | Protection of Information at Rest — FSLogix storage | Azure Files storage accounts are encrypted with customer-managed keys. Infrastructure double encryption is always on. | Configurable | `keyManagementStorage: CustomerManaged` or `CustomerManagedHSM` |
-| SC-28 | Protection of Information at Rest — Recovery Services Vault (personal host pool VM backup) | Personal host pool RSV is encrypted with a host-pool-scoped customer-managed key using the vault's system-assigned identity. | Configurable | `keyManagementRecoveryServicesVault: CustomerManaged` or `CustomerManagedHSM` |
-| SC-28 | Protection of Information at Rest — shared FSLogix snapshot vault (pooled host pools) | CMK is **not applied** to the shared operations RSV used for pooled host pool Azure Files snapshot backup. Azure Files snapshots are stored in the storage account itself — no user data or CUI is transmitted to or stored in this vault. The vault holds only backup scheduling metadata (policy assignments, job history). SC-28 for actual FSLogix profile data is fully satisfied by the storage account CMK (`keyManagementStorage`). Applying CMK to this vault would encrypt only metadata with no incremental protection of user data. | Not applicable — metadata-only vault | SC-28 satisfied at the storage account via `keyManagementStorage: CustomerManaged` or `CustomerManagedHSM` |
+| SC-12 | Cryptographic Key Establishment and Management | Ordinary CMK paths configure Key Vault rotation and expiry policies (`keyExpirationInDays`, default 180 days). Confidential VM secure-release keys have a separate lifecycle and do not receive that automatic rotation policy. Platform-managed key lifecycle evidence is inherited from Azure. | Inherited + Configurable | Key management selection, `keyExpirationInDays`, confidential disk encryption configuration |
+| SC-20 | Secure Name/Address Resolution | Private DNS supports private endpoint name resolution within linked networks. It does not by itself provide DNSSEC or all name-resolution authenticity requirements. | Configurable (partial) | Applicable endpoint settings + [consumer-specific DNS inputs](parameters.md#private-dns-parameter-names) |
+| SC-28 | Protection of Information at Rest — VM disks | Managed disks use platform-managed encryption by default. Optional CMK uses a Disk Encryption Set; double-encryption modes add an independent infrastructure layer. Select the mode against actual authorization and policy requirements, not the NIST/FedRAMP label alone. Confidential VMs do not support the double-encryption modes; see [encryption and policy distinctions](#encryption-requirements-policy-mappings-and-configuration-choices). | Inherited + Configurable | `keyManagementDisks`: `PlatformManaged`, CMK, or supported double-encryption mode |
+| SC-28 | Protection of Information at Rest — FSLogix storage | Azure Files is encrypted at rest with platform-managed keys by default. Optional CMK provides customer key control. Storage infrastructure encryption is a separate setting, not proof that CMK is required. | Inherited + Configurable | `keyManagementStorage`: `PlatformManaged`, `CustomerManaged`, or `CustomerManagedHSM` |
+| SC-28 | Protection of Information at Rest — Recovery Services Vault (personal host pool VM backup) | Azure Backup provides encryption at rest. When CMK is selected, the personal host pool vault uses a host-pool-scoped key and its system-assigned identity. Verify the selected backup and key configuration. | Inherited + Configurable | `recoveryServices: true`; applicable `keyManagementRecoveryServicesVault` selection |
+| SC-28 | Protection of Information at Rest — shared FSLogix snapshot vault (pooled host pools) | For snapshot-tier Azure Files backup, profile data and snapshots remain in the storage account and use its encryption configuration; the operations vault holds backup metadata. This is not proof that SC-28 is fully satisfied, nor a blanket exemption for vault metadata. Vaulted Azure Files backup has a different data location and must be assessed separately. | Configurable; assess data and metadata separately | Storage encryption, backup tier, and applicable vault requirements |
 | SC-28(1) | Cryptographic Protection — supplemental | Encryption at host encrypts temp disk and disk caches at the physical host. Infrastructure double encryption adds a second platform-managed encryption layer on all storage. | Automatic | `encryptionAtHost: true` (default) |
 
 ### System and Information Integrity (SI)
@@ -117,7 +163,7 @@ recommendation is implementation guidance, not an authorization or certification
 | Control | Title | Implementation | Type | Parameter / Feature |
 | --- | --- | --- | --- | --- |
 | CP-6 | Alternate Storage Site | Recovery Services Vault storage redundancy can be set to GeoRedundant to replicate backup data to a paired region. | Configurable | `recoveryServicesVaultStorageRedundancy: GeoRedundant` |
-| CP-7 | Alternate Processing Site | When vault storage is GeoRedundant, Cross-Region Restore (CRR) is automatically enabled, allowing personal VMs to be restored to the paired region. This satisfies CP-7 when the Contingency Plan (CP-2) documents an acceptable RPO of hours. **Azure Site Recovery (ASR) replication is not implemented** — if sub-hour RPO is required, ASR would need to be added. The built-in Azure Policy "Audit virtual machines without disaster recovery configured" (ID `0015ea4d`) will flag personal VMs as non-compliant because it checks for ASR-specific resource links, not Azure Backup. A policy exemption with documented CP-2 justification is required when using Azure Backup + CRR as the CP-7 control. See [bcdr.md](bcdr.md#azure-site-recovery-asr-is-not-implemented) for the full comparison. | Configurable | `recoveryServicesVaultStorageRedundancy: GeoRedundant` |
+| CP-7 | Alternate Processing Site | Supported cross-region backup restore can contribute to alternate-site planning, but does not establish an alternate processing site or satisfy CP-7 by itself. Validate restore capacity, dependencies, data locations, and measured RPO/RTO against the contingency plan. **Azure Site Recovery (ASR) is not implemented**; any assigned ASR-specific policy and proposed exemption must be reviewed separately. See [bcdr.md](bcdr.md#azure-site-recovery-asr-is-not-implemented). | Configurable (partial) | Backup/restore configuration and contingency-plan evidence |
 | CP-9 | Information System Backup — FSLogix profiles | Azure Backup snapshot policy protects FSLogix Azure Files shares (pooled) or VM disks (personal). | Configurable | `recoveryServices: true` |
 | CP-9 | Information System Backup — zone resilience | Azure Files storage can be deployed with Zone Redundant Storage to survive an availability zone failure without restore. | Configurable | `fslogixProfileStorageRedundancy: ZoneRedundant` |
 
@@ -125,16 +171,18 @@ recommendation is implementation guidance, not an authorization or certification
 
 ## DoD Cloud Computing SRG — Impact Level 4 (IL4)
 
-**Reference:** [DoD Cloud Computing SRG](https://public.cyber.mil/dccs/dccs-documents/) | [Azure Government IL4 documentation](https://learn.microsoft.com/en-us/azure/azure-government/documentation-government-impact-level-4)
+**Reference:** [DoD Cloud Computing SRG](https://public.cyber.mil/dccs/dccs-documents/) | [Azure Government IL4 documentation](https://learn.microsoft.com/en-us/azure/compliance/offerings/offering-dod-il4)
 
-IL4 builds on FedRAMP High. All NIST 800-53 / FedRAMP High controls above apply. The following are additional or modified requirements.
+The DoD SRG uses FedRAMP baselines with additional requirements. A FedRAMP High platform
+authorization does not by itself authorize the mission owner's IL4 workload. Confirm the applicable
+SRG requirements, service scope, contract, and authorization conditions.
 
 | Requirement | Implementation | Type | Parameter / Feature |
 | --- | --- | --- | --- |
 | Data must reside in US Government regions | Deploy to `usgovvirginia`, `usgovarizona`, or `usgovtexas` (or US DoD regions). The solution supports all Azure Government regions. | Configurable | `location` parameter |
 | Encryption in transit for all data flows | TLS enforced on all PaaS endpoints. AVD session traffic encrypted. Storage accounts reject HTTP. | Automatic | Built-in |
-| Customer-managed encryption keys | All data-bearing resources must use CMK: VM disks, FSLogix storage accounts, and the **personal host pool VM backup vault**. VM disks additionally require double encryption per the NIST SP 800-53 Rev 5 / FedRAMP High built-in policy initiative ("Managed disks should be double encrypted with both platform-managed and customer-managed keys"). The shared operations RSV used for pooled FSLogix Azure Files snapshot backup is **not** a data-bearing resource — snapshots remain in the storage account and the vault holds only scheduling metadata. SC-28 for FSLogix profile data is satisfied by the storage account CMK. | Configurable | `keyManagementDisks` → `PlatformManagedAndCustomerManaged`; `keyManagementStorage`, `keyManagementRecoveryServicesVault` → `CustomerManaged` |
-| No public internet exposure for sensitive workloads | Private endpoints deployed for storage, Key Vault, RSV, and AVD workspace/host pool. | Configurable | `deployPrivateEndpoints: true` |
+| Encryption and customer key control | CMK can provide owner key control for disks, FSLogix storage, and personal VM backup. Select it according to the workload's authorization requirements, organizational policies, or security design. IL4 and NIST/FedRAMP labels alone do not establish a blanket CMK or disk double-encryption mandate. Assess snapshot data and vault metadata separately. | Inherited + Configurable | Applicable `keyManagementDisks`, `keyManagementStorage`, and `keyManagementRecoveryServicesVault` selections |
+| Restricted network exposure | Configure private endpoints and public access restrictions for the relevant services; endpoint creation alone does not disable public access. | Configurable | `paasNetworking`, `privateEndpointSubnetResourceIds`, and separate AVD Private Link inputs |
 | Audit logging | Log Analytics workspace + AVD Insights DCR active. Key Vault and RSV diagnostic logs enabled. | Automatic | `enableMonitoring: true` (default) |
 | MFA for all administrative access | Enforced via Entra ID Conditional Access Policy — outside this solution's scope but applies to the same identity plane. | External | Entra ID CA Policy |
 
@@ -144,32 +192,44 @@ IL4 builds on FedRAMP High. All NIST 800-53 / FedRAMP High controls above apply.
 
 **Reference:** [Azure Government IL5 documentation](https://learn.microsoft.com/en-us/azure/azure-government/documentation-government-impact-level-5)
 
-IL5 adds compute isolation and HSM requirements on top of IL4. All IL4 controls above apply.
+IL5 adds separation requirements. Microsoft's documented cryptographic-separation approach
+uses owner-managed keys held in FIPS-validated HSMs; its applicability depends on the service,
+region, and authorized design. This is an IL5-specific implementation requirement, not a
+universal requirement for every government workload.
 
 > **Dedicated Hosts are mandatory in US Gov regions.** Per the DoD SRG and [Azure Government IL5 guidance](https://learn.microsoft.com/en-us/azure/azure-government/documentation-government-impact-level-5#virtual-machines): *"When you deploy VMs in Azure Government regions US Gov Arizona, US Gov Texas, and US Gov Virginia, you must use Azure Dedicated Host."* In the dedicated DoD regions (US DoD Central, US DoD East) physical separation is provided by design and Dedicated Hosts are not required.
 >
-> **Exemptions:** If Dedicated Hosts are operationally or financially infeasible, request a technical exception through your AO. Exceptions must be documented in the SSP with compensating controls and a risk acceptance signed by the AO.
+> **Unsupported configurations:** If the required isolation cannot be provided, consult the AO and cloud provider about approved alternatives. Do not assume that cost or an internal risk acceptance overrides the platform authorization's conditions.
 
 | Requirement | Implementation | Type | Parameter / Feature |
 | --- | --- | --- | --- |
-| Compute isolation — dedicated physical hosts (US Gov AZ/TX/VA) | Session host VMs are deployed to pre-provisioned Azure Dedicated Host(s) in a Dedicated Host Group. | Configurable | `deployToDedicatedHosts: true`, `dedicatedHostGroupResourceId` |
-| HSM-backed encryption keys (FIPS 140-2 Level 3) | Deploys Azure Key Vault Premium. All CMK keys are generated in and never leave the HSM. Applies to VM disks, FSLogix storage accounts, the **personal host pool VM backup vault**, and image management resources. VM disks use `PlatformManagedAndCustomerManagedHSM` to satisfy both the HSM requirement and the double encryption policy from the NIST 800-53 / FedRAMP High built-in initiative. The shared operations RSV for pooled FSLogix snapshot backup is **not in scope** — it is metadata-only; SC-28 is satisfied at the storage account. | Configurable | `keyManagementDisks: PlatformManagedAndCustomerManagedHSM` `keyManagementStorage: CustomerManagedHSM` `keyManagementRecoveryServicesVault: CustomerManagedHSM` |
-| HSM keys for image pipeline storage | Build log storage accounts and Compute Gallery image versions are encrypted with HSM-backed CMK. | Configurable | `keyManagementStorageAccounts: CustomerManagedHSM` `keyManagementGalleryImageVersions: CustomerManagedHSM` *(imageManagement.bicep)* |
-| Disk encryption via SSE + CMK (not EAH alone) | Server-Side Encryption with a Disk Encryption Set + CMK is the IL5-compliant mechanism. `encryptionAtHost` is a complementary control but does not satisfy IL5 storage isolation on its own. Double encryption (platform infrastructure layer + customer-managed key layer) is required by the NIST 800-53 / FedRAMP High built-in policy initiative. | Configurable | `keyManagementDisks: PlatformManagedAndCustomerManagedHSM` |
-| VM private disk access (optional deep isolation) | Disk Access resource with private endpoint prevents any direct internet access to managed disk URIs. Deployed automatically for personal host pools when `deployPrivateEndpoints: true`. | Automatic (when applicable) | `deployPrivateEndpoints: true` + personal host pool |
+| Compute isolation — dedicated physical hosts (US Gov AZ/TX/VA) | Standard session hosts can use pre-provisioned Azure Dedicated Host(s) or a Dedicated Host Group. Verify the selected host SKU, region, and placement. | Configurable | `dedicatedHostResourceId` or `dedicatedHostGroupResourceId` |
+| HSM-backed CMK for cryptographic separation | Use owner-managed, HSM-protected keys for resources within the documented cryptographic-separation scope. This solution creates RSA-HSM keys in Premium Key Vaults when an HSM mode is selected. Verify current FIPS validation evidence for the target cloud and service. Disk double encryption is a separate policy/design choice, and snapshot vault metadata needs its own applicability assessment. | Configurable | Applicable `CustomerManagedHSM` or supported `PlatformManagedAndCustomerManagedHSM` selections |
+| HSM keys for image pipeline resources in scope | Select HSM-backed CMK for storage accounts and gallery image versions where required by the authorized image pipeline design. Do not infer a requirement for every logging or metadata resource solely from the IL5 label. | Configurable | `keyManagementStorageAccounts: CustomerManagedHSM`, `keyManagementGalleryImageVersions: CustomerManagedHSM` |
+| Disk encryption and owner key control | This solution offers managed-disk SSE with a CMK-backed Disk Encryption Set. Microsoft documents other encryption paths too; validate the selected mechanism against the current authorization requirements. Encryption at host complements disk encryption but does not provide customer key control by itself. Require double encryption only where the applicable policy or design calls for it. | Configurable | `keyManagementDisks: CustomerManagedHSM` or supported `PlatformManagedAndCustomerManagedHSM`; `encryptionAtHost` |
+| VM private disk export/import access (optional) | A Disk Access private endpoint provides private disk export/import connectivity. Verify the disk's network access policy and public access settings separately; an endpoint alone does not block every public path. | Configurable | `paasNetworking.disk.privateEndpoint: true`, private endpoint placement, and personal host pool disk configuration |
 
-### Complete IL5 Parameter Set
+### Example IL5-Oriented Settings — Not a Complete Authorization Baseline
 
-Apply these in addition to the IL4 values above:
+These are illustrative **standard host-pool** settings for a design using dedicated compute,
+HSM-backed CMK, private connectivity, and backup. They are not universally required values or
+a complete parameter file. Replace placeholder IDs, supply the remaining deployment inputs,
+and review the applicable authorization and policy assignments. For Confidential VMs, use a
+supported CMK mode rather than the double-encryption example.
 
 ```json
 {
-  "deployToDedicatedHosts": { "value": true },
   "dedicatedHostGroupResourceId": { "value": "/subscriptions/.../dedicatedHostGroups/dhg-avd-prod" },
   "keyManagementDisks": { "value": "PlatformManagedAndCustomerManagedHSM" },
   "keyManagementStorage": { "value": "CustomerManagedHSM" },
   "keyManagementRecoveryServicesVault": { "value": "CustomerManagedHSM" },
-  "deployPrivateEndpoints": { "value": true },
+  "paasNetworking": { "value": { "publicNetworkAccess": "Disabled", "privateEndpoint": true } },
+  "privateEndpointSubnetResourceIds": {
+    "value": {
+      "sharedResources": "/subscriptions/.../virtualNetworks/vnet-avd/subnets/pe-shared",
+      "hostPoolResources": "/subscriptions/.../virtualNetworks/vnet-avd/subnets/pe-hostpool"
+    }
+  },
   "recoveryServicesVaultStorageRedundancy": { "value": "GeoRedundant" },
   "fslogixProfileStorageRedundancy": { "value": "ZoneRedundant" },
   "recoveryServices": { "value": true }
@@ -194,26 +254,33 @@ For workloads requiring hardware-level memory encryption and attestation (beyond
 | Capability | Implementation | Parameter |
 | --- | --- | --- |
 | Hardware-isolated VM execution | Confidential VMs use AMD SEV-SNP or Intel TDX to encrypt VM memory in hardware. The hypervisor cannot read guest memory. | `securityType: ConfidentialVM` |
-| Confidential OS disk encryption | OS disk encrypted using a key that is bound to the vTPM attestation state — the key is only released after successful platform attestation. | `securityType: ConfidentialVM` + `keyManagementDisks: CustomerManagedHSM` |
-| Key release policy | The CMK key release policy enforces that the key is only released to a VM that has passed Azure confidential computing attestation. Implemented via `cvmKeyReleasePolicy` in the customerManagedKeys module. | Automatic when `ConfidentialVM` |
+| Confidential OS disk encryption | Optional confidential OS disk encryption uses a secure-release key and attestation policy; VM type and HSM selection alone do not enable it. | `securityType: ConfidentialVM`, `confidentialVMOSDiskEncryption: true`, and supported CMK configuration |
+| Key release policy | Secure-release keys are exportable only to an attested environment matching their release policy. Do not describe these keys as never leaving the HSM or receiving ordinary CMK automatic rotation. Validate policy/cloud compatibility and manage their lifecycle separately. | Confidential OS disk encryption path; see [Key Vault key release and attestation](https://learn.microsoft.com/en-us/azure/key-vault/keys/secure-keys#key-release-and-attestation) |
 
 ---
 
-## Summary: Minimum Parameter Set by Framework
+## Summary: Configuration Choices to Review
 
-| Parameter | FedRAMP High | IL4 | IL5 |
-| --- | --- | --- | --- |
-| `keyManagementDisks` | `PlatformManagedAndCustomerManaged` | `PlatformManagedAndCustomerManaged` | `PlatformManagedAndCustomerManagedHSM` |
-| `keyManagementStorage` | `CustomerManaged` | `CustomerManaged` | `CustomerManagedHSM` |
-| `keyManagementRecoveryServicesVault` | `CustomerManaged` | `CustomerManaged` | `CustomerManagedHSM` |
-| `deployPrivateEndpoints` | `true` | `true` | `true` |
-| `fslogixProfileStorageRedundancy` | `ZoneRedundant` | `ZoneRedundant` | `ZoneRedundant` |
-| `recoveryServicesVaultStorageRedundancy` | `GeoRedundant` | `GeoRedundant` | `GeoRedundant` |
-| `recoveryServices` | `true` | `true` | `true` |
-| `deployToDedicatedHosts` | *(optional)* | *(optional)* | `true` *(US Gov AZ/TX/VA)* |
-| `securityType` | `TrustedLaunch` ✅ default | `TrustedLaunch` ✅ default | `TrustedLaunch` or `ConfidentialVM` |
-| `encryptionAtHost` | `true` ✅ default | `true` ✅ default | `true` ✅ default |
-| `enableMonitoring` | `true` ✅ default | `true` ✅ default | `true` ✅ default |
+No fixed parameter set establishes NIST, FedRAMP, or DoD compliance. Review these choices
+against the approved system boundary, assigned policies, service availability, and recovery
+requirements. The names below are standard host-pool entry inputs; other solutions can expose
+different subsets.
+
+| Parameter | Configuration Choice | Applicability |
+| --- | --- | --- |
+| `keyManagementDisks` | Platform-managed, CMK, or supported double-encryption mode | Customer key control, authorization conditions, and enabled disk policies; Confidential VM restrictions apply |
+| `keyManagementStorage` | Platform-managed or CMK, with optional HSM protection | Storage key-control requirements and applicable policies |
+| `keyManagementRecoveryServicesVault` | Platform-managed or CMK, with optional HSM protection | Personal VM backup vault; assess snapshot-tier data and metadata separately |
+| `paasNetworking` | Secure default: public access `Disabled`, private endpoints enabled; explicit family overrides supported | Connectivity and boundary-protection design, not a framework-wide private-endpoint mandate |
+| `privateEndpointSubnetResourceIds` | `sharedResources` and `hostPoolResources` placement IDs | Required for the selected private endpoint deployment paths |
+| `privateDnsZoneResourceIds` | Applicable service namespace IDs, where reusing zones | Client resolution, zone links, and resolver configuration |
+| `fslogixProfileStorageRedundancy` | Locally redundant, zone redundant, or other supported option | Availability and recovery design; zone redundancy is not a universal framework mandate |
+| `recoveryServicesVaultStorageRedundancy` | Supported local, zone, or geo-redundancy option | Backup availability, permitted data locations, and restore requirements |
+| `recoveryServices` | Enable when this deployment supplies the required backup capability | Alternative approved backup arrangements require their own evidence |
+| `dedicatedHostResourceId` / `dedicatedHostGroupResourceId` | Existing dedicated compute placement | Applicable IL5 region/VM isolation requirements; not required by every framework |
+| `securityType` | `TrustedLaunch` default or supported `ConfidentialVM` configuration | Boot integrity and confidential-computing design |
+| `encryptionAtHost` | `true` default | Host cache/temp-disk protection; does not select CMK |
+| `enableMonitoring` | `true` default | Verify diagnostic coverage, collection, retention, alerting, and external SIEM requirements |
 
 ---
 
@@ -233,7 +300,10 @@ Federal agencies are required to implement Zero Trust Architecture (ZTA) under m
 
 ### CISA Zero Trust Maturity Model — AVD Control Mapping
 
-The CISA ZTMM v2.0 is the primary implementation framework for federal civilian agencies. This solution provides capabilities across all five pillars.
+The CISA ZTMM v2.0 is an implementation framework for federal civilian agencies. This solution
+provides capabilities across all five pillars. The maturity labels below indicate potential
+alignment, not an assessed maturity level or a claim that CMK, HSM, or any single feature achieves
+Advanced/Optimal maturity. Validate the complete capability and organizational implementation.
 
 #### Pillar 1: Identity
 
@@ -245,7 +315,7 @@ The CISA ZTMM v2.0 is the primary implementation framework for federal civilian 
 | Phishing-resistant MFA for privileged users | FIDO2 / Windows Hello for Business (supported by Entra ID). | Advanced | External (Entra ID CA) |
 | Non-person entity (NPE) authentication via managed identities | All service-to-service access uses system-assigned or user-assigned managed identities. No stored credentials, API keys, or SAS tokens in code. | Optimal | Automatic |
 | Privileged access management | Key Vault secrets for domain join and VM admin credentials. RBAC scoped to minimum required roles. | Advanced | Automatic |
-| Continuous access evaluation | Entra ID CAE applies to AVD sessions — token revocation on risk signal takes effect without waiting for token expiry. | Advanced | Automatic (platform) |
+| Continuous access evaluation | CAE requires participating clients and resource services. These templates do not establish that identity/token revocation terminates an existing AVD desktop session; validate supported client/service behavior and session revocation controls separately. See [CAE guidance](https://learn.microsoft.com/en-us/entra/identity/conditional-access/concept-continuous-access-evaluation). | Advanced (potential alignment) | External (identity, client, and service configuration) |
 
 #### Pillar 2: Devices
 
@@ -265,10 +335,10 @@ The CISA ZTMM v2.0 is the primary implementation framework for federal civilian 
 
 | ZTMM Capability | Implementation | Maturity Level | Type |
 | --- | --- | --- | --- |
-| Network micro-segmentation | Private endpoints for all PaaS resources. Session hosts in dedicated subnet. No direct internet exposure. | Advanced | Configurable (`deployPrivateEndpoints: true`) |
+| Network micro-segmentation | Private endpoints for all PaaS resources. Session hosts in dedicated subnet. No direct internet exposure. | Advanced | Configurable (service-specific private endpoint inputs) |
 | Deny by default for PaaS | `publicNetworkAccess: Disabled` on all PaaS resources when private endpoints + no permitted IPs. | Advanced → Optimal | Configurable |
 | Encrypted traffic (data in transit) | All AVD session traffic over TLS 1.2+. All PaaS endpoints HTTPS-only. | Optimal | Automatic |
-| DNS-based exfiltration prevention | Private DNS zones resolve PaaS FQDNs to private IP addresses. No public DNS resolution of internal resources. | Advanced | Configurable (`deployPrivateEndpoints: true`) |
+| Private endpoint name resolution | Private DNS zones resolve PaaS FQDNs to private addresses when linked networks and client resolvers are configured. Exfiltration prevention requires additional network and DNS controls. | Advanced (potential alignment) | Configurable (service-specific DNS inputs) |
 | Private connectivity to AVD control plane | AVD workspace and host pool private link prevents feed URL and broker traffic traversal over public internet. | Optimal | Configurable (`hostPoolPublicNetworkAccess`, `workspaceFeedPublicNetworkAccess`) |
 | Azure Monitor private link | Azure Monitor data collection traffic routed through a network-managed AMPLS private link scope — no monitoring data over public internet. | Advanced | Reuse existing (`azureMonitorPrivateLinkScopeResourceId`) |
 
@@ -285,13 +355,13 @@ The CISA ZTMM v2.0 is the primary implementation framework for federal civilian 
 
 #### Pillar 5: Data
 
-> ZTMM principle: Data encryption at rest and in transit; CMK control over encryption keys; classification and labeling; data access auditing.
+> ZTMM principle: Data protection at rest and in transit; appropriate cryptographic key management; classification and labeling; data access auditing.
 
 | ZTMM Capability | Implementation | Maturity Level | Type |
 | --- | --- | --- | --- |
-| Encryption at rest — all data-bearing resources | CMK encryption on VM disks, FSLogix storage, RSV, image storage, and gallery image versions. Infrastructure double encryption always on. | Optimal (with CMK) | Configurable (`keyManagementDisks/Storage/RSV: CustomerManaged`) |
-| HSM-backed key protection | Azure Key Vault Premium (FIPS 140-2 Level 3 HSM) for all CMK keys. Keys never leave the HSM. | Optimal | Configurable (`*: CustomerManagedHSM`) |
-| Key lifecycle management | Key expiration policy enforced (default 180 days). Key rotation triggers re-encryption of wrapped DEKs. | Advanced | Automatic (`keyExpirationInDays`) |
+| Encryption at rest | Azure provides platform-managed encryption for managed disks and storage; CMK and infrastructure/disk double encryption are separate configurable choices. CMK alone does not establish Optimal maturity. | Requires assessment | Inherited + Configurable (applicable key-management inputs) |
+| HSM-backed key protection | HSM modes create RSA-HSM keys in Premium Key Vaults. Verify the actual FIPS-validated module for the target service/cloud. Confidential secure-release keys can leave the HSM only under their attestation policy. | Requires assessment | Configurable (applicable HSM selections) |
+| Key lifecycle management | Ordinary CMK paths configure rotation/expiry policies; services must adopt new key versions. Confidential secure-release keys need separate lifecycle management. Rotation does not necessarily re-encrypt all underlying data. | Advanced (potential alignment) | Configurable (`keyExpirationInDays`, selected key path) |
 | Data access auditing | Key Vault audit logs (AuditEvent) capture all key operations (wrap/unwrap/get). Sent to Log Analytics. | Advanced | Automatic (`enableMonitoring: true`) |
 | Data in transit encryption | TLS 1.2+ for all data flows. Azure Files SMB 3.0 with encryption. | Optimal | Automatic |
 
@@ -302,8 +372,8 @@ For DoD components, the [DoD ZT Strategy](https://dodcio.defense.gov/Portals/0/D
 | DoD Pillar | DoD-Specific Requirement | Implementation |
 | --- | --- | --- |
 | **User** | CAC/PIV authentication for privileged access | Entra ID supports certificate-based authentication (CBA) with CAC/PIV — configured via Conditional Access Policy outside template scope |
-| **Device** | Dedicated physical compute isolation for IL5 | Azure Dedicated Hosts (`deployToDedicatedHosts: true`) — mandatory in US Gov AZ/TX/VA for IL5 |
-| **Data** | HSM-backed CMK for all sensitive data | `CustomerManagedHSM` on all key management parameters |
+| **Device** | Applicable IL5 compute isolation | Existing Azure Dedicated Host placement (`dedicatedHostResourceId` or `dedicatedHostGroupResourceId`) for applicable US Gov AZ/TX/VA VM deployments |
+| **Data** | Key control and cryptographic separation where required | HSM-backed CMK for resources in the applicable IL5 separation scope; do not treat it as a blanket requirement for all DoD sensitive data |
 | **Visibility & Analytics** | Continuous monitoring with automated response | SIEM integration with Log Analytics workspace (Microsoft Sentinel or third-party — outside template scope) |
 | **Automation & Orchestration** | Policy-driven remediation for non-compliant resources | The automated host-pool policy stage assigns VM identity, AMA, DCR/DCE, configuration, encryption, and tagging policies to the dedicated service-managed session-host resource group |
 
@@ -313,19 +383,23 @@ For DoD components, the [DoD ZT Strategy](https://dodcio.defense.gov/Portals/0/D
 
 **Reference:** [CMMC 2.0 Model](https://dodcio.defense.gov/CMMC/Model/) | [NIST SP 800-171 Rev 2](https://csrc.nist.gov/pubs/sp/800/171/r2/upd1/final)
 
-CMMC 2.0 Level 2 is required for any DoD contractor or subcontractor that handles **Controlled Unclassified Information (CUI)**. Level 2 aligns 1:1 with NIST SP 800-171 Rev 2 (110 practices across 14 domains). Because NIST 800-171 is derived from NIST 800-53, the controls already documented in the NIST 800-53 / FedRAMP High section above apply directly. The table below maps CMMC practice IDs to the solution's implementation.
+CMMC Level 2 addresses **Controlled Unclassified Information (CUI)** using NIST SP 800-171
+Rev. 2 requirements. Applicability, required assessment level, and timing depend on the
+solicitation/contract and phased implementation; see the [official CMMC rollout guidance](https://www.defensesbirsttr.mil/Education/CMMC-Draft/).
+Crosswalks to NIST SP 800-53 support evidence reuse but do not automatically transfer a FedRAMP
+implementation or establish that every CMMC requirement is satisfied.
 
-> **Assessment scope:** CMMC Level 2 requires a third-party C3PAO assessment (or self-assessment for non-prioritized acquisitions). This mapping supports the evidence narrative — it documents what the AVD infrastructure provides. The organization's System Security Plan (SSP) and Security Assessment Report (SAR) must cover all 110 practices, including organizational, personnel, and physical domains not addressed here.
+> **Assessment scope:** Follow the contract's required Level 2 self-assessment or C3PAO assessment. This mapping supports the evidence narrative; the organization's SSP and assessment evidence must cover all applicable requirements, including organizational, personnel, and physical requirements not addressed here.
 
 | CMMC Domain | Practice | Requirement Summary | Implementation | Type |
 | --- | --- | --- | --- | --- |
 | **AC** Access Control | 3.1.1 | Limit system access to authorized users and processes | Entra ID authentication; RBAC scoped to minimum roles; no public session host ports | Automatic |
 | **AC** | 3.1.2 | Limit system access to authorized transaction types | Azure RBAC enforces operation-level permissions on all resources | Automatic |
-| **AC** | 3.1.12 | Monitor and control remote access sessions | All AVD session traffic brokered through control plane; private endpoints optional | Configurable (`deployPrivateEndpoints: true`) |
+| **AC** | 3.1.12 | Monitor and control remote access sessions | All AVD session traffic brokered through control plane; private endpoints optional | Configurable (AVD Private Link inputs) |
 | **AC** | 3.1.13 | Employ cryptographic mechanisms to protect remote access | TLS 1.2+ for all AVD sessions; HTTPS-only for all PaaS endpoints | Automatic |
-| **AC** | 3.1.14 | Route remote access via managed access control points | AVD control plane is the sole access path; no direct RDP internet exposure | Automatic |
-| **AC** | 3.1.19 | Encrypt CUI on mobile devices and portable storage | OS disk and data disk encrypted via Disk Encryption Set + CMK | Configurable (`keyManagementDisks: CustomerManaged`) |
-| **AC** | 3.1.20 | Verify and control all connections to external systems | Private endpoints prevent data flow to/from external networks for PaaS resources | Configurable (`deployPrivateEndpoints: true`) |
+| **AC** | 3.1.14 | Route remote access via managed access control points | AVD brokers user sessions. Verify NSGs, routes, and any permitted direct management access separately; brokering alone does not establish that it is the only access path. | Automatic (partial) + External |
+| **AC** | 3.1.19 | Encrypt CUI on mobile devices and portable storage | Session-host disk encryption does not configure client mobile devices or portable media. Enforce and assess their encryption separately. | External (endpoint/media controls) |
+| **AC** | 3.1.20 | Verify and control all connections to external systems | Private endpoints provide private service access. Independently configure public access, trusted-service exceptions, egress controls, and approval of external connections; endpoint creation alone does not block external data flow. | Configurable (partial) + External |
 | **AU** Audit & Accountability | 3.3.1 | Create and retain system audit logs to enable monitoring | AMA deployed to each session host; TerminalServices, System, and FSLogix events → Log Analytics. Key Vault audit logs enabled. Note: Windows Security event log not collected — see AU gap note. | Automatic (partial) |
 | **AU** | 3.3.2 | Ensure audit log actions are traceable to users | TerminalServices events include user session context; Key Vault records include caller identity | Automatic (partial) |
 | **IA** Identification & Authentication | 3.5.1 | Identify all system users, processes, and devices | Entra ID provides authoritative identity for all users and managed identities for all services | Automatic |
@@ -333,20 +407,24 @@ CMMC 2.0 Level 2 is required for any DoD contractor or subcontractor that handle
 | **IA** | 3.5.3 | Use MFA for local and network access | MFA enforced via Entra ID Conditional Access (outside template scope; applies to same identity plane) | External (CA Policy) |
 | **IA** | 3.5.10 | Store and transmit only cryptographically-protected passwords | Passwords stored in Azure Key Vault (encrypted at rest). Never in parameter files or environment variables. | Automatic |
 | **IA** | 3.5.11 | Obscure feedback of authentication information | Entra ID and Key Vault handle credential display — no raw password exposure in template outputs | Automatic |
-| **SC** System & Communications Protection | 3.13.1 | Monitor and control communications at external boundaries | Private endpoints + `publicNetworkAccess: Disabled` enforce deny-by-default at PaaS boundary | Configurable (`deployPrivateEndpoints: true`) |
+| **SC** System & Communications Protection | 3.13.1 | Monitor and control communications at external boundaries | Private endpoints + `publicNetworkAccess: Disabled` enforce deny-by-default at PaaS boundary | Configurable (service-specific private endpoint and public-access inputs) |
 | **SC** | 3.13.2 | Employ architectural designs, software development techniques, and engineering principles | Subscription-scoped Bicep templates enforce consistent deployment; no ad-hoc resource creation | Automatic |
 | **SC** | 3.13.5 | Implement subnetworks for publicly accessible system components | Session hosts deploy to private VNet subnets with no public IPs | Automatic |
 | **SC** | 3.13.6 | Deny network communications traffic by default | `publicNetworkAccess: Disabled` on PaaS + private DNS = deny-by-default for all PaaS traffic | Configurable |
 | **SC** | 3.13.8 | Implement cryptographic mechanisms to prevent unauthorized disclosure during transmission | TLS 1.2+ for AVD sessions; HTTPS-only for storage and Key Vault | Automatic |
 | **SC** | 3.13.10 | Establish and manage cryptographic keys | CMK keys in Azure Key Vault with rotation policy. HSM option (FIPS 140-2 Level 3) available. | Configurable (`keyManagementDisks/Storage/RSV: CustomerManaged`) |
-| **SC** | 3.13.16 | Protect the confidentiality of CUI at rest | CMK encryption on VM disks, FSLogix storage, RSV. Infrastructure double encryption always on. | Configurable (`keyManagementDisks/Storage/RSV: CustomerManaged`) |
+| **SC** | 3.13.16 | Protect the confidentiality of CUI at rest | Azure encryption at rest with platform-managed keys or selected CMK provides implementation evidence. Validate the cryptographic protection and key management against applicable requirements; CMK and double encryption are not prescribed by this practice alone. | Inherited + Configurable (applicable key-management inputs) |
 | **SI** System & Information Integrity | 3.14.1 | Identify, report, and correct information and information system flaws | Trusted Launch + vTPM measured boot detects firmware/OS integrity violations | Automatic |
 | **SI** | 3.14.6 | Monitor organizational systems to detect attacks and indicators of potential attacks | AVD Insights DCR → Log Analytics. Azure Monitor alerts configurable. SIEM integration outside scope. | Automatic |
 | **SI** | 3.14.7 | Identify unauthorized use of organizational systems | TerminalServices session events logged; Key Vault access audited. Security event log gap applies. | Automatic (partial) |
 
-### Minimum CMMC Level 2 Parameter Set
+### CMMC Level 2 Configuration and Evidence
 
-The NIST 800-53 / FedRAMP High parameter set (see table above) satisfies CMMC Level 2 infrastructure requirements. No additional parameters are required beyond those listed in the FedRAMP High section. However, the organization must also address the non-technical CMMC domains (AT, CM, IR, MA, MP, PS, PE, RA, CA) in its SSP.
+Use the [configuration choices above](#summary-configuration-choices-to-review) as engineering
+inputs, not a CMMC minimum or compliance guarantee. Determine the applicable contract
+requirements and assessment scope, then collect deployed-resource, endpoint, logging,
+cryptographic-module, procedural, and SSP evidence. A template parameter set alone cannot
+satisfy all Level 2 technical or organizational requirements.
 
 ---
 
@@ -363,20 +441,25 @@ HIPAA Technical Safeguards (§164.312) govern the technology and policy that pro
 | **(a)(1)** Access Control — Unique User Identification | Required | Each user must have a unique identifier | Entra ID assigns unique user identities; no shared accounts in AVD | Automatic |
 | **(a)(2)(i)** Unique User ID | Required | Assign unique name/number for tracking identity | Entra ID UPN/Object ID for all users and service principals | Automatic |
 | **(a)(2)(iii)** Automatic Logoff | Addressable | Terminate session after inactivity | Configured via AVD host pool idle timeout and Windows session timeout policy (outside template scope) | External (GP/Intune) |
-| **(a)(2)(iv)** Encryption and Decryption | Addressable | Mechanism to encrypt and decrypt ePHI | VM disks and FSLogix profile storage encrypted with CMK. Infrastructure double encryption always on. | Configurable (`keyManagementDisks/Storage: CustomerManaged`) |
+| **(a)(2)(iv)** Encryption and Decryption | Addressable | Mechanism to encrypt and decrypt ePHI | Managed disks and Azure Files provide encryption at rest with platform-managed keys; optional CMK provides customer key control. Select and document the mechanism through the HIPAA risk analysis, not a blanket CMK requirement. | Inherited + Configurable (applicable key-management inputs) |
 | **(b)** Audit Controls | Required | Hardware/software/procedural mechanisms that record and examine activity | AMA + DCR deployed to each session host. Key Vault audit logs to Log Analytics. Note: Windows Security event log not collected — supplemental DCR required for full ePHI access audit trail. | Automatic (partial) |
 | **(c)(1)** Integrity — Electronic Mechanism | Addressable | Protect ePHI from improper alteration or destruction | Trusted Launch vTPM provides measured boot. Azure Backup (RSV) for profile and file share protection. | Automatic + Configurable (`recoveryServices: true`) |
 | **(d)** Person or Entity Authentication | Required | Verify that a person seeking access is the one claimed | Entra ID authentication for all AVD sessions. MFA via Conditional Access Policy (outside template scope). | External (CA Policy) |
 | **(e)(1)** Transmission Security — Integrity Controls | Addressable | Guard against unauthorized modification of ePHI in transit | TLS 1.2+ for all AVD session traffic | Automatic |
-| **(e)(2)(ii)** Transmission Security — Encryption | Addressable | Encrypt ePHI in transit when deemed appropriate | TLS 1.2+ for all PaaS endpoints. Private endpoints eliminate public transit path. | Configurable (`deployPrivateEndpoints: true`) |
+| **(e)(2)(ii)** Transmission Security — Encryption | Addressable | Encrypt ePHI in transit when deemed appropriate | TLS 1.2+ for all PaaS endpoints. Private endpoints eliminate public transit path. | Configurable (service-specific private endpoint inputs) |
 
-### HIPAA Minimum Parameter Set
+### Example HIPAA-Oriented Security Settings
+
+This is an optional hardened profile, not a HIPAA-prescribed minimum or a complete parameter
+file. Assess the applicable safeguards and supply private endpoint placement and other required
+inputs for the selected deployment. CMK and private endpoints are implementation choices, not
+universal HIPAA requirements.
 
 ```json
 {
   "keyManagementDisks": { "value": "CustomerManaged" },
   "keyManagementStorage": { "value": "CustomerManaged" },
-  "deployPrivateEndpoints": { "value": true },
+  "paasNetworking": { "value": { "publicNetworkAccess": "Disabled", "privateEndpoint": true } },
   "recoveryServices": { "value": true },
   "enableMonitoring": { "value": true }
 }
@@ -397,14 +480,14 @@ The CJIS Security Policy governs access to Criminal Justice Information (CJI) an
 | **5.5** Access Control | Ensure only authorized individuals access CJI | Entra ID authentication + RBAC; no public exposure of session hosts | Automatic |
 | **5.6.2.1** Advanced Authentication (MFA) | MFA required for all remote access to CJI | MFA enforced via Entra ID Conditional Access Policy (outside template scope; mandatory for any CJIS-compliant deployment) | External (CA Policy) |
 | **5.6.2.2** Advanced Authentication — Phishing-Resistant | FIDO2 or certificate-based auth for privileged access | Entra ID supports FIDO2 and CBA with CAC/PIV | External (CA Policy) |
-| **5.8.1** Boundary Protection | Isolate CJI systems from non-CJI systems | Private endpoints, VNet isolation, dedicated subnets. No session host public IPs. | Configurable (`deployPrivateEndpoints: true`) |
-| **5.8.2** Encryption — Data at Rest | Encrypt CJI at rest using FIPS-validated cryptography (AES-256) | CMK disk and storage encryption using AES-256 in Key Vault. Infrastructure double encryption always on. | Configurable (`keyManagementDisks/Storage: CustomerManaged`) |
+| **5.8.1** Boundary Protection | Isolate CJI systems from non-CJI systems | Private endpoints, VNet isolation, dedicated subnets. No session host public IPs. | Configurable (service-specific private endpoint inputs) |
+| **5.8.2** Encryption — Data at Rest | Encrypt CJI at rest using FIPS-validated cryptography (AES-256) | Azure disk/storage services perform data encryption; optional CMK in Key Vault controls the wrapping keys, not an AES data-encryption operation performed in Key Vault. Verify the approved cryptographic module, algorithm, and key-management configuration for the applicable policy version. | Inherited + Configurable (applicable key-management inputs) |
 | **5.8.3** Encryption — Data in Transit | Encrypt CJI in transit (minimum AES-128, FIPS-validated) | TLS 1.2+ (AES-256 cipher suites) for all AVD session and PaaS traffic | Automatic |
-| **5.8.4** Encryption — Key Management | Keys protected from unauthorized access; stored separately from encrypted data | CMK keys in Azure Key Vault (separate from the data they encrypt). Key access audited. | Automatic |
+| **5.8.4** Encryption — Key Management | Keys protected from unauthorized access; stored separately from encrypted data | Platform-managed key controls require Azure evidence; selected CMK paths use Key Vault access controls and configurable audit logging. A CMK label alone does not prove the key-management requirements. | Inherited + Configurable |
 | **5.9** Formal Audits | Log access to CJI; retain audit logs | AMA + DCR deployed to session hosts. Key Vault access logs. Note: Windows Security event log gap — supplemental DCR required for full CJI access audit. | Automatic (partial) |
 | **5.10** Personnel Security | Background checks, training (organizational, outside template scope) | — | Organizational |
 | **5.11** Physical Protection | Physical security of terminals accessing CJI | Azure datacenter physical security inherited from platform. End-user device policies outside scope. | Inherited / External |
-| **5.12** Systems and Communications Protection | Protect CJI during storage and transmission | Private DNS zones + private endpoints = no CJI traverses public internet. TLS for all sessions. | Configurable |
+| **5.12** Systems and Communications Protection | Protect CJI during storage and transmission | Private endpoints support private PaaS connectivity; verify public access settings and actual client, session, management, and data routes. Private DNS and PaaS endpoints alone do not prove that no CJI traverses public internet. | Configurable (partial) |
 | **5.13** Formal Audits — System Audit | System must generate audit records for CJI access | Key Vault audit logs + TerminalServices session events collected. Windows Security event log required separately. | Automatic (partial) |
 
 > **CJIS audit gap:** CJIS §5.9 requires logging of CJI access events. The AVD Insights DCR captures session connect/disconnect events but **not** the Windows Security event log (logon events 4624/4634, privilege use 4672). For CJIS compliance, a supplemental DCR or SIEM agent targeting the Security event log is required.
@@ -426,7 +509,10 @@ StateRAMP is the state and local government equivalent of FedRAMP, using the sam
 | StateRAMP Authorized — Moderate | FedRAMP Moderate | Most state agency systems |
 | StateRAMP Authorized — High | FedRAMP High | High-impact state systems (CJI, tax, health) |
 
-Because StateRAMP uses the identical NIST 800-53 control baseline, the FedRAMP High parameter set documented in this page satisfies StateRAMP High requirements. StateRAMP Moderate deployments may use a subset — CMK and HSM are recommended but `CustomerManaged` (standard Key Vault) rather than `CustomerManagedHSM` is typically acceptable at Moderate.
+StateRAMP uses NIST-based controls, but a FedRAMP-oriented parameter profile does not establish
+StateRAMP authorization or satisfy every requirement. Verify the applicable program baseline,
+assessment evidence, organization-defined requirements, and assigned policies. Do not infer
+mandatory CMK/HSM or acceptability of a Key Vault tier solely from a Moderate/High label.
 
 > **StateRAMP and CJIS:** Many state/local deployments require both StateRAMP and CJIS compliance simultaneously (e.g., a state portal used for law enforcement and general government). The CJIS Advanced Authentication requirement (MFA) is an additional requirement on top of StateRAMP controls — both are addressed by Entra ID Conditional Access Policy.
 
@@ -440,11 +526,11 @@ IRS Publication 1075 (P1075) governs the handling of Federal Tax Information (FT
 
 | P1075 Area | Requirement | Implementation | Notes |
 | --- | --- | --- | --- |
-| **Exhibit 7** — Encryption at Rest | FTI must be encrypted at rest using FIPS 140-2 validated cryptography | CMK disk and storage encryption. Infrastructure double encryption. Key Vault (Standard = FIPS 140-2 Level 1; Premium = Level 3 HSM). | `keyManagementDisks/Storage: CustomerManaged` |
+| **Exhibit 7** — Encryption at Rest | FTI must be encrypted at rest using FIPS 140-2 validated cryptography | Azure disk/storage encryption provides data protection; optional CMK supports customer key control. Validate the actual cryptographic modules and accepted FIPS evidence against the applicable P1075 requirements. Key Vault SKU, CMK, or double encryption alone is not a compliance determination. | Applicable `keyManagementDisks` / `keyManagementStorage` selection and cryptographic-module evidence |
 | **Exhibit 7** — Encryption in Transit | FTI must be encrypted in transit (TLS 1.2 minimum) | TLS 1.2+ on all AVD sessions and PaaS endpoints | Automatic |
 | **Exhibit 7** — Access Control | Role-based access; limit FTI access to authorized individuals | Entra ID + RBAC. MFA required via CA Policy. | External (CA) + Automatic |
 | **Exhibit 7** — Audit Logging | Log all access to FTI systems; retain 3+ years | Log Analytics workspace. Retention configurable (`logAnalyticsWorkspaceRetention`). Note: Windows Security event log required for full FTI access audit. | Configurable |
-| **Exhibit 7** — Network Protection | Separate FTI systems from non-FTI systems | Private endpoints + VNet isolation + dedicated subnets | Configurable (`deployPrivateEndpoints: true`) |
+| **Exhibit 7** — Network Protection | Separate FTI systems from non-FTI systems | Private endpoints + VNet isolation + dedicated subnets | Configurable (service-specific private endpoint inputs) |
 | **Exhibit 7** — Media Protection | Protect/sanitize media containing FTI | Azure managed disk encryption + secure delete. Azure Backup with RSV for retention management. | Automatic + Configurable |
 | **Section 4** — Incident Response | Report FTI incidents to IRS within 24 hours | Organizational process; SIEM integration with Log Analytics enables detection | External (IR process) |
 | **Section 4** — Annual Reviews | Annual P1075 compliance review | Organizational process; this mapping supports evidence collection | Organizational |
@@ -467,11 +553,11 @@ ISO 27001 is an internationally recognized information security management syste
 | **A.5.33** Protection of Records | Protect records from loss, destruction, falsification | Azure Backup (RSV) for VM and file share protection | Configurable (`recoveryServices: true`) |
 | **A.8.5** Secure Authentication | Secure authentication mechanisms | Entra ID MFA (CA Policy); managed identities; Key Vault for secrets | External + Automatic |
 | **A.8.7** Protection Against Malware | Protection against malware | Trusted Launch Secure Boot + vTPM; Defender for Endpoint integration | Automatic |
-| **A.8.9** Configuration Management | Manage configurations of hardware, software, services | Infrastructure-as-code (Bicep) enforces consistent configuration; no manual drift | Automatic |
+| **A.8.9** Configuration Management | Manage configurations of hardware, software, services | Bicep defines repeatable desired configuration. Drift detection, change control, and remediation require separate policy or operational evidence. | Automatic (partial) + External |
 | **A.8.10** Information Deletion | Delete information when no longer required | Soft delete on Key Vault and Storage; RSV retention policies | Configurable |
 | **A.8.15** Logging | Produce, store, protect, and analyze event logs | AMA + DCR + Log Analytics + Key Vault audit logs | Automatic |
 | **A.8.20** Network Security | Secure and manage networks | Private endpoints, VNet isolation, private DNS | Configurable |
-| **A.8.24** Use of Cryptography | CMK + HSM; key lifecycle management | Key Vault Standard or Premium; CMK on all data-bearing resources; key expiration enforced | Configurable |
+| **A.8.24** Use of Cryptography | Appropriate cryptography and key management | Azure encryption at rest plus optional CMK/HSM and ordinary CMK lifecycle policies support the organization's cryptographic policy. Validate requirements through the ISMS and Statement of Applicability; this mapping does not mandate CMK/HSM on every resource. | Inherited + Configurable |
 | **A.8.25** Secure Development Life Cycle | Policies for secure software development | Infrastructure-as-code in Git; image build pipeline with integrity verification | Automatic |
 
 > **Certification path:** Achieving ISO 27001 certification requires an accredited certification body (CB) audit of the organization's ISMS, not just the technical controls. This mapping supports the technical evidence package for Annex A controls but does not substitute for the full ISMS and Statement of Applicability (SoA).

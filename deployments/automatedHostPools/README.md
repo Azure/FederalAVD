@@ -575,22 +575,65 @@ production customer-managed encryption, create the shared encryption Key Vault t
 orchestrator or select an existing Shared Services vault. An existing Disk Encryption Set can
 still be supplied with `diskEncryptionSetResourceId` through Bicep or a parameter file.
 
-The **PaaS Public Network Access** section appears before **AVD Private Link** and offers Disabled,
-Enabled with restrictions, and Enabled independently of private endpoint creation. One choice
-applies to newly deployed Azure Files storage and Key Vaults. The initial Portal choice is Disabled
-with private endpoints, Enabled otherwise. Disabled retains entered IP rules; restricted mode
-denies unmatched traffic even with an empty list. Existing trusted-service exceptions remain
-configured and can still apply when public access is Disabled.
+Three sealed objects replace eighteen former flat networking inputs:
+`paasNetworking`, `privateEndpointSubnetResourceIds`, and `privateDnsZoneResourceIds`.
+Each defaults to `{}`; omitted fields normalize explicitly, including partially supplied objects.
 
-Parameter files use `paasPublicNetworkAccess` (default `Auto`) and
-`permittedIPs` for the shared allowlist. `fslogixPermittedIPs` is
-combined with the shared list for Azure Files only. These settings do not alter adopted resources,
-AVD Private Link, backup vaults or monitoring. See the
-[shared access-mode contract](../../docs/parameters.md#paas-public-network-access).
+The Portal offers **Private connectivity** (default), **Restricted public connectivity**, and
+**Custom configuration (advanced)**. Private creates applicable private endpoints with public access
+`Disabled`. Restricted uses `EnabledWithRestrictions` without private endpoints for new Storage
+and Key Vault resources; each created family needs its own IP/CIDR or eligible service-endpoint subnet
+allowlist. Custom exposes independent per-family public-access and private-endpoint choices, with
+warnings for unrestricted public access.
 
-The same portal choice can also create private endpoints for newly created Shared Services Key
-Vaults and the shared FSLogix Recovery Services vault. Operations endpoints and FSLogix storage
-endpoints can use different subnets. Every endpoint is deployed in the Azure region of its selected
+`paasNetworking.publicNetworkAccess` defaults to `Disabled` and `paasNetworking.privateEndpoint`
+defaults to `true`. Override either under `storage`, `keyVault`, or `backup`; explicit `false`
+is preserved. Storage and Key Vault independently accept `permittedIPs` and
+`serviceEndpointSubnetResourceIds`; lists do not merge or authorize the private endpoint placement
+subnet. Bicep retains explicitly supplied lists in every access mode. The Portal emits lists only
+for an active family's restricted public-access mode and clears hidden lists in Disabled or
+Enabled modes. Existing/adopted PaaS resources are owner-managed
+and are not reconfigured by these inputs.
+
+Backup has only `Enabled`/`Disabled` public access and no IP/subnet ACL equivalent. In Restricted
+mode a **new** FSLogix Backup vault requires an explicit supported choice:
+`backup: { publicNetworkAccess: 'Disabled', privateEndpoint: true }` (Private) or
+`backup: { publicNetworkAccess: 'Enabled', privateEndpoint: false }` (Public).
+There is no implicit unrestricted public fallback. An adopted vault needs no new connectivity choice.
+New Backup private endpoints require `privateDnsZoneResourceIds.backup`; both the form and backend
+reject a missing Backup zone. Blob and Queue integration is optional only when an approved external
+DNS or policy process handles those namespaces.
+
+Placement uses exactly two explicit ownership slots:
+`privateEndpointSubnetResourceIds.sharedResources` for newly created Key Vaults, FSLogix Backup,
+workspace-feed and global-feed endpoints; `.hostPoolResources` for newly created FSLogix Storage
+and AVD connections. Missing required placement fails rather than falling back to
+`virtualMachineSubnetResourceId` or public access. The automated workflow does not create Disk
+Access private endpoints: `disableManagedDiskPublicNetworkAccess` remains a separate policy setting.
+
+The DNS object accepts `file`, `vault`, `backup`, `blob`, `queue`, `avdFeed`, and `avdGlobalFeed`.
+AVD route/public-access settings remain separate and their selectors stay active even when the
+PaaS scenario uses no private endpoints.
+
+### Breaking migration from flat networking inputs
+
+Move `storagePublicNetworkAccess`, `storagePrivateEndpoint`, `storagePermittedIPs`, and
+`storageServiceEndpointSubnetResourceIds` into `paasNetworking.storage` as `publicNetworkAccess`,
+`privateEndpoint`, `permittedIPs`, and `serviceEndpointSubnetResourceIds`; do the same for the four
+`keyVault*` inputs under `.keyVault`. Move `deployBackupPrivateEndpoints` to `.backup.privateEndpoint`
+and explicitly specify `.backup.publicNetworkAccess` where necessary. Move the two former
+`*ResourcesPrivateEndpointSubnetResourceId` inputs into their corresponding ownership slots.
+Move the five service `*PrivateDnsZoneResourceId` inputs into their matching DNS keys, and move
+`avdPrivateDnsZoneResourceId`/`globalFeedPrivateDnsZoneResourceId` into `avdFeed`/`avdGlobalFeed`.
+Remove the old keys; they are no longer accepted.
+
+Review previously omitted defaults during migration: Key Vault private endpoints now default
+**true**, Backup defaults to private endpoints with disabled public access, and neither placement
+slot defaults to the VM subnet. Copy the updated
+[starter parameters](../../customer-examples/parameters/automatedHostPools/example.automatedHostPool.parameters.json)
+into `customer\parameters\automatedHostPools\` and select explicit placement for every active consumer.
+
+Every endpoint is deployed in the Azure region of its selected
 subnet's parent virtual network, including when that region differs from the resource group's
 location.
 

@@ -426,8 +426,14 @@
               "constraints": {
                 "required": true,
                 "allowedValues": [
-                  { "label": "Standard HDD", "value": "Standard" },
-                  { "label": "Premium SSD", "value": "Premium" }
+                  {
+                    "label": "Standard HDD",
+                    "value": "Standard"
+                  },
+                  {
+                    "label": "Premium SSD",
+                    "value": "Premium"
+                  }
                 ]
               }
             },
@@ -440,8 +446,14 @@
               "constraints": {
                 "required": true,
                 "allowedValues": [
-                  { "label": "Standard", "value": "Standard" },
-                  { "label": "Premium", "value": "Premium" }
+                  {
+                    "label": "Standard",
+                    "value": "Standard"
+                  },
+                  {
+                    "label": "Premium",
+                    "value": "Premium"
+                  }
                 ]
               }
             },
@@ -455,8 +467,14 @@
               "constraints": {
                 "required": true,
                 "allowedValues": [
-                  { "label": "Legacy", "value": "Legacy" },
-                  { "label": "Provisioned v2", "value": "ProvisionedV2" }
+                  {
+                    "label": "Legacy",
+                    "value": "Legacy"
+                  },
+                  {
+                    "label": "Provisioned v2",
+                    "value": "ProvisionedV2"
+                  }
                 ]
               }
             },
@@ -466,7 +484,11 @@
               "label": "Profile Provisioned IOPS (0 = Automatic (capacity-based))",
               "defaultValue": "0",
               "visible": "[and(startsWith(steps('storage').storageService, 'AzureFiles'), equals(steps('storage').profileStorageBillingModel, 'ProvisionedV2'))]",
-              "constraints": { "required": true, "regex": "^(0|[1-9][0-9]*)$", "validationMessage": "Enter a nonnegative whole number; 0 automatically calculates performance from the Profile share capacity." }
+              "constraints": {
+                "required": true,
+                "regex": "^(0|[1-9][0-9]*)$",
+                "validationMessage": "Enter a nonnegative whole number; 0 automatically calculates performance from the Profile share capacity."
+              }
             },
             {
               "name": "profileProvisionedThroughputMiBps",
@@ -474,7 +496,11 @@
               "label": "Profile Provisioned Throughput MiB/s (0 = Automatic (capacity-based))",
               "defaultValue": "0",
               "visible": "[and(startsWith(steps('storage').storageService, 'AzureFiles'), equals(steps('storage').profileStorageBillingModel, 'ProvisionedV2'))]",
-              "constraints": { "required": true, "regex": "^(0|[1-9][0-9]*)$", "validationMessage": "Enter a nonnegative whole number; 0 automatically calculates performance from the Profile share capacity." }
+              "constraints": {
+                "required": true,
+                "regex": "^(0|[1-9][0-9]*)$",
+                "validationMessage": "Enter a nonnegative whole number; 0 automatically calculates performance from the Profile share capacity."
+              }
             },
             {
               "name": "storageRedundancy",
@@ -543,7 +569,10 @@
               "constraints": {
                 "required": true,
                 "validations": [
-                  { "regex": "^[1-9][0-9]*$", "message": "Enter a positive whole number." },
+                  {
+                    "regex": "^[1-9][0-9]*$",
+                    "message": "Enter a positive whole number."
+                  },
                   {
                     "isValid": "[or(not(startsWith(steps('storage').storageService, 'AzureFiles')), and(greaterOrEquals(int(steps('storage').shareSizeInGB), if(equals(steps('storage').profileStorageBillingModel, 'ProvisionedV2'), 32, if(equals(steps('storage').profileStorageTier, 'Premium'), 100, 1))), lessOrEquals(int(steps('storage').shareSizeInGB), if(equals(steps('storage').profileStorageBillingModel, 'ProvisionedV2'), 262144, 102400))))]",
                     "message": "Azure Files v2 requires 32-262144 GiB. Legacy permits up to 102400 GiB (Premium minimum 100 GiB)."
@@ -568,9 +597,18 @@
               "constraints": {
                 "required": true,
                 "allowedValues": [
-                  { "label": "Inherit Profile", "value": "Inherit" },
-                  { "label": "Legacy", "value": "Legacy" },
-                  { "label": "Provisioned v2", "value": "ProvisionedV2" }
+                  {
+                    "label": "Inherit Profile",
+                    "value": "Inherit"
+                  },
+                  {
+                    "label": "Legacy",
+                    "value": "Legacy"
+                  },
+                  {
+                    "label": "Provisioned v2",
+                    "value": "ProvisionedV2"
+                  }
                 ]
               }
             },
@@ -580,7 +618,11 @@
               "label": "Office Provisioned IOPS (0 = Automatic (capacity-based))",
               "defaultValue": "0",
               "visible": "[and(startsWith(steps('storage').storageService, 'AzureFiles'), contains(steps('storage').containerType, 'OfficeContainer'), or(equals(steps('storage').officeStorageBillingModel, 'ProvisionedV2'), and(equals(steps('storage').officeStorageBillingModel, 'Inherit'), equals(steps('storage').profileStorageBillingModel, 'ProvisionedV2'))))]",
-              "constraints": { "required": true, "regex": "^(0|[1-9][0-9]*)$", "validationMessage": "Enter a nonnegative whole number; 0 calculates sizing from the Office quota, not Profile performance." }
+              "constraints": {
+                "required": true,
+                "regex": "^(0|[1-9][0-9]*)$",
+                "validationMessage": "Enter a nonnegative whole number; 0 calculates sizing from the Office quota, not Profile performance."
+              }
             },
             {
               "name": "officeProvisionedThroughputMiBps",
@@ -588,7 +630,11 @@
               "label": "Office Provisioned Throughput MiB/s (0 = Automatic (capacity-based))",
               "defaultValue": "0",
               "visible": "[and(startsWith(steps('storage').storageService, 'AzureFiles'), contains(steps('storage').containerType, 'OfficeContainer'), or(equals(steps('storage').officeStorageBillingModel, 'ProvisionedV2'), and(equals(steps('storage').officeStorageBillingModel, 'Inherit'), equals(steps('storage').profileStorageBillingModel, 'ProvisionedV2'))))]",
-              "constraints": { "required": true, "regex": "^(0|[1-9][0-9]*)$", "validationMessage": "Enter a nonnegative whole number; 0 calculates sizing from the Office quota, not Profile performance." }
+              "constraints": {
+                "required": true,
+                "regex": "^(0|[1-9][0-9]*)$",
+                "validationMessage": "Enter a nonnegative whole number; 0 calculates sizing from the Office quota, not Profile performance."
+              }
             },
             {
               "name": "officeStorageTier",
@@ -599,9 +645,18 @@
               "constraints": {
                 "required": true,
                 "allowedValues": [
-                  { "label": "Inherit Profile", "value": "Inherit" },
-                  { "label": "Standard", "value": "Standard" },
-                  { "label": "Premium", "value": "Premium" }
+                  {
+                    "label": "Inherit Profile",
+                    "value": "Inherit"
+                  },
+                  {
+                    "label": "Standard",
+                    "value": "Standard"
+                  },
+                  {
+                    "label": "Premium",
+                    "value": "Premium"
+                  }
                 ]
               }
             },
@@ -696,9 +751,18 @@
               "constraints": {
                 "required": true,
                 "allowedValues": [
-                  { "label": "No Sharding", "value": "None" },
-                  { "label": "Sharding via Permissions", "value": "ShardPerms" },
-                  { "label": "Sharding via Object Specific Settings", "value": "ShardOSS" }
+                  {
+                    "label": "No Sharding",
+                    "value": "None"
+                  },
+                  {
+                    "label": "Sharding via Permissions",
+                    "value": "ShardPerms"
+                  },
+                  {
+                    "label": "Sharding via Object Specific Settings",
+                    "value": "ShardOSS"
+                  }
                 ]
               }
             },
@@ -711,8 +775,14 @@
               "constraints": {
                 "required": true,
                 "allowedValues": [
-                  { "label": "No Sharding", "value": "None" },
-                  { "label": "Sharding via Permissions", "value": "ShardPerms" }
+                  {
+                    "label": "No Sharding",
+                    "value": "None"
+                  },
+                  {
+                    "label": "Sharding via Permissions",
+                    "value": "ShardPerms"
+                  }
                 ]
               }
             },
@@ -1299,9 +1369,24 @@
               ]
             },
             {
-              "name": "privateNetworking",
+              "name": "serviceEndpointVirtualNetworksApi",
+              "type": "Microsoft.Solutions.ArmApiControl",
+              "condition": "[not(empty(steps('scope').resourceScope.subscription.id))]",
+              "request": {
+                "method": "GET",
+                "path": "[if(empty(steps('scope').resourceScope.subscription.id), '', concat(steps('scope').resourceScope.subscription.id, '/providers/Microsoft.Network/virtualNetworks?api-version=2022-11-01'))]",
+                "transforms": {
+                  "loaded": "`true`",
+                  "vnets": "value",
+                  "subnets": "value[].properties.subnets[]",
+                  "nextLink": "nextLink"
+                }
+              }
+            },
+            {
+              "name": "storagePrivateNetworking",
               "type": "Microsoft.Common.Section",
-              "label": "Private Networking",
+              "label": "Storage networking: Private endpoints",
               "visible": "[startsWith(steps('storage').storageService, 'AzureFiles')]",
               "elements": [
                 {
@@ -1309,76 +1394,134 @@
                   "type": "Microsoft.Common.InfoBox",
                   "options": {
                     "style": "Info",
-                    "text": "Private endpoints provide private Azure Files connectivity. Configure public network access separately below."
+                    "text": "Applies to all newly created Profile and Office Azure Files accounts. NetApp Files and existing backup/encryption resources are unchanged. Private endpoints and public endpoint access are independent. Configure DNS for the intended client path; public firewall rules do not restrict Private Link traffic."
                   }
                 },
                 {
-                  "name": "privateEndpoint",
-                  "type": "Microsoft.Common.CheckBox",
-                  "label": "Deploy Azure Files private endpoints",
-                  "defaultValue": true
+                  "name": "storagePrivateEndpoint",
+                  "type": "Microsoft.Common.OptionsGroup",
+                  "label": "Deploy Storage private endpoints",
+                  "defaultValue": "Yes",
+                  "constraints": {
+                    "required": true,
+                    "allowedValues": [
+                      {
+                        "label": "Yes",
+                        "value": true
+                      },
+                      {
+                        "label": "No",
+                        "value": false
+                      }
+                    ]
+                  }
                 },
                 {
                   "name": "privateEndpointVirtualNetwork",
                   "type": "Microsoft.Common.DropDown",
-                  "label": "Private Endpoint Virtual Network",
+                  "label": "Private endpoint virtual network",
                   "defaultValue": "",
                   "multiLine": true,
-                  "toolTip": "Select the virtual network where the Azure Files private endpoints will be created.",
-                  "visible": "[steps('zeroTrust').privateNetworking.privateEndpoint]",
+                  "visible": "[steps('zeroTrust').storagePrivateNetworking.storagePrivateEndpoint]",
                   "constraints": {
                     "required": true,
-                    "allowedValues": "[map(filter(steps('scope').virtualNetworksApi.value, (vnet) => equals(vnet.location, steps('scope').resourceScope.location.name)), (vnet) => parse(concat('{\"label\":\"', vnet.name, '\",\"description\":\"Location: ', vnet.location, ' Resource Group: ', first(skip(split(vnet.id, '/'), 4)), '\",\"value\":{\"name\":\"', vnet.name, '\",\"id\":\"', vnet.id, '\"}}')))]"
+                    "allowedValues": "[if(not(equals(steps('zeroTrust').serviceEndpointVirtualNetworksApi.transformed.loaded, true)), parse('[{\"label\":\"Loading VNet inventory\",\"value\":\"\"}]'), if(empty(filter(steps('zeroTrust').serviceEndpointVirtualNetworksApi.transformed.vnets, (vnet) => equals(vnet.location, steps('scope').resourceScope.location.name))), parse('[{\"label\":\"No regional VNets found\",\"value\":\"\"}]'), map(filter(steps('zeroTrust').serviceEndpointVirtualNetworksApi.transformed.vnets, (vnet) => equals(vnet.location, steps('scope').resourceScope.location.name)), (vnet) => parse(concat('{\"label\":\"', vnet.name, '\",\"description\":\"Resource group: ', first(skip(split(vnet.id, '/'), 4)), '\",\"value\":{\"id\":\"', vnet.id, '\"}}')))))]"
                   }
                 },
                 {
                   "name": "privateEndpointSubnetsApi",
                   "type": "Microsoft.Solutions.ArmApiControl",
-                  "condition": "[and(steps('zeroTrust').privateNetworking.privateEndpoint, not(empty(steps('zeroTrust').privateNetworking.privateEndpointVirtualNetwork)))]",
+                  "condition": "[and(startsWith(steps('storage').storageService, 'AzureFiles'), steps('zeroTrust').storagePrivateNetworking.storagePrivateEndpoint, not(empty(steps('zeroTrust').storagePrivateNetworking.privateEndpointVirtualNetwork.id)))]",
                   "request": {
                     "method": "GET",
-                    "path": "[concat(steps('zeroTrust').privateNetworking.privateEndpointVirtualNetwork.id, '/subnets?api-version=2022-05-01')]"
+                    "path": "[concat(steps('zeroTrust').storagePrivateNetworking.privateEndpointVirtualNetwork.id, '/subnets?api-version=2022-05-01')]"
                   }
                 },
                 {
                   "name": "privateEndpointSubnet",
                   "type": "Microsoft.Common.DropDown",
-                  "label": "Private Endpoint Subnet",
+                  "label": "Private endpoint subnet",
                   "defaultValue": "",
-                  "visible": "[steps('zeroTrust').privateNetworking.privateEndpoint]",
+                  "visible": "[steps('zeroTrust').storagePrivateNetworking.storagePrivateEndpoint]",
+                  "toolTip": "Choose an existing nondelegated subnet. Function outbound integration requires a separate delegated subnet.",
                   "constraints": {
                     "required": true,
-                    "allowedValues": "[map(filter(steps('zeroTrust').privateNetworking.privateEndpointSubnetsApi.value, (snet) => empty(snet.properties.delegations)), (snet) => parse(concat('{\"label\":\"', snet.name, '\",\"value\":{\"name\":\"', snet.name, '\",\"id\":\"', snet.id, '\"}}')))]"
+                    "allowedValues": "[if(empty(steps('zeroTrust').storagePrivateNetworking.privateEndpointSubnetsApi.value), parse('[{\"label\":\"Select a VNet or check subnet read permissions\",\"value\":\"\"}]'), if(empty(filter(steps('zeroTrust').storagePrivateNetworking.privateEndpointSubnetsApi.value, (snet) => empty(snet.properties.delegations))), parse('[{\"label\":\"No nondelegated subnets found\",\"value\":\"\"}]'), map(filter(steps('zeroTrust').storagePrivateNetworking.privateEndpointSubnetsApi.value, (snet) => empty(snet.properties.delegations)), (snet) => parse(concat('{\"label\":\"', snet.name, '\",\"value\":{\"id\":\"', snet.id, '\"}}')))))]"
                   }
+                },
+                {
+                  "name": "enablePrivateDNSIntegration",
+                  "type": "Microsoft.Common.OptionsGroup",
+                  "label": "Integrate with Azure Private DNS",
+                  "defaultValue": "Yes",
+                  "constraints": {
+                    "required": true,
+                    "allowedValues": [
+                      {
+                        "label": "Yes",
+                        "value": true
+                      },
+                      {
+                        "label": "No",
+                        "value": false
+                      }
+                    ]
+                  },
+                  "visible": "[steps('zeroTrust').storagePrivateNetworking.storagePrivateEndpoint]"
+                },
+                {
+                  "name": "externalDnsInfo",
+                  "type": "Microsoft.Common.InfoBox",
+                  "options": {
+                    "style": "Warning",
+                    "text": "If Azure Private DNS integration is disabled, provide DNS records through your approved DNS or policy process. Private endpoints alone do not configure client name resolution."
+                  },
+                  "visible": "[and(steps('zeroTrust').storagePrivateNetworking.storagePrivateEndpoint, not(steps('zeroTrust').storagePrivateNetworking.enablePrivateDNSIntegration))]"
+                },
+                {
+                  "name": "privateDnsSubscription",
+                  "type": "Microsoft.Common.SubscriptionSelector",
+                  "resourceProviders": [
+                    "Microsoft.Network"
+                  ],
+                  "visible": "[and(steps('zeroTrust').storagePrivateNetworking.storagePrivateEndpoint, steps('zeroTrust').storagePrivateNetworking.enablePrivateDNSIntegration)]"
                 },
                 {
                   "name": "privateDnsZonesApi",
                   "type": "Microsoft.Solutions.ArmApiControl",
-                  "condition": "[and(startsWith(steps('storage').storageService, 'AzureFiles'), steps('zeroTrust').privateNetworking.privateEndpoint)]",
+                  "condition": "[and(startsWith(steps('storage').storageService, 'AzureFiles'), steps('zeroTrust').storagePrivateNetworking.storagePrivateEndpoint, steps('zeroTrust').storagePrivateNetworking.enablePrivateDNSIntegration, not(empty(steps('zeroTrust').storagePrivateNetworking.privateDnsSubscription.subscriptionId)))]",
                   "request": {
                     "method": "GET",
-                    "path": "[concat(steps('scope').resourceScope.subscription.id, '/providers/Microsoft.Network/privateDnsZones?api-version=2018-09-01')]"
+                    "path": "[concat('/subscriptions/', steps('zeroTrust').storagePrivateNetworking.privateDnsSubscription.subscriptionId, '/providers/Microsoft.Network/privateDnsZones?api-version=2018-09-01')]"
                   }
                 },
                 {
-                  "name": "azureFilePrivateDnsZone",
+                  "name": "filePrivateDnsZone",
                   "type": "Microsoft.Common.DropDown",
-                  "label": "Azure Files Private DNS Zone",
-                  "defaultValue": "[first(map(filter(steps('zeroTrust').privateNetworking.privateDnsZonesApi.value, (zone) => contains(zone.name, 'privatelink.file.')), (zone) => zone.name))]",
+                  "filter": true,
+                  "label": "Azure Files private DNS zone",
+                  "defaultValue": "[if(empty(steps('zeroTrust').storagePrivateNetworking.privateDnsZonesApi.value), 'Select a DNS subscription or check zone availability', if(empty(filter(steps('zeroTrust').storagePrivateNetworking.privateDnsZonesApi.value, (zone) => contains(zone.name, 'privatelink.file.'))), 'Select a DNS subscription or check zone availability', first(map(filter(steps('zeroTrust').storagePrivateNetworking.privateDnsZonesApi.value, (zone) => contains(zone.name, 'privatelink.file.')), (zone) => zone.name))))]",
                   "multiLine": true,
-                  "toolTip": "Select the existing Private DNS Zone for Azure Files.",
-                  "visible": "[steps('zeroTrust').privateNetworking.privateEndpoint]",
+                  "visible": "[and(steps('zeroTrust').storagePrivateNetworking.storagePrivateEndpoint, steps('zeroTrust').storagePrivateNetworking.enablePrivateDNSIntegration)]",
                   "constraints": {
-                    "allowedValues": "[map(filter(steps('zeroTrust').privateNetworking.privateDnsZonesApi.value, (zone) => contains(zone.name, 'privatelink.file.')), (zone) => parse(concat('{\"label\":\"', zone.name, '\",\"description\":\"Resource Group: ', first(skip(split(zone.id, '/'), 4)), '\",\"value\":\"', zone.id, '\"}')))]",
-                    "required": false
+                    "required": true,
+                    "allowedValues": "[if(empty(steps('zeroTrust').storagePrivateNetworking.privateDnsZonesApi.value), parse('[{\"label\":\"Select a DNS subscription or check zone availability\",\"value\":\"\"}]'), if(empty(filter(steps('zeroTrust').storagePrivateNetworking.privateDnsZonesApi.value, (zone) => contains(zone.name, 'privatelink.file.'))), parse('[{\"label\":\"Select a DNS subscription or check zone availability\",\"value\":\"\"}]'), map(filter(steps('zeroTrust').storagePrivateNetworking.privateDnsZonesApi.value, (zone) => contains(zone.name, 'privatelink.file.')), (zone) => parse(concat('{\"label\":\"', zone.name, '\",\"description\":\"Resource group: ', first(skip(split(zone.id, '/'), 4)), '\",\"value\":\"', zone.id, '\"}')))))]"
                   }
-                },
+                }
+              ]
+            },
+            {
+              "name": "storagePublicNetworking",
+              "type": "Microsoft.Common.Section",
+              "label": "Storage networking: Public endpoint access",
+              "visible": "[startsWith(steps('storage').storageService, 'AzureFiles')]",
+              "elements": [
                 {
-                  "name": "paasPublicNetworkAccess",
+                  "name": "storagePublicNetworkAccess",
                   "type": "Microsoft.Common.DropDown",
                   "label": "Public network access",
-                  "defaultValue": "[if(steps('zeroTrust').privateNetworking.privateEndpoint, 'Disabled', 'Enabled')]",
-                  "toolTip": "Applies to newly deployed Azure Files storage independently of private endpoints. NetApp Files and existing backup vaults are unchanged.",
+                  "defaultValue": "Disabled",
+                  "toolTip": "Applies to all newly created Profile and Office Azure Files accounts. NetApp Files and existing backup/encryption resources are unchanged.",
                   "constraints": {
                     "required": true,
                     "allowedValues": [
@@ -1398,33 +1541,58 @@
                   }
                 },
                 {
-                  "name": "permittedIPsDisabledInfo",
+                  "name": "publicAccessDisabledInfo",
                   "type": "Microsoft.Common.TextBlock",
-                  "visible": "[equals(steps('zeroTrust').privateNetworking.paasPublicNetworkAccess, 'Disabled')]",
+                  "visible": "[equals(steps('zeroTrust').storagePublicNetworking.storagePublicNetworkAccess, 'Disabled')]",
                   "options": {
                     "text": "Public network access is disabled. Ensure private connectivity is available. Existing trusted-service exceptions may still apply."
                   }
                 },
                 {
-                  "name": "permittedIPsRestrictedInfo",
+                  "name": "publicAccessEnabledWithRestrictionsInfo",
                   "type": "Microsoft.Common.TextBlock",
-                  "visible": "[equals(steps('zeroTrust').privateNetworking.paasPublicNetworkAccess, 'EnabledWithRestrictions')]",
+                  "visible": "[equals(steps('zeroTrust').storagePublicNetworking.storagePublicNetworkAccess, 'EnabledWithRestrictions')]",
                   "options": {
-                    "text": "Allow the public IPv4 addresses or CIDR ranges below. Other public traffic is denied, subject to existing trusted-service exceptions."
+                    "text": "Allow IP addresses, service-endpoint subnets, or both. Other public traffic is denied, subject to existing service exceptions."
                   }
                 },
                 {
-                  "name": "permittedIPsEnabledInfo",
+                  "name": "publicAccessEnabledInfo",
                   "type": "Microsoft.Common.TextBlock",
-                  "visible": "[equals(steps('zeroTrust').privateNetworking.paasPublicNetworkAccess, 'Enabled')]",
+                  "visible": "[equals(steps('zeroTrust').storagePublicNetworking.storagePublicNetworkAccess, 'Enabled')]",
                   "options": {
-                    "text": "Public network access is allowed from all networks. Authentication and authorization still apply."
+                    "text": "Public network access is unrestricted. Stored IP and subnet rules do not limit traffic. Authentication is still required."
                   }
                 },
                 {
-                  "name": "permittedIPs",
+                  "name": "noPrivateConnectivityWarning",
+                  "type": "Microsoft.Common.InfoBox",
+                  "options": {
+                    "style": "Warning",
+                    "text": "Public access is disabled and this deployment is not creating private endpoints for this service. Provide an existing approved connectivity path before deploying."
+                  },
+                  "visible": "[and(equals(steps('zeroTrust').storagePublicNetworking.storagePublicNetworkAccess, 'Disabled'), not(steps('zeroTrust').storagePrivateNetworking.storagePrivateEndpoint))]"
+                }
+              ]
+            },
+            {
+              "name": "storageServiceEndpointAccess",
+              "type": "Microsoft.Common.Section",
+              "label": "Storage networking: Allowed public-endpoint sources",
+              "visible": "[and(startsWith(steps('storage').storageService, 'AzureFiles'), equals(steps('zeroTrust').storagePublicNetworking.storagePublicNetworkAccess, 'EnabledWithRestrictions'))]",
+              "elements": [
+                {
+                  "name": "requirements",
+                  "type": "Microsoft.Common.InfoBox",
+                  "options": {
+                    "style": "Info",
+                    "text": "Applies to all newly created Profile and Office Azure Files accounts. NetApp Files and existing backup/encryption resources are unchanged. Allow IP addresses, service-endpoint subnets, or both. This deployment never enables endpoints on existing subnets. Service endpoints use the public service endpoint, not a private IP."
+                  }
+                },
+                {
+                  "name": "storagePermittedIPs",
                   "type": "Microsoft.Common.EditableGrid",
-                  "visible": "[equals(steps('zeroTrust').privateNetworking.paasPublicNetworkAccess, 'EnabledWithRestrictions')]",
+                  "visible": "[equals(steps('zeroTrust').storagePublicNetworking.storagePublicNetworkAccess, 'EnabledWithRestrictions')]",
                   "label": "Permitted IP Addresses and CIDR Blocks",
                   "ariaLabel": "Permitted IP Addresses and CIDR Blocks",
                   "constraints": {
@@ -1449,6 +1617,49 @@
                       }
                     ]
                   }
+                },
+                {
+                  "name": "inventoryStatus",
+                  "type": "Microsoft.Common.InfoBox",
+                  "options": {
+                    "style": "Info",
+                    "text": "The subnet inventory has not loaded. If this persists, check the subscription and Microsoft.Network read permissions."
+                  },
+                  "visible": "[not(equals(steps('zeroTrust').serviceEndpointVirtualNetworksApi.transformed.loaded, true))]"
+                },
+                {
+                  "name": "inventoryPageWarning",
+                  "type": "Microsoft.Common.InfoBox",
+                  "options": {
+                    "style": "Warning",
+                    "text": "The VNet API returned a partial inventory. Use a parameter-file deployment for subnets on later pages."
+                  },
+                  "visible": "[not(empty(steps('zeroTrust').serviceEndpointVirtualNetworksApi.transformed.nextLink))]"
+                },
+                {
+                  "name": "storageServiceEndpointSubnets",
+                  "type": "Microsoft.Common.DropDown",
+                  "label": "Storage access subnets",
+                  "multiselect": true,
+                  "selectAll": false,
+                  "filter": true,
+                  "multiLine": true,
+                  "defaultValue": "[parse('[]')]",
+                  "toolTip": "Requires existing Microsoft.Storage in the storage region, or Microsoft.Storage.Global for cross-region access where supported. Applies only to storage accounts created by this deployment. Does not change private endpoints or DNS.",
+                  "visible": "[and(startsWith(steps('storage').storageService, 'AzureFiles'), equals(steps('zeroTrust').storagePublicNetworking.storagePublicNetworkAccess, 'EnabledWithRestrictions'))]",
+                  "constraints": {
+                    "required": false,
+                    "allowedValues": "[if(not(equals(steps('zeroTrust').serviceEndpointVirtualNetworksApi.transformed.loaded, true)), parse('[{\"label\":\"Loading subnet inventory\",\"value\":\"\"}]'), if(or(empty(steps('zeroTrust').serviceEndpointVirtualNetworksApi.transformed.vnets), empty(steps('zeroTrust').serviceEndpointVirtualNetworksApi.transformed.subnets)), parse('[{\"label\":\"No eligible subnets found\",\"value\":\"\"}]'), if(empty(filter(steps('zeroTrust').serviceEndpointVirtualNetworksApi.transformed.subnets, (snet) => if(empty(snet.properties.serviceEndpoints), false, or(not(empty(filter(snet.properties.serviceEndpoints, (se) => equals(se.service, 'Microsoft.Storage.Global')))), and(not(empty(filter(snet.properties.serviceEndpoints, (se) => equals(se.service, 'Microsoft.Storage')))), contains(map(filter(steps('zeroTrust').serviceEndpointVirtualNetworksApi.transformed.vnets, (vnet) => equals(vnet.location, steps('scope').resourceScope.location.name)), (vnet) => vnet.id), first(split(snet.id, '/subnets/')))))))), parse('[{\"label\":\"No eligible subnets found\",\"value\":\"\"}]'), map(filter(steps('zeroTrust').serviceEndpointVirtualNetworksApi.transformed.subnets, (snet) => if(empty(snet.properties.serviceEndpoints), false, or(not(empty(filter(snet.properties.serviceEndpoints, (se) => equals(se.service, 'Microsoft.Storage.Global')))), and(not(empty(filter(snet.properties.serviceEndpoints, (se) => equals(se.service, 'Microsoft.Storage')))), contains(map(filter(steps('zeroTrust').serviceEndpointVirtualNetworksApi.transformed.vnets, (vnet) => equals(vnet.location, steps('scope').resourceScope.location.name)), (vnet) => vnet.id), first(split(snet.id, '/subnets/'))))))), (snet) => parse(concat('{\"label\":\"', first(skip(split(snet.id, '/'), 8)), ' | ', snet.name, '\",\"description\":\"Resource Group: ', first(skip(split(snet.id, '/'), 4)), '\",\"value\":\"', snet.id, '\"}'))))))]"
+                  }
+                },
+                {
+                  "name": "emptyAllowlistWarning",
+                  "type": "Microsoft.Common.InfoBox",
+                  "options": {
+                    "style": "Warning",
+                    "text": "No ordinary public sources are allowed. Private endpoints still work if reachable; existing service exceptions may apply. Add IP or subnet rules if clients need the public path."
+                  },
+                  "visible": "[and(empty(steps('zeroTrust').storageServiceEndpointAccess.storagePermittedIPs), empty(if(empty(steps('zeroTrust').storageServiceEndpointAccess.storageServiceEndpointSubnets), parse('[]'), filter(steps('zeroTrust').storageServiceEndpointAccess.storageServiceEndpointSubnets, (id) => not(empty(id))))))]"
                 }
               ]
             },
@@ -1923,7 +2134,7 @@
                   "label": "Private Endpoint Naming Convention",
                   "placeholder": "pe-RESOURCE-SUBRESOURCE-VNETID",
                   "toolTip": "Optional. Naming convention for private endpoints. RESOURCE, SUBRESOURCE, and VNETID are replaced at deployment time and must remain in the convention.",
-                  "visible": "[and(steps('tagsAndNaming').naming.enableNameOverrides, startsWith(steps('storage').storageService, 'AzureFiles'), steps('zeroTrust').privateNetworking.privateEndpoint)]",
+                  "visible": "[and(steps('tagsAndNaming').naming.enableNameOverrides, startsWith(steps('storage').storageService, 'AzureFiles'), steps('zeroTrust').storagePrivateNetworking.storagePrivateEndpoint)]",
                   "constraints": {
                     "required": false,
                     "regex": "^$|^(?=.*RESOURCE)(?=.*SUBRESOURCE)(?=.*VNETID).+$",
@@ -1936,7 +2147,7 @@
                   "label": "Private Endpoint NIC Naming Convention",
                   "placeholder": "nic-pe-RESOURCE-SUBRESOURCE-VNETID",
                   "toolTip": "Optional. Naming convention for private endpoint network interfaces. RESOURCE, SUBRESOURCE, and VNETID are replaced at deployment time and must remain in the convention.",
-                  "visible": "[and(steps('tagsAndNaming').naming.enableNameOverrides, startsWith(steps('storage').storageService, 'AzureFiles'), steps('zeroTrust').privateNetworking.privateEndpoint)]",
+                  "visible": "[and(steps('tagsAndNaming').naming.enableNameOverrides, startsWith(steps('storage').storageService, 'AzureFiles'), steps('zeroTrust').storagePrivateNetworking.storagePrivateEndpoint)]",
                   "constraints": {
                     "required": false,
                     "regex": "^$|^(?=.*RESOURCE)(?=.*SUBRESOURCE)(?=.*VNETID).+$",
@@ -2063,13 +2274,9 @@
         "officeStorageAccountNamePrefix": "[if(and(steps('tagsAndNaming').naming.enableNameOverrides, startsWith(steps('storage').storageService, 'AzureFiles'), contains(steps('storage').containerType, 'OfficeContainer')), coalesce(steps('tagsAndNaming').naming.officeStorageAccountNamePrefixOverride, ''), '')]",
         "storageIndex": "[if(startsWith(steps('storage').storageService, 'AzureFiles'), int(steps('storage').storageIndex), 1)]",
         "parentResourceId": "[if(equals(steps('scope').storagePurpose.storageAssociation, 'ExistingHostPool'), steps('scope').storagePurpose.hostPool.id, '')]",
-        "privateEndpoint": "[and(startsWith(steps('storage').storageService, 'AzureFiles'), steps('zeroTrust').privateNetworking.privateEndpoint)]",
-        "privateEndpointSubnetResourceId": "[if(and(startsWith(steps('storage').storageService, 'AzureFiles'), steps('zeroTrust').privateNetworking.privateEndpoint), steps('zeroTrust').privateNetworking.privateEndpointSubnet.id, '')]",
-        "azureFilePrivateDnsZoneResourceId": "[if(and(startsWith(steps('storage').storageService, 'AzureFiles'), steps('zeroTrust').privateNetworking.privateEndpoint, not(empty(steps('zeroTrust').privateNetworking.azureFilePrivateDnsZone))), steps('zeroTrust').privateNetworking.azureFilePrivateDnsZone, '')]",
-        "privateEndpointNameConvention": "[if(and(steps('tagsAndNaming').naming.enableNameOverrides, startsWith(steps('storage').storageService, 'AzureFiles'), steps('zeroTrust').privateNetworking.privateEndpoint), coalesce(steps('tagsAndNaming').naming.privateEndpointNameConventionOverride, ''), '')]",
-        "privateEndpointNicNameConvention": "[if(and(steps('tagsAndNaming').naming.enableNameOverrides, startsWith(steps('storage').storageService, 'AzureFiles'), steps('zeroTrust').privateNetworking.privateEndpoint), coalesce(steps('tagsAndNaming').naming.privateEndpointNicNameConventionOverride, ''), '')]",
-        "permittedIPs": "[if(startsWith(steps('storage').storageService, 'AzureFiles'), filter(map(steps('zeroTrust').privateNetworking.permittedIPs, (item) => item.value), (ip) => not(empty(ip))), parse('[]'))]",
-        "paasPublicNetworkAccess": "[if(startsWith(steps('storage').storageService, 'AzureFiles'), steps('zeroTrust').privateNetworking.paasPublicNetworkAccess, 'Auto')]",
+        "filePrivateDnsZoneResourceId": "[if(and(startsWith(steps('storage').storageService, 'AzureFiles'), and(steps('zeroTrust').storagePrivateNetworking.storagePrivateEndpoint, steps('zeroTrust').storagePrivateNetworking.enablePrivateDNSIntegration)), steps('zeroTrust').storagePrivateNetworking.filePrivateDnsZone, '')]",
+        "privateEndpointNameConvention": "[if(and(steps('tagsAndNaming').naming.enableNameOverrides, startsWith(steps('storage').storageService, 'AzureFiles'), steps('zeroTrust').storagePrivateNetworking.storagePrivateEndpoint), coalesce(steps('tagsAndNaming').naming.privateEndpointNameConventionOverride, ''), '')]",
+        "privateEndpointNicNameConvention": "[if(and(steps('tagsAndNaming').naming.enableNameOverrides, startsWith(steps('storage').storageService, 'AzureFiles'), steps('zeroTrust').storagePrivateNetworking.storagePrivateEndpoint), coalesce(steps('tagsAndNaming').naming.privateEndpointNicNameConventionOverride, ''), '')]",
         "logAnalyticsWorkspaceResourceId": "[if(empty(steps('zeroTrust').operations.logAnalyticsWorkspace), '', steps('zeroTrust').operations.logAnalyticsWorkspace.id)]",
         "keyManagementStorage": "[if(startsWith(steps('storage').storageService, 'AzureFiles'), steps('zeroTrust').keyManagement.keyManagementStorage, 'PlatformManaged')]",
         "existingEncryptionKeyVaultResourceId": "[if(and(startsWith(steps('storage').storageService, 'AzureFiles'), contains(steps('zeroTrust').keyManagement.keyManagementStorage, 'CustomerManaged')), steps('zeroTrust').keyManagement.existingEncryptionKeyVault.id, '')]",
@@ -2092,7 +2299,12 @@
         "remoteProfileStorageAccountResourceIds": "[if(and(startsWith(steps('storage').storageService, 'AzureFiles'), contains(steps('storage').containerType, 'CloudCache')), steps('storage').remoteStorageAccounts, parse('[]'))]",
         "remoteOfficeStorageAccountResourceIds": "[if(and(startsWith(steps('storage').storageService, 'AzureFiles'), contains(steps('storage').containerType, 'CloudCache'), contains(steps('storage').containerType, 'OfficeContainer')), steps('storage').remoteOfficeStorageAccounts, parse('[]'))]",
         "remoteNetAppVolumeResourceIds": "[if(and(startsWith(steps('storage').storageService, 'AzureNetAppFiles'), contains(steps('storage').containerType, 'CloudCache')), steps('storage').remoteNetAppVolumes, parse('[]'))]",
-        "tags": "[steps('tagsAndNaming').tagsSection.tags]"
+        "tags": "[steps('tagsAndNaming').tagsSection.tags]",
+        "storageServiceEndpointSubnetResourceIds": "[if(startsWith(steps('storage').storageService, 'AzureFiles'), if(empty(steps('zeroTrust').storageServiceEndpointAccess.storageServiceEndpointSubnets), parse('[]'), filter(steps('zeroTrust').storageServiceEndpointAccess.storageServiceEndpointSubnets, (id) => not(empty(id)))), parse('[]'))]",
+        "storagePrivateEndpoint": "[if(startsWith(steps('storage').storageService, 'AzureFiles'), steps('zeroTrust').storagePrivateNetworking.storagePrivateEndpoint, false)]",
+        "storagePrivateEndpointSubnetResourceId": "[if(and(startsWith(steps('storage').storageService, 'AzureFiles'), steps('zeroTrust').storagePrivateNetworking.storagePrivateEndpoint), steps('zeroTrust').storagePrivateNetworking.privateEndpointSubnet.id, '')]",
+        "storagePermittedIPs": "[if(startsWith(steps('storage').storageService, 'AzureFiles'), if(empty(steps('zeroTrust').storageServiceEndpointAccess.storagePermittedIPs), parse('[]'), filter(map(steps('zeroTrust').storageServiceEndpointAccess.storagePermittedIPs, (item) => item.value), (ip) => not(empty(ip)))), parse('[]'))]",
+        "storagePublicNetworkAccess": "[if(startsWith(steps('storage').storageService, 'AzureFiles'), steps('zeroTrust').storagePublicNetworking.storagePublicNetworkAccess, 'Disabled')]"
       },
       "kind": "Subscription",
       "subscriptionId": "[steps('scope').resourceScope.subscription.id]",

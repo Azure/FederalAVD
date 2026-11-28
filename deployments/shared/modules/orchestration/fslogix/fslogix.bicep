@@ -4,7 +4,7 @@ metadata description = 'Composes Azure Files or domain-services Azure NetApp Fil
 targetScope = 'subscription'
 
 import { entraGroupType } from '../../resourceModules/types/identityTypes.bicep'
-import { publicNetworkAccessMode } from '../networking/functions.bicep'
+import { servicePublicNetworkAccessMode } from '../networking/functions.bicep'
 
 // Profile is always first so array positions remain stable for storage roles and NetApp volumes.
 @export()
@@ -50,7 +50,7 @@ param createNetAppCapacityPool bool = true
 @description('Required. Selected session-host or SMB identity mode used to choose domain, Entra, and storage configuration paths.')
 param identitySolution string
 @description('Required. Resource ID of an existing Azure Files private DNS zone; empty omits the private endpoint DNS zone group.')
-param azureFilePrivateDnsZoneResourceId string
+param filePrivateDnsZoneResourceId string
 @description('Required. Client ID of the identity attached to the helper VM and authorized for storage configuration.')
 param deploymentUserAssignedIdentityClientId string
 @description('Required. Name of the existing deployment helper VM used to execute storage or cleanup Run Commands.')
@@ -93,14 +93,14 @@ param netAppCapacityPoolName string
 param netAppVolumesSubnetResourceId string
 @description('Required. Distinguished name of the target organizational unit for selected domain operations; empty uses the domain default.')
 param ouPath string
-@description('Required. Whether to create private endpoints and apply the corresponding public-network restrictions.')
-param privateEndpoint bool
+@description('Required. Whether to create Azure Files private endpoints. Public access is controlled independently by storagePublicNetworkAccess.')
+param storagePrivateEndpoint bool
 @description('Required. Private endpoint name pattern using RESOURCE, SUBRESOURCE, and VNETID substitution tokens.')
 param privateEndpointNameConv string
 @description('Required. Private endpoint NIC name pattern using RESOURCE, SUBRESOURCE, and VNETID substitution tokens.')
 param privateEndpointNICNameConv string
 @description('Required. Resource ID of the existing subnet for private endpoints; required when endpoint creation is selected.')
-param privateEndpointSubnetResourceId string
+param storagePrivateEndpointSubnetResourceId string
 @description('Required. Name of the existing resource group containing the deployment helper VM.')
 param resourceGroupDeployment string
 @description('Required. Name of the existing storage resource group in this subscription.')
@@ -153,10 +153,13 @@ param tags object
 @description('Optional. Resource ID of the existing identity authorized to use the storage encryption keys; unused for PlatformManaged encryption.')
 param encryptionUserAssignedIdentityResourceId string = ''
 @description('Optional. Array of permitted IP address or CIDR strings for resource firewalls.')
-param permittedIPs string[] = []
+param storagePermittedIPs string[] = []
 
-@description('Optional. Azure Files public-access mode; Auto preserves legacy private-endpoint/IP inference. Does not apply to NetApp Files or backup vaults.')
-param paasPublicNetworkAccess publicNetworkAccessMode = 'Auto'
+@description('Optional. Allowed Azure Files subnet IDs with existing Storage service endpoints. Does not modify subnets or existing storage.')
+param storageServiceEndpointSubnetResourceIds string[] = []
+
+@description('Optional. Explicit Azure Files public-access policy, independent of private endpoints and allowlists. Does not apply to NetApp Files or backup vaults.')
+param storagePublicNetworkAccess servicePublicNetworkAccessMode = 'Disabled'
 @description('Optional. Retention interval in days for deleted Azure Files shares.')
 param fslogixSoftDeleteRetentionDays int = 14
 @description('Optional. Resource ID of an existing Recovery Services vault; empty disables backup registration.')
@@ -213,7 +216,7 @@ module azureFiles 'modules/azureFiles.bicep' = if (storageSolution == 'AzureFile
   scope: resourceGroup(resourceGroupStorage)
   params: {
     appUpdateUserAssignedIdentityResourceId: appUpdateUserAssignedIdentityResourceId
-    azureFilePrivateDnsZoneResourceId: azureFilePrivateDnsZoneResourceId
+    filePrivateDnsZoneResourceId: filePrivateDnsZoneResourceId
     deploymentUserAssignedIdentityClientId: deploymentUserAssignedIdentityClientId
     deploymentVirtualMachineName: deploymentVirtualMachineName
     deploymentResourceGroupName: resourceGroupDeployment
@@ -243,10 +246,10 @@ module azureFiles 'modules/azureFiles.bicep' = if (storageSolution == 'AzureFile
     location: location
     logAnalyticsWorkspaceId: logAnalyticsWorkspaceResourceId
     ouPath: ouPath
-    privateEndpoint: privateEndpoint
+    storagePrivateEndpoint: storagePrivateEndpoint
     privateEndpointNameConv: privateEndpointNameConv
     privateEndpointNICNameConv: privateEndpointNICNameConv
-    privateEndpointSubnetResourceId: privateEndpointSubnetResourceId
+    storagePrivateEndpointSubnetResourceId: storagePrivateEndpointSubnetResourceId
     resourceGroupStorage: resourceGroupStorage
     shardingOptions: fslogixShardOptions
     shareAdminGroups: fslogixAdminGroups
@@ -258,8 +261,9 @@ module azureFiles 'modules/azureFiles.bicep' = if (storageSolution == 'AzureFile
     profileStorageTier: profileStorageTier
     profileStorageRedundancy: profileStorageRedundancy
     tags: tags
-    permittedIPs: permittedIPs
-    paasPublicNetworkAccess: paasPublicNetworkAccess
+    storagePermittedIPs: storagePermittedIPs
+    storageServiceEndpointSubnetResourceIds: storageServiceEndpointSubnetResourceIds
+    storagePublicNetworkAccess: storagePublicNetworkAccess
     softDeleteRetentionDays: fslogixSoftDeleteRetentionDays
   }
 }

@@ -1,6 +1,6 @@
 targetScope = 'subscription'
 
-import { publicNetworkAccessMode } from '../shared/modules/orchestration/networking/functions.bicep'
+import { sharedServicesPaasNetworkingType, sharedPrivateEndpointSubnetResourceIdsType, sharedServicesPrivateDnsZoneResourceIdsType, resolvePaasNetworking, requirePrivateEndpointSubnet } from '../shared/modules/orchestration/networking/scenarios.bicep'
 import { sharedServicesNames, namingConventionConfig } from '../shared/modules/orchestration/naming/naming.bicep'
 
 // Deploys the AVD Key Vault prerequisites into the operations resource group: a Secrets Key Vault for
@@ -83,22 +83,15 @@ param encryptionKeyVaultRetentionInDays int = 90
 
 // ── Private Endpoints ──────────────────────────────────────────────────────────
 
-@description('Optional. Deploy private endpoints for the Key Vaults. Public access is controlled separately by paasPublicNetworkAccess.')
-param privateEndpoint bool = false
+@description('Optional. Common secure networking defaults and Key Vault/Backup overrides for newly created resources. Restricted public Backup requires an explicit Enabled or Disabled choice; vaults have no IP/subnet ACL equivalent.')
+param paasNetworking sharedServicesPaasNetworkingType = {}
 
-@description('Conditional. The resource ID of the subnet for Key Vault private endpoints. Required when privateEndpoint is true.')
-param privateEndpointSubnetResourceId string = ''
+@description('Conditional. One shared-resource subnet for all selected Key Vault, Backup and AVD private endpoints. Required when any applicable endpoint is selected; no public or session-host subnet fallback.')
+param privateEndpointSubnetResourceIds sharedPrivateEndpointSubnetResourceIdsType = {}
 
-@description('Conditional. The resource ID of the Azure Key Vault Private DNS Zone. Required when privateEndpoint is true.')
-param azureKeyVaultPrivateDnsZoneResourceId string = ''
+@description('Optional. Existing private DNS zone IDs by namespace, including AVD feed/global feed. Backup is required when a new Backup private endpoint is selected.')
+param privateDnsZoneResourceIds sharedServicesPrivateDnsZoneResourceIdsType = {}
 
-// ── Permitted IPs ─────────────────────────────────────────────────────────────
-
-@description('Optional. Array of permitted IP addresses or CIDR blocks allowed through the firewall of all Key Vaults deployed by this module. Use when managing from a trusted workstation outside the Azure network boundary.')
-param permittedIPs array = []
-
-@description('Optional. Public-access mode for newly deployed Key Vaults. Auto preserves legacy behavior; IP rules remain configured and AzureServices bypass still applies.')
-param paasPublicNetworkAccess publicNetworkAccessMode = 'Auto'
 
 // ── Monitoring ─────────────────────────────────────────────────────────────────
 
@@ -167,11 +160,8 @@ param avdWorkspaceNameOverride string = ''
 @description('Optional. Public network access mode managed on the shared AVD workspace.')
 param avdWorkspacePublicNetworkAccess 'Disabled' | 'Enabled' = 'Enabled'
 
-@description('Optional. Subnet resource ID for the deterministically named workspace feed private endpoint. Empty disables feed endpoint management.')
-param workspaceFeedPrivateEndpointSubnetResourceId string = ''
-
-@description('Optional. AVD feed Private DNS zone resource ID for the workspace feed private endpoint.')
-param avdPrivateDnsZoneResourceId string = ''
+@description('Optional. Create or update the deterministic workspace feed private endpoint when manageAvdWorkspace is true, using sharedResourcesPrivateEndpointSubnetResourceId. Does not enable Key Vault, Backup, or global-feed endpoints.')
+param deployWorkspaceFeedPrivateEndpoint bool = false
 
 @description('Optional. Create or update and manage the global-feed workspace and its deterministically named private endpoint.')
 param manageGlobalAvdWorkspace bool = false
@@ -191,12 +181,6 @@ param globalFeedResourceGroupNameOverride string = ''
 
 @description('Optional. Complete name override for a newly created global-feed workspace.')
 param globalFeedWorkspaceNameOverride string = ''
-
-@description('Conditional. Subnet resource ID for the deterministically named global-feed private endpoint. Required when manageGlobalAvdWorkspace is true.')
-param globalFeedPrivateEndpointSubnetResourceId string = ''
-
-@description('Optional. AVD global-feed Private DNS zone resource ID.')
-param globalFeedPrivateDnsZoneResourceId string = ''
 
 // FSLogix Backup
 
@@ -219,15 +203,6 @@ param fslogixBackupRetentionDays int = 30
 
 @description('Optional. Time zone used by the shared Azure Files snapshot backup policy.')
 param fslogixBackupTimeZone string = 'UTC'
-
-@description('Conditional. Resource ID of the Azure Backup private DNS zone used by the FSLogix backup vault private endpoint.')
-param azureBackupPrivateDnsZoneResourceId string = ''
-
-@description('Conditional. Resource ID of the Azure Blob private DNS zone used by the FSLogix backup vault private endpoint.')
-param azureBlobPrivateDnsZoneResourceId string = ''
-
-@description('Conditional. Resource ID of the Azure Queue private DNS zone used by the FSLogix backup vault private endpoint.')
-param azureQueuePrivateDnsZoneResourceId string = ''
 
 // ── Tags ───────────────────────────────────────────────────────────────────────
 
@@ -283,6 +258,23 @@ var createSecretsKeyVault = deploySecretsKeyVault && empty(existingSecretsKeyVau
 var createEncryptionKeyVault = deployEncryptionKeyVault && empty(existingEncryptionKeyVaultResourceId)
 var createFSLogixBackupVault = deployFSLogixBackupVault && empty(existingFSLogixBackupVaultResourceId)
 var deployOperationsResourceGroup = createSecretsKeyVault || createEncryptionKeyVault || createFSLogixBackupVault
+var keyVaultCreated = createSecretsKeyVault || createEncryptionKeyVault
+var resolvedNetworking = resolvePaasNetworking(paasNetworking, false, keyVaultCreated, createFSLogixBackupVault)
+var keyVaultPublicNetworkAccess = resolvedNetworking.keyVault.publicNetworkAccess
+var keyVaultPrivateEndpoint = resolvedNetworking.keyVault.privateEndpoint
+var keyVaultPermittedIPs = resolvedNetworking.keyVault.permittedIPs
+var keyVaultServiceEndpointSubnetResourceIds = resolvedNetworking.keyVault.serviceEndpointSubnetResourceIds
+var deployBackupPrivateEndpoints = resolvedNetworking.backup.privateEndpoint
+var backupPublicNetworkAccess = resolvedNetworking.backup.publicNetworkAccess
+var sharedResourcesPrivateEndpointSubnetResourceId = requirePrivateEndpointSubnet(privateEndpointSubnetResourceIds.?sharedResources ?? '', (keyVaultCreated && keyVaultPrivateEndpoint) || (createFSLogixBackupVault && deployBackupPrivateEndpoints) || (manageAvdWorkspace && deployWorkspaceFeedPrivateEndpoint) || manageGlobalAvdWorkspace, 'sharedResources')
+var vaultPrivateDnsZoneResourceId = privateDnsZoneResourceIds.?vault ?? ''
+var backupPrivateDnsZoneResourceId = createFSLogixBackupVault && deployBackupPrivateEndpoints && empty(trim(privateDnsZoneResourceIds.?backup ?? ''))
+  ? fail('privateDnsZoneResourceIds.backup is required for the selected new Backup private endpoint.')
+  : privateDnsZoneResourceIds.?backup ?? ''
+var blobPrivateDnsZoneResourceId = privateDnsZoneResourceIds.?blob ?? ''
+var queuePrivateDnsZoneResourceId = privateDnsZoneResourceIds.?queue ?? ''
+var avdPrivateDnsZoneResourceId = privateDnsZoneResourceIds.?avdFeed ?? ''
+var globalFeedPrivateDnsZoneResourceId = privateDnsZoneResourceIds.?avdGlobalFeed ?? ''
 
 var naming = sharedServicesNames(namingConvention, {
   subscriptionId: subscription().subscriptionId
@@ -357,9 +349,9 @@ module monitoring '../shared/modules/orchestration/monitoring/monitoring.bicep' 
 var avdWorkspaceConfigurationIsValid = !manageAvdWorkspace || avdWorkspaceMode == 'Create' && empty(existingAvdWorkspaceResourceId) || avdWorkspaceMode == 'Update' && !empty(existingAvdWorkspaceResourceId)
   ? true
   : fail('AVD workspace management requires an empty existingAvdWorkspaceResourceId for Create, or a workspace resource ID for Update.')
-var globalAvdWorkspaceConfigurationIsValid = !manageGlobalAvdWorkspace || !empty(globalFeedPrivateEndpointSubnetResourceId) && (globalAvdWorkspaceMode == 'Create' && empty(existingGlobalAvdWorkspaceResourceId) || globalAvdWorkspaceMode == 'Update' && !empty(existingGlobalAvdWorkspaceResourceId))
+var globalAvdWorkspaceConfigurationIsValid = !manageGlobalAvdWorkspace || !empty(sharedResourcesPrivateEndpointSubnetResourceId) && (globalAvdWorkspaceMode == 'Create' && empty(existingGlobalAvdWorkspaceResourceId) || globalAvdWorkspaceMode == 'Update' && !empty(existingGlobalAvdWorkspaceResourceId))
   ? true
-  : fail('Global-feed workspace management requires an endpoint subnet and an empty existingGlobalAvdWorkspaceResourceId for Create, or a workspace resource ID for Update.')
+  : fail('Global-feed workspace management requires sharedResourcesPrivateEndpointSubnetResourceId and an empty existingGlobalAvdWorkspaceResourceId for Create, or a workspace resource ID for Update.')
 
 module avdWorkspace '../shared/modules/orchestration/avdWorkspace/avdWorkspace.bicep' = if ((manageAvdWorkspace || manageGlobalAvdWorkspace) && avdWorkspaceConfigurationIsValid && globalAvdWorkspaceConfigurationIsValid) {
   scope: subscription()
@@ -373,7 +365,7 @@ module avdWorkspace '../shared/modules/orchestration/avdWorkspace/avdWorkspace.b
     workspaceLocation: location
     workspaceFriendlyName: avdWorkspaceFriendlyName
     workspacePublicNetworkAccess: avdWorkspacePublicNetworkAccess
-    workspaceFeedPrivateEndpointSubnetResourceId: workspaceFeedPrivateEndpointSubnetResourceId
+    workspaceFeedPrivateEndpointSubnetResourceId: manageAvdWorkspace && deployWorkspaceFeedPrivateEndpoint ? sharedResourcesPrivateEndpointSubnetResourceId : ''
     avdPrivateDnsZoneResourceId: avdPrivateDnsZoneResourceId
     logAnalyticsWorkspaceResourceId: effectiveLogAnalyticsWorkspaceResourceId
     manageGlobalWorkspace: manageGlobalAvdWorkspace
@@ -381,7 +373,7 @@ module avdWorkspace '../shared/modules/orchestration/avdWorkspace/avdWorkspace.b
     globalWorkspaceName: globalFeedWorkspaceName
     globalWorkspaceResourceId: existingGlobalAvdWorkspaceResourceId
     globalWorkspaceResourceGroupName: globalFeedResourceGroupName
-    globalFeedPrivateEndpointSubnetResourceId: globalFeedPrivateEndpointSubnetResourceId
+    globalFeedPrivateEndpointSubnetResourceId: manageGlobalAvdWorkspace ? sharedResourcesPrivateEndpointSubnetResourceId : ''
     globalFeedPrivateDnsZoneResourceId: globalFeedPrivateDnsZoneResourceId
     privateEndpointNameConv: privateEndpointNameConv
     privateEndpointNICNameConv: privateEndpointNICNameConv
@@ -420,13 +412,14 @@ module keyVaults '../shared/modules/orchestration/keyVaults/keyVaults.bicep' = {
     deployEncryptionKeyVault: createEncryptionKeyVault
     encryptionKeyVaultName: encryptionKeyVaultName
     encryptionKeyVaultRetentionInDays: encryptionKeyVaultRetentionInDays
-    privateEndpoint: privateEndpoint
-    privateEndpointSubnetResourceId: privateEndpointSubnetResourceId
-    azureKeyVaultPrivateDnsZoneResourceId: azureKeyVaultPrivateDnsZoneResourceId
+    keyVaultPrivateEndpoint: keyVaultPrivateEndpoint
+    keyVaultPrivateEndpointSubnetResourceId: sharedResourcesPrivateEndpointSubnetResourceId
+    vaultPrivateDnsZoneResourceId: vaultPrivateDnsZoneResourceId
     privateEndpointNameConv: privateEndpointNameConv
     privateEndpointNICNameConv: privateEndpointNICNameConv
-    permittedIPs: permittedIPs
-    paasPublicNetworkAccess: paasPublicNetworkAccess
+    keyVaultPermittedIPs: keyVaultPermittedIPs
+    keyVaultServiceEndpointSubnetResourceIds: keyVaultServiceEndpointSubnetResourceIds
+    keyVaultPublicNetworkAccess: keyVaultPublicNetworkAccess
     logAnalyticsWorkspaceResourceId: effectiveLogAnalyticsWorkspaceResourceId
     tags: tags
   }
@@ -435,7 +428,7 @@ module keyVaults '../shared/modules/orchestration/keyVaults/keyVaults.bicep' = {
 
 // Shared FSLogix Backup Vault
 
-module fslogixBackupVault '../shared/modules/resourceModules/recoveryServices/fslogixBackupVault.bicep' = if (createFSLogixBackupVault) {
+module fslogixBackupVault '../shared/modules/orchestration/recoveryServices/fslogixBackupVault.bicep' = if (createFSLogixBackupVault) {
   params: {
     createVault: true
     manageBackupPolicy: true
@@ -443,11 +436,12 @@ module fslogixBackupVault '../shared/modules/resourceModules/recoveryServices/fs
     resourceGroupOperations: operationsResourceGroupName
     location: location
     logAnalyticsWorkspaceResourceId: effectiveLogAnalyticsWorkspaceResourceId
-    privateEndpoint: privateEndpoint
-    privateEndpointSubnetResourceId: privateEndpointSubnetResourceId
-    azureBackupPrivateDnsZoneResourceId: azureBackupPrivateDnsZoneResourceId
-    azureBlobPrivateDnsZoneResourceId: azureBlobPrivateDnsZoneResourceId
-    azureQueuePrivateDnsZoneResourceId: azureQueuePrivateDnsZoneResourceId
+    publicNetworkAccess: backupPublicNetworkAccess
+    privateEndpoint: deployBackupPrivateEndpoints
+    privateEndpointSubnetResourceId: sharedResourcesPrivateEndpointSubnetResourceId
+    backupPrivateDnsZoneResourceId: backupPrivateDnsZoneResourceId
+    blobPrivateDnsZoneResourceId: blobPrivateDnsZoneResourceId
+    queuePrivateDnsZoneResourceId: queuePrivateDnsZoneResourceId
     privateEndpointNameConv: privateEndpointNameConv
     privateEndpointNICNameConv: privateEndpointNICNameConv
     tags: tags

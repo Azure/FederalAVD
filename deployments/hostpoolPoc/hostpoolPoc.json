@@ -6,7 +6,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.49.2.45890",
-      "templateHash": "13779806951348866272"
+      "templateHash": "17974668459960958328"
     }
   },
   "definitions": {
@@ -446,6 +446,20 @@
         "description": "Reference to an existing Microsoft Entra group by object ID and display name.",
         "__bicep_imported_from!": {
           "sourceTemplate": "../shared/modules/resourceModules/types/identityTypes.bicep"
+        }
+      }
+    },
+    "servicePublicNetworkAccessMode": {
+      "type": "string",
+      "allowedValues": [
+        "Disabled",
+        "Enabled",
+        "EnabledWithRestrictions"
+      ],
+      "metadata": {
+        "description": "Explicit service-family public endpoint policy. Independent of private endpoints and allowlists.",
+        "__bicep_imported_from!": {
+          "sourceTemplate": "../shared/modules/orchestration/networking/functions.bicep"
         }
       }
     }
@@ -1725,6 +1739,16 @@
     }
   ],
   "parameters": {
+    "storageServiceEndpointSubnetResourceIds": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "defaultValue": [],
+      "metadata": {
+        "description": "Optional. Additional allowed subnet IDs with existing Storage service endpoints. Restricted storage also enables the endpoint on the new PoC host subnet and allows it; existing subnets are not modified."
+      }
+    },
     "identifier": {
       "type": "string",
       "maxLength": 16,
@@ -1831,6 +1855,23 @@
       "metadata": {
         "description": "Optional. Key/value metadata applied to supported PoC resources."
       }
+    },
+    "storagePublicNetworkAccess": {
+      "$ref": "#/definitions/servicePublicNetworkAccessMode",
+      "defaultValue": "Disabled",
+      "metadata": {
+        "description": "Optional. Public endpoint policy for newly created storage resources. Independent of private endpoints and other service families."
+      }
+    },
+    "storagePermittedIPs": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "defaultValue": [],
+      "metadata": {
+        "description": "Optional. Public IP addresses/CIDRs allowed for newly created storage resources. Retained in all access modes; does not grant authorization."
+      }
     }
   },
   "variables": {
@@ -1840,6 +1881,7 @@
     "fslogixFileShareNames": [
       "profile-containers"
     ],
+    "configureStorageServiceEndpoint": "[and(parameters('deployFSLogixStorage'), equals(parameters('storagePublicNetworkAccess'), 'EnabledWithRestrictions'))]",
     "naming": "[__bicep.hostPoolNames(variables('namingPolicy').defaults, variables('hpBaseName'), createObject('subscriptionId', subscription().subscriptionId, 'cloud', environment().name, 'virtualMachinesLocation', variables('location'), 'controlPlaneLocation', variables('location'), 'globalFeedLocation', '', 'existingFeedWorkspaceResourceId', '', 'sharedServicesSubscriptionId', subscription().subscriptionId))]",
     "resourceGroupName": "[variables('naming').resourceGroupConsolidated]",
     "virtualNetworkName": "[__bicep.resourceName(variables('namingPolicy').defaults, 'pocVirtualNetwork', variables('naming').vmLocationAbbreviation, variables('hpBaseName'), '')]",
@@ -2854,11 +2896,7 @@
           },
           "subnets": {
             "value": [
-              {
-                "name": "[variables('sessionHostSubnetName')]",
-                "addressPrefix": "[parameters('sessionHostSubnetAddressPrefix')]",
-                "purpose": "hosts"
-              }
+              "[union(createObject('name', variables('sessionHostSubnetName'), 'addressPrefix', parameters('sessionHostSubnetAddressPrefix'), 'purpose', 'hosts'), if(variables('configureStorageServiceEndpoint'), createObject('serviceEndpoints', createArray(createObject('service', 'Microsoft.Storage'))), createObject()))]"
             ]
           },
           "defaultRouting": {
@@ -2927,7 +2965,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.49.2.45890",
-              "templateHash": "8964133074514929807"
+              "templateHash": "8211312750154406165"
             }
           },
           "parameters": {
@@ -3098,7 +3136,7 @@
                     "_generator": {
                       "name": "bicep",
                       "version": "0.49.2.45890",
-                      "templateHash": "12015431321016469171"
+                      "templateHash": "1979535899671667716"
                     }
                   },
                   "parameters": {
@@ -3178,15 +3216,7 @@
                         "count": "[length(variables('hostsSubnetsList'))]",
                         "input": {
                           "name": "[variables('hostsSubnetsList')[copyIndex('snetHosts')].name]",
-                          "properties": {
-                            "addressPrefix": "[variables('hostsSubnetsList')[copyIndex('snetHosts')].addressPrefix]",
-                            "defaultOutboundAccess": false,
-                            "natGateway": "[if(variables('deployNatGateway'), createObject('id', resourceId('Microsoft.Network/natGateways', parameters('natGatewayName'))), null())]",
-                            "routeTable": "[if(equals(parameters('defaultRouting'), 'nva'), createObject('id', resourceId('Microsoft.Network/routeTables', parameters('routeTableName'))), null())]",
-                            "networkSecurityGroup": {
-                              "id": "[resourceId('Microsoft.Network/networkSecurityGroups', parameters('nsgName'))]"
-                            }
-                          }
+                          "properties": "[union(createObject('addressPrefix', variables('hostsSubnetsList')[copyIndex('snetHosts')].addressPrefix, 'defaultOutboundAccess', false(), 'natGateway', if(variables('deployNatGateway'), createObject('id', resourceId('Microsoft.Network/natGateways', parameters('natGatewayName'))), null()), 'routeTable', if(equals(parameters('defaultRouting'), 'nva'), createObject('id', resourceId('Microsoft.Network/routeTables', parameters('routeTableName'))), null()), 'networkSecurityGroup', createObject('id', resourceId('Microsoft.Network/networkSecurityGroups', parameters('nsgName')))), if(contains(variables('hostsSubnetsList')[copyIndex('snetHosts')], 'serviceEndpoints'), createObject('serviceEndpoints', variables('hostsSubnetsList')[copyIndex('snetHosts')].serviceEndpoints), createObject()))]"
                         }
                       }
                     ],
@@ -8727,7 +8757,7 @@
           "appUpdateUserAssignedIdentityResourceId": {
             "value": ""
           },
-          "azureFilePrivateDnsZoneResourceId": {
+          "filePrivateDnsZoneResourceId": {
             "value": ""
           },
           "deploymentUserAssignedIdentityClientId": {
@@ -8791,7 +8821,7 @@
           "ouPath": {
             "value": ""
           },
-          "privateEndpoint": {
+          "storagePrivateEndpoint": {
             "value": false
           },
           "privateEndpointNameConv": {
@@ -8800,7 +8830,7 @@
           "privateEndpointNICNameConv": {
             "value": "[variables('naming').privateEndpointNICNameConv]"
           },
-          "privateEndpointSubnetResourceId": {
+          "storagePrivateEndpointSubnetResourceId": {
             "value": ""
           },
           "resourceGroupDeployment": {
@@ -8839,8 +8869,14 @@
           "storageSolution": {
             "value": "AzureFiles"
           },
-          "permittedIPs": {
-            "value": []
+          "storagePermittedIPs": {
+            "value": "[parameters('storagePermittedIPs')]"
+          },
+          "storagePublicNetworkAccess": {
+            "value": "[parameters('storagePublicNetworkAccess')]"
+          },
+          "storageServiceEndpointSubnetResourceIds": {
+            "value": "[union(parameters('storageServiceEndpointSubnetResourceIds'), if(variables('configureStorageServiceEndpoint'), createArray(variables('sessionHostSubnetResourceId')), createArray()))]"
           },
           "tags": {
             "value": "[parameters('tags')]"
@@ -8866,7 +8902,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.49.2.45890",
-              "templateHash": "7525476791702001789"
+              "templateHash": "10310622093389773909"
             },
             "name": "FSLogix storage orchestration",
             "description": "Composes Azure Files or domain-services Azure NetApp Files storage in an existing storage resource group, with optional Azure Files backup registration in an existing vault resource group."
@@ -8895,16 +8931,15 @@
                 }
               }
             },
-            "publicNetworkAccessMode": {
+            "servicePublicNetworkAccessMode": {
               "type": "string",
               "allowedValues": [
-                "Auto",
                 "Disabled",
                 "Enabled",
                 "EnabledWithRestrictions"
               ],
               "metadata": {
-                "description": "Public endpoint mode. Auto preserves legacy private-endpoint/firewall inference and is not offered in Portal forms.",
+                "description": "Explicit service-family public endpoint policy. Independent of private endpoints and allowlists.",
                 "__bicep_imported_from!": {
                   "sourceTemplate": "../networking/functions.bicep"
                 }
@@ -9046,7 +9081,7 @@
                 "description": "Required. Selected session-host or SMB identity mode used to choose domain, Entra, and storage configuration paths."
               }
             },
-            "azureFilePrivateDnsZoneResourceId": {
+            "filePrivateDnsZoneResourceId": {
               "type": "string",
               "metadata": {
                 "description": "Required. Resource ID of an existing Azure Files private DNS zone; empty omits the private endpoint DNS zone group."
@@ -9179,10 +9214,10 @@
                 "description": "Required. Distinguished name of the target organizational unit for selected domain operations; empty uses the domain default."
               }
             },
-            "privateEndpoint": {
+            "storagePrivateEndpoint": {
               "type": "bool",
               "metadata": {
-                "description": "Required. Whether to create private endpoints and apply the corresponding public-network restrictions."
+                "description": "Required. Whether to create Azure Files private endpoints. Public access is controlled independently by storagePublicNetworkAccess."
               }
             },
             "privateEndpointNameConv": {
@@ -9197,7 +9232,7 @@
                 "description": "Required. Private endpoint NIC name pattern using RESOURCE, SUBRESOURCE, and VNETID substitution tokens."
               }
             },
-            "privateEndpointSubnetResourceId": {
+            "storagePrivateEndpointSubnetResourceId": {
               "type": "string",
               "metadata": {
                 "description": "Required. Resource ID of the existing subnet for private endpoints; required when endpoint creation is selected."
@@ -9370,7 +9405,7 @@
                 "description": "Optional. Resource ID of the existing identity authorized to use the storage encryption keys; unused for PlatformManaged encryption."
               }
             },
-            "permittedIPs": {
+            "storagePermittedIPs": {
               "type": "array",
               "items": {
                 "type": "string"
@@ -9380,11 +9415,21 @@
                 "description": "Optional. Array of permitted IP address or CIDR strings for resource firewalls."
               }
             },
-            "paasPublicNetworkAccess": {
-              "$ref": "#/definitions/publicNetworkAccessMode",
-              "defaultValue": "Auto",
+            "storageServiceEndpointSubnetResourceIds": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "defaultValue": [],
               "metadata": {
-                "description": "Optional. Azure Files public-access mode; Auto preserves legacy private-endpoint/IP inference. Does not apply to NetApp Files or backup vaults."
+                "description": "Optional. Allowed Azure Files subnet IDs with existing Storage service endpoints. Does not modify subnets or existing storage."
+              }
+            },
+            "storagePublicNetworkAccess": {
+              "$ref": "#/definitions/servicePublicNetworkAccessMode",
+              "defaultValue": "Disabled",
+              "metadata": {
+                "description": "Optional. Explicit Azure Files public-access policy, independent of private endpoints and allowlists. Does not apply to NetApp Files or backup vaults."
               }
             },
             "fslogixSoftDeleteRetentionDays": {
@@ -10361,8 +10406,8 @@
                   "appUpdateUserAssignedIdentityResourceId": {
                     "value": "[parameters('appUpdateUserAssignedIdentityResourceId')]"
                   },
-                  "azureFilePrivateDnsZoneResourceId": {
-                    "value": "[parameters('azureFilePrivateDnsZoneResourceId')]"
+                  "filePrivateDnsZoneResourceId": {
+                    "value": "[parameters('filePrivateDnsZoneResourceId')]"
                   },
                   "deploymentUserAssignedIdentityClientId": {
                     "value": "[parameters('deploymentUserAssignedIdentityClientId')]"
@@ -10443,8 +10488,8 @@
                   "ouPath": {
                     "value": "[parameters('ouPath')]"
                   },
-                  "privateEndpoint": {
-                    "value": "[parameters('privateEndpoint')]"
+                  "storagePrivateEndpoint": {
+                    "value": "[parameters('storagePrivateEndpoint')]"
                   },
                   "privateEndpointNameConv": {
                     "value": "[parameters('privateEndpointNameConv')]"
@@ -10452,8 +10497,8 @@
                   "privateEndpointNICNameConv": {
                     "value": "[parameters('privateEndpointNICNameConv')]"
                   },
-                  "privateEndpointSubnetResourceId": {
-                    "value": "[parameters('privateEndpointSubnetResourceId')]"
+                  "storagePrivateEndpointSubnetResourceId": {
+                    "value": "[parameters('storagePrivateEndpointSubnetResourceId')]"
                   },
                   "resourceGroupStorage": {
                     "value": "[parameters('resourceGroupStorage')]"
@@ -10488,11 +10533,14 @@
                   "tags": {
                     "value": "[parameters('tags')]"
                   },
-                  "permittedIPs": {
-                    "value": "[parameters('permittedIPs')]"
+                  "storagePermittedIPs": {
+                    "value": "[parameters('storagePermittedIPs')]"
                   },
-                  "paasPublicNetworkAccess": {
-                    "value": "[parameters('paasPublicNetworkAccess')]"
+                  "storageServiceEndpointSubnetResourceIds": {
+                    "value": "[parameters('storageServiceEndpointSubnetResourceIds')]"
+                  },
+                  "storagePublicNetworkAccess": {
+                    "value": "[parameters('storagePublicNetworkAccess')]"
                   },
                   "softDeleteRetentionDays": {
                     "value": "[parameters('fslogixSoftDeleteRetentionDays')]"
@@ -10506,7 +10554,7 @@
                     "_generator": {
                       "name": "bicep",
                       "version": "0.49.2.45890",
-                      "templateHash": "3564368425505078343"
+                      "templateHash": "971090947073736639"
                     },
                     "name": "FSLogix Azure Files orchestration",
                     "description": "Creates indexed storage accounts, SMB shares, optional private endpoints, administrator RBAC, and identity-dependent configuration through an existing deployment helper VM."
@@ -10541,7 +10589,7 @@
                         }
                       }
                     },
-                    "publicNetworkAccessMode": {
+                    "_3.publicNetworkAccessMode": {
                       "type": "string",
                       "allowedValues": [
                         "Auto",
@@ -10551,6 +10599,20 @@
                       ],
                       "metadata": {
                         "description": "Public endpoint mode. Auto preserves legacy private-endpoint/firewall inference and is not offered in Portal forms.",
+                        "__bicep_imported_from!": {
+                          "sourceTemplate": "../../networking/functions.bicep"
+                        }
+                      }
+                    },
+                    "servicePublicNetworkAccessMode": {
+                      "type": "string",
+                      "allowedValues": [
+                        "Disabled",
+                        "Enabled",
+                        "EnabledWithRestrictions"
+                      ],
+                      "metadata": {
+                        "description": "Explicit service-family public endpoint policy. Independent of private endpoints and allowlists.",
                         "__bicep_imported_from!": {
                           "sourceTemplate": "../../networking/functions.bicep"
                         }
@@ -10631,7 +10693,7 @@
                         "resolveNetworkAccess": {
                           "parameters": [
                             {
-                              "$ref": "#/definitions/publicNetworkAccessMode",
+                              "$ref": "#/definitions/_3.publicNetworkAccessMode",
                               "name": "mode"
                             },
                             {
@@ -10652,6 +10714,30 @@
                           },
                           "metadata": {
                             "description": "Resolves publicNetworkAccess and firewall defaultAction without modifying configured rules or service exceptions.",
+                            "__bicep_imported_from!": {
+                              "sourceTemplate": "../../networking/functions.bicep"
+                            }
+                          }
+                        },
+                        "serviceEndpointSubnetIds": {
+                          "parameters": [
+                            {
+                              "type": "array",
+                              "items": {
+                                "type": "string"
+                              },
+                              "name": "ids"
+                            }
+                          ],
+                          "output": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            },
+                            "value": "[union(map(parameters('ids'), lambda('id', if(and(and(and(and(and(and(and(and(and(and(equals(length(split(trim(lambdaVariables('id')), '/')), 11), startsWith(toLower(trim(lambdaVariables('id'))), '/subscriptions/')), equals(toLower(coalesce(tryGet(split(trim(lambdaVariables('id')), '/'), 3), '')), 'resourcegroups')), equals(toLower(coalesce(tryGet(split(trim(lambdaVariables('id')), '/'), 5), '')), 'providers')), equals(toLower(coalesce(tryGet(split(trim(lambdaVariables('id')), '/'), 6), '')), 'microsoft.network')), equals(toLower(coalesce(tryGet(split(trim(lambdaVariables('id')), '/'), 7), '')), 'virtualnetworks')), equals(toLower(coalesce(tryGet(split(trim(lambdaVariables('id')), '/'), 9), '')), 'subnets')), not(empty(coalesce(tryGet(split(trim(lambdaVariables('id')), '/'), 2), '')))), not(empty(coalesce(tryGet(split(trim(lambdaVariables('id')), '/'), 4), '')))), not(empty(coalesce(tryGet(split(trim(lambdaVariables('id')), '/'), 8), '')))), not(empty(coalesce(tryGet(split(trim(lambdaVariables('id')), '/'), 10), '')))), toLower(trim(lambdaVariables('id'))), fail('Service endpoint allowlists require complete Microsoft.Network/virtualNetworks/subnets resource IDs.')))), createArray())]"
+                          },
+                          "metadata": {
+                            "description": "Validates subnet resource IDs and deduplicates them case-insensitively. Does not enable service endpoints or change subnets.",
                             "__bicep_imported_from!": {
                               "sourceTemplate": "../../networking/functions.bicep"
                             }
@@ -10690,7 +10776,7 @@
                         "description": "Required. Resource ID of the storage application update identity attached to the helper VM; empty skips application manifest and consent commands."
                       }
                     },
-                    "azureFilePrivateDnsZoneResourceId": {
+                    "filePrivateDnsZoneResourceId": {
                       "type": "string",
                       "metadata": {
                         "description": "Required. Resource ID of an existing Azure Files private DNS zone; empty omits the private endpoint DNS zone group."
@@ -10792,10 +10878,10 @@
                         "description": "Required. Distinguished name of the target organizational unit for selected domain operations; empty uses the domain default."
                       }
                     },
-                    "privateEndpoint": {
+                    "storagePrivateEndpoint": {
                       "type": "bool",
                       "metadata": {
-                        "description": "Required. Whether to create private endpoints. Public access is controlled separately by paasPublicNetworkAccess."
+                        "description": "Required. Whether to create Azure Files private endpoints. Public access is controlled separately by storagePublicNetworkAccess."
                       }
                     },
                     "privateEndpointNameConv": {
@@ -10810,7 +10896,7 @@
                         "description": "Required. Private endpoint NIC name pattern using RESOURCE, SUBRESOURCE, and VNETID substitution tokens."
                       }
                     },
-                    "privateEndpointSubnetResourceId": {
+                    "storagePrivateEndpointSubnetResourceId": {
                       "type": "string",
                       "metadata": {
                         "description": "Required. Resource ID of the existing subnet for private endpoints; required when endpoint creation is selected."
@@ -10973,18 +11059,28 @@
                         "description": "Required. Tag bags keyed by Azure resource type; each bag is applied to resources of that type."
                       }
                     },
-                    "permittedIPs": {
+                    "storagePermittedIPs": {
                       "type": "array",
                       "defaultValue": [],
                       "metadata": {
                         "description": "Optional. Array of permitted IP addresses or CIDR blocks for the FSLogix storage account firewall."
                       }
                     },
-                    "paasPublicNetworkAccess": {
-                      "$ref": "#/definitions/publicNetworkAccessMode",
-                      "defaultValue": "Auto",
+                    "storageServiceEndpointSubnetResourceIds": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      },
+                      "defaultValue": [],
                       "metadata": {
-                        "description": "Optional. Storage public-access mode. Auto preserves legacy behavior; IP rules and AzureServices bypass remain configured in all modes."
+                        "description": "Optional. Allowed Azure Files subnet IDs with existing Microsoft.Storage or Microsoft.Storage.Global service endpoints. Does not modify subnets."
+                      }
+                    },
+                    "storagePublicNetworkAccess": {
+                      "$ref": "#/definitions/servicePublicNetworkAccessMode",
+                      "defaultValue": "Disabled",
+                      "metadata": {
+                        "description": "Optional. Explicit Storage public-access policy. IP/subnet rules and AzureServices bypass remain configured in all modes."
                       }
                     },
                     "softDeleteRetentionDays": {
@@ -11006,6 +11102,14 @@
                           "value": "[variables('effectivePermittedIPs')[copyIndex('storageIpRules')]]",
                           "action": "Allow"
                         }
+                      },
+                      {
+                        "name": "storageVnetRules",
+                        "count": "[length(variables('storageSubnetIds'))]",
+                        "input": {
+                          "id": "[variables('storageSubnetIds')[copyIndex('storageVnetRules')]]",
+                          "action": "Allow"
+                        }
                       }
                     ],
                     "$fxv#0": "param \r\n(        \r\n    [Parameter(Mandatory = $true)]\r\n    [String]$DomainJoinUserPwd,\r\n\r\n    [Parameter(Mandatory = $true)]\r\n    [String]$DomainJoinUserPrincipalName,\r\n\r\n    [Parameter(Mandatory = $true)]\r\n    [String]$DomainName,\r\n\r\n    [Parameter(Mandatory = $false)]\r\n    [String]$HostPoolName,\r\n\r\n    [Parameter(Mandatory = $false)]\r\n    [ValidateSet(\"AES256\", \"RC4\")]\r\n    [String]$KerberosEncryptionType,\r\n\r\n    [Parameter(Mandatory = $false)]\r\n    [String]$OuPath,\r\n\r\n    [Parameter(Mandatory = $false)]\r\n    [string]$ResourceManagerUri,\r\n\r\n    [Parameter(Mandatory = $false)]\r\n    [String]$StorageAccountPrefix,\r\n\r\n    [Parameter(Mandatory = $false)]\r\n    [String]$StorageAccountResourceGroupName,\r\n\r\n    [Parameter(Mandatory = $false)]\r\n    [String]$StorageCount,\r\n\r\n    [Parameter(Mandatory = $false)]\r\n    [String]$StorageIndex,\r\n\r\n    [Parameter(Mandatory = $false)]\r\n    [String]$StorageSuffix,\r\n\r\n    [Parameter(Mandatory = $false)]\r\n    [string]$SubscriptionId,\r\n\r\n    [Parameter(Mandatory = $false)]\r\n    [string]$UserAssignedIdentityClientId\r\n)\r\n\r\n# Configure error handling and output preferences\r\n$ErrorActionPreference = 'Stop'\r\n$WarningPreference = 'SilentlyContinue'\r\n\r\ntry {\r\n    # Configure TLS 1.2 for secure HTTPS connections to Azure APIs\r\n    [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12\r\n\r\n    # Ensure Active Directory PowerShell module is available\r\n    Write-Output \"Checking for Active Directory PowerShell module...\"\r\n    $RsatInstalled = (Get-WindowsFeature -Name 'RSAT-AD-PowerShell').Installed\r\n    if (!$RsatInstalled) {\r\n        Write-Output \"Installing RSAT-AD-PowerShell feature...\"\r\n        Install-WindowsFeature -Name 'RSAT-AD-PowerShell' | Out-Null\r\n    }\r\n    \r\n    $DomainName = $DomainName.Replace('\\\"', '\"').Trim()\r\n\r\n    # Create credential object for domain operations\r\n    Write-Output \"Creating domain credentials...\"\r\n    $DomainPassword = ConvertTo-SecureString -String $DomainJoinUserPwd -AsPlainText -Force\r\n    [pscredential]$DomainCredential = New-Object System.Management.Automation.PSCredential ($DomainJoinUserPrincipalName, $DomainPassword)\r\n\r\n    # Discover an ADWS-capable domain controller through DC Locator and DNS SRV records.\r\n    Write-Output \"Discovering a domain controller for $DomainName...\"\r\n    $DomainController = Get-ADDomainController -Discover -DomainName $DomainName -Service ADWS -Writable -ForceDiscover\r\n    [string]$DomainControllerHostName = ($DomainController.HostName | Select-Object -First 1)\r\n    if ([string]::IsNullOrWhiteSpace($DomainControllerHostName)) {\r\n        throw \"Domain controller discovery returned no usable hostname for $DomainName.\"\r\n    }\r\n    Write-Output \"Using domain controller: $DomainControllerHostName\"\r\n\r\n    Write-Output \"Getting Active Directory domain information...\"\r\n    $Domain = Get-ADDomain -Identity $DomainName -Server $DomainControllerHostName -Credential $DomainCredential\r\n    Write-Output \"Domain: $($Domain.DNSRoot)\"\r\n    Write-Output \"NetBIOS Name: $($Domain.NetBIOSName)\"\r\n    \r\n    # Parse and clean input parameters\r\n    [int]$StCount = $StorageCount.replace('\\\"', '\"')  # Number of storage accounts to process\r\n    [int]$StIndex = $StorageIndex.replace('\\\"', '\"')  # Starting index for storage account naming\r\n    Write-Output \"Processing $StCount storage accounts starting from index $StIndex\"\r\n    \r\n    # Clean escaped characters from string parameters\r\n    $OuPath = $OuPath.Replace('\\\"', '\"')  # Target OU for computer accounts\r\n    $ComputerObjectPath = if ([string]::IsNullOrWhiteSpace($OuPath)) { $Domain.ComputersContainer } else { $OuPath }\r\n    $ResourceManagerUri = $ResourceManagerUri.Replace('\\\"', '\"')  # Azure Resource Manager endpoint\r\n    $StorageAccountPrefix = $StorageAccountPrefix.ToLower().replace('\\\"', '\"')  # Storage account name prefix\r\n    $StorageAccountResourceGroupName = $StorageAccountResourceGroupName.Replace('\\\"', '\"')\r\n    $SubscriptionId = $SubscriptionId.replace('\\\"', '\"')\r\n    $UserAssignedIdentityClientId = $UserAssignedIdentityClientId.replace('\\\"', '\"')\r\n    \r\n    Write-Output \"Configuration parameters:\"\r\n    Write-Output \"  Storage Account Prefix: $StorageAccountPrefix\"\r\n    Write-Output \"  Resource Group: $StorageAccountResourceGroupName\"\r\n    Write-Output \"  Subscription ID: $SubscriptionId\"\r\n    Write-Output \"  Target OU: $ComputerObjectPath\"\r\n    \r\n    # Build Azure Files endpoint suffix (e.g., \".file.core.windows.net\")\r\n    $FilesSuffix = \".file.$($StorageSuffix.Replace('\\\"', '\"'))\"\r\n    Write-Output \"  Files Suffix: $FilesSuffix\"\r\n    \r\n    # Normalize Resource Manager URI (remove trailing slash for consistency)\r\n    $ResourceManagerUri = if ($ResourceManagerUri[-1] -eq '/') { $ResourceManagerUri.Substring(0, $ResourceManagerUri.Length - 1) } else { $ResourceManagerUri }\r\n    Write-Output \"  Resource Manager URI: $ResourceManagerUri\"\r\n    \r\n    # Authenticate to Azure using managed identity\r\n    Write-Output \"Authenticating to Azure using managed identity...\"\r\n    $AzureManagementAccessToken = (Invoke-RestMethod `\r\n            -Headers @{Metadata = \"true\" } `\r\n            -Uri $('http://169.254.169.254/metadata/identity/oauth2/token?api-version=2018-02-01&resource=' + $ResourceManagerUri + '&client_id=' + $UserAssignedIdentityClientId)).access_token\r\n    \r\n    # Prepare headers for Azure Management API calls\r\n    $AzureManagementHeader = @{\r\n        'Content-Type'  = 'application/json'\r\n        'Authorization' = 'Bearer ' + $AzureManagementAccessToken\r\n    }\r\n    # Process each storage account for AD DS integration\r\n    Write-Output \"`nStarting storage account processing...\"\r\n    for ($i = 0; $i -lt $StCount; $i++) {\r\n        # Generate storage account name with zero-padded index (e.g., \"stavd01\", \"stavd02\")\r\n        $StorageAccountName = $StorageAccountPrefix + ($i + $StIndex).ToString().PadLeft(2, '0')\r\n        Write-Output \"`n=== Processing Storage Account: $StorageAccountName ===\"\r\n        \r\n        # Retrieve or generate Kerberos key for the storage account\r\n        Write-Output \"Checking for existing Kerberos key...\"\r\n        $KerberosKey = ((Invoke-RestMethod `\r\n                    -Headers $AzureManagementHeader `\r\n                    -Method 'POST' `\r\n                    -Uri $($ResourceManagerUri + '/subscriptions/' + $SubscriptionId + '/resourceGroups/' + $StorageAccountResourceGroupName + '/providers/Microsoft.Storage/storageAccounts/' + $StorageAccountName + '/listKeys?api-version=2023-05-01&$expand=kerb')).keys | Where-Object { $_.Keyname -contains 'kerb1' }).Value\r\n                \r\n        if (!$KerberosKey) {\r\n            # Generate new Kerberos key if none exists\r\n            Write-Output \"Kerberos Key not found, generating new kerb1 key...\"\r\n            $null = Invoke-RestMethod `\r\n                -Body (@{keyName = 'kerb1' } | ConvertTo-Json) `\r\n                -Headers $AzureManagementHeader `\r\n                -Method 'POST' `\r\n                -Uri $($ResourceManagerUri + '/subscriptions/' + $SubscriptionId + '/resourceGroups/' + $StorageAccountResourceGroupName + '/providers/Microsoft.Storage/storageAccounts/' + $StorageAccountName + '/regenerateKey?api-version=2023-05-01')\r\n            \r\n            # Retrieve the newly generated key\r\n            $Key = ((Invoke-RestMethod `\r\n                        -Headers $AzureManagementHeader `\r\n                        -Method 'POST' `\r\n                        -Uri $($ResourceManagerUri + '/subscriptions/' + $SubscriptionId + '/resourceGroups/' + $StorageAccountResourceGroupName + '/providers/Microsoft.Storage/storageAccounts/' + $StorageAccountName + '/listKeys?api-version=2023-05-01&$expand=kerb')).keys | Where-Object { $_.Keyname -contains 'kerb1' }).Value\r\n        } \r\n        else {\r\n            Write-Output \"Existing Kerberos key found and will be used\"\r\n            $Key = $KerberosKey\r\n        }\r\n        \r\n        # Convert Kerberos key to secure password for AD computer account\r\n        Write-Output \"Preparing computer account password from Kerberos key...\"\r\n        $ComputerPassword = ConvertTo-SecureString -String $Key.Replace(\"'\", \"\") -AsPlainText -Force\r\n        \r\n        # Create Service Principal Name (SPN) for SMB/CIFS access\r\n        # Format: cifs/storageaccount.file.core.windows.net\r\n        Write-Output \"Creating Service Principal Name (SPN)...\"\r\n        $SPN = 'cifs/' + $StorageAccountName + $FilesSuffix\r\n        Write-Output \"SPN: $SPN\"\r\n        \r\n        # Create description for the computer account\r\n        $Description = \"FSLogix for $HostPoolName\"\r\n\r\n        # Check for existing computer account and clean up if necessary\r\n        Write-Output \"Checking for existing computer account in Active Directory...\"\r\n        $Computer = Get-ADComputer -Credential $DomainCredential -Server $DomainControllerHostName -Filter { Name -eq $StorageAccountName } -ErrorAction SilentlyContinue\r\n        if ($Computer) {\r\n            Write-Output \"Existing computer account found. Removing to ensure clean setup...\"\r\n            Remove-ADComputer -Credential $DomainCredential -Server $DomainControllerHostName -Identity $Computer.DistinguishedName -Confirm:$false\r\n        }\r\n        else {\r\n            Write-Output \"No existing computer account found.\"\r\n        }\r\n        \r\n        # Create new computer account in Active Directory\r\n        Write-Output \"Creating new computer account in AD...\"\r\n        Write-Output \"  Target OU: $ComputerObjectPath\"\r\n        Write-Output \"  SPN: $SPN\"\r\n        try {\r\n            $ComputerObject = New-ADComputer -Credential $DomainCredential -Server $DomainControllerHostName -Name $StorageAccountName -Path $ComputerObjectPath -ServicePrincipalNames $SPN -AccountPassword $ComputerPassword -Description $Description -PassThru\r\n            Write-Output \"Computer account created successfully with SID: $($ComputerObject.SID.Value)\"\r\n        }\r\n        catch {\r\n            Write-Error \"Failed to create computer account: $($_.Exception.Message)\"\r\n            throw\r\n        }\r\n        \r\n        # Configure Azure Storage Account for AD DS authentication\r\n        Write-Output \"Configuring Azure Storage Account for AD DS authentication...\"\r\n        \r\n        # Determine SAM account name based on encryption type\r\n        $SamAccountName = switch ($KerberosEncryptionType) {\r\n            'AES256' { $StorageAccountName }  # For AES256, use computer name\r\n            'RC4' { $ComputerObject.SamAccountName }  # For RC4, use full SAM account name\r\n        }\r\n        Write-Output \"Using SAM Account Name: $SamAccountName\"\r\n        \r\n        # Build request body with AD information for Azure Storage Account\r\n        $Body = (@{\r\n                properties = @{\r\n                    azureFilesIdentityBasedAuthentication = @{\r\n                        activeDirectoryProperties = @{\r\n                            accountType       = 'Computer'  # Computer account type\r\n                            azureStorageSid   = $ComputerObject.SID.Value  # Computer account SID\r\n                            domainGuid        = $Domain.ObjectGUID.Guid  # Domain GUID\r\n                            domainName        = $Domain.DNSRoot  # DNS domain name\r\n                            domainSid         = $Domain.DomainSID.Value  # Domain SID\r\n                            forestName        = $Domain.Forest  # Forest name\r\n                            netBiosDomainName = $Domain.NetBIOSName  # NetBIOS domain name\r\n                            samAccountName    = $samAccountName  # SAM account name\r\n                        }\r\n                        directoryServiceOptions   = 'AD'  # Use Active Directory (not Azure AD DS)\r\n                    }\r\n                }\r\n            } | ConvertTo-Json -Depth 6 -Compress)\r\n        \r\n        # Update storage account with AD authentication configuration\r\n        try {\r\n            $null = Invoke-RestMethod `\r\n                -Body $Body `\r\n                -Headers $AzureManagementHeader `\r\n                -Method 'PATCH' `\r\n                -Uri $($ResourceManagerUri + '/subscriptions/' + $SubscriptionId + '/resourceGroups/' + $StorageAccountResourceGroupName + '/providers/Microsoft.Storage/storageAccounts/' + $StorageAccountName + '?api-version=2023-05-01')\r\n            Write-Output \"Storage account AD authentication configured successfully\"\r\n        }\r\n        catch {\r\n            Write-Error \"Failed to configure storage account AD authentication: $($_.Exception.Message)\"\r\n            throw\r\n        }             \r\n                \r\n        # Configure AES256 encryption if specified (enhanced security)\r\n        if ($KerberosEncryptionType -eq 'AES256') {\r\n            Write-Output \"Configuring AES256 Kerberos encryption (enhanced security)...\"\r\n            \r\n            # Set Kerberos encryption type on the computer account in AD\r\n            try {\r\n                Set-ADComputer -Credential $DomainCredential -Server $DomainControllerHostName -Identity $ComputerObject.DistinguishedName -KerberosEncryptionType 'AES256' | Out-Null\r\n                Write-Output \"AES256 encryption type set on computer account\"\r\n            }\r\n            catch {\r\n                Write-Error \"Failed to set AES256 encryption on computer account: $($_.Exception.Message)\"\r\n                throw\r\n            }\r\n            \r\n            # Regenerate Kerberos keys after setting encryption type\r\n            # This ensures keys are compatible with AES256 encryption\r\n            Write-Output \"Regenerating Kerberos keys for AES256 compatibility...\"\r\n            \r\n            # Regenerate kerb1 key\r\n            try {\r\n                $null = Invoke-RestMethod `\r\n                    -Body (@{keyName = 'kerb1' } | ConvertTo-Json) `\r\n                    -Headers $AzureManagementHeader `\r\n                    -Method 'POST' `\r\n                    -Uri $($ResourceManagerUri + '/subscriptions/' + $SubscriptionId + '/resourceGroups/' + $StorageAccountResourceGroupName + '/providers/Microsoft.Storage/storageAccounts/' + $StorageAccountName + '/regenerateKey?api-version=2023-05-01')\r\n                Write-Output \"kerb1 key regenerated\"\r\n            }\r\n            catch {\r\n                Write-Error \"Failed to regenerate kerb1 key: $($_.Exception.Message)\"\r\n                throw\r\n            }\r\n            \r\n            # Regenerate kerb2 key\r\n            try {\r\n                $null = Invoke-RestMethod `\r\n                    -Body (@{keyName = 'kerb2' } | ConvertTo-Json) `\r\n                    -Headers $AzureManagementHeader `\r\n                    -Method 'POST' `\r\n                    -Uri $($ResourceManagerUri + '/subscriptions/' + $SubscriptionId + '/resourceGroups/' + $StorageAccountResourceGroupName + '/providers/Microsoft.Storage/storageAccounts/' + $StorageAccountName + '/regenerateKey?api-version=2023-05-01')\r\n                Write-Output \"kerb2 key regenerated\"\r\n            }\r\n            catch {\r\n                Write-Error \"Failed to regenerate kerb2 key: $($_.Exception.Message)\"\r\n                throw\r\n            }\r\n\r\n            # Retrieve the new kerb1 key for password update\r\n            try {\r\n                $Key = ((Invoke-RestMethod `\r\n                            -Headers $AzureManagementHeader `\r\n                            -Method 'POST' `\r\n                            -Uri $($ResourceManagerUri + '/subscriptions/' + $SubscriptionId + '/resourceGroups/' + $StorageAccountResourceGroupName + '/providers/Microsoft.Storage/storageAccounts/' + $StorageAccountName + '/listKeys?api-version=2023-05-01&$expand=kerb')).keys | Where-Object { $_.Keyname -contains 'kerb1' }).Value\r\n            }\r\n            catch {\r\n                Write-Error \"Failed to retrieve new kerb1 key: $($_.Exception.Message)\"\r\n                throw\r\n            }\r\n            \r\n            # Update computer account password with new AES256-compatible key\r\n            Write-Output \"Updating computer account password with new AES256-compatible key...\"\r\n            try {\r\n                $NewPassword = ConvertTo-SecureString -String $Key -AsPlainText -Force\r\n                Set-ADAccountPassword -Credential $DomainCredential -Server $DomainControllerHostName -Identity $ComputerObject.DistinguishedName -Reset -NewPassword $NewPassword | Out-Null\r\n                Write-Output \"Computer account password updated successfully\"\r\n            }\r\n            catch {\r\n                Write-Error \"Failed to update computer account password: $($_.Exception.Message)\"\r\n                throw\r\n            }\r\n            \r\n            Write-Output \"AES256 Kerberos encryption configuration completed successfully\"\r\n        }\r\n        \r\n        Write-Output \"=== Storage Account $StorageAccountName processing completed ===\"                \r\n    }\r\n    \r\n    Write-Output \"`n=== AD DS Integration Process Completed Successfully ===\"\r\n    Write-Output \"Summary:\"\r\n    Write-Output \"  - Processed $StCount storage accounts\"\r\n    Write-Output \"  - Created computer accounts in OU: $ComputerObjectPath\"\r\n    Write-Output \"  - Configured Azure Files for AD DS authentication\"\r\n    if ($KerberosEncryptionType -eq 'AES256') {\r\n        Write-Output \"  - Applied AES256 Kerberos encryption for enhanced security\"\r\n    }\r\n    Write-Output \"`nStorage accounts are now ready for identity-based authentication!\"\r\n}\r\ncatch {\r\n    Write-Error \"AD DS integration failed: $($_.Exception.Message)\"\r\n    Write-Error \"Full error details: $($_ | Out-String)\"\r\n    throw\r\n}",
@@ -11015,7 +11119,7 @@
                     "$fxv#4": "[CmdletBinding()]\r\nparam (\r\n    [Parameter(Mandatory = $true)]\r\n    [string]$AppDisplayNamePrefix,\r\n\r\n    [Parameter(Mandatory = $true)]\r\n    [ValidateRange(1, 2147483647)]\r\n    [int]$StorageCount,\r\n\r\n    [Parameter(Mandatory = $true)]\r\n    [ValidateRange(0, 2147483647)]\r\n    [int]$StorageIndex,\r\n\r\n    [Parameter(Mandatory = $true)]\r\n    [string]$ClientId,\r\n\r\n    [Parameter(Mandatory = $true)]\r\n    [string]$GraphEndpoint\r\n)\r\n\r\n$ErrorActionPreference = \"Stop\"\r\n\r\n# Setup Logging\r\n$logPath = \"C:\\Windows\\Logs\"\r\n$logFile = Join-Path -Path $logPath -ChildPath \"Grant-StorageAccountApplicationConsent-$(Get-Date -Format 'yyyyMMdd-HHmm').log\"\r\nStart-Transcript -Path $logFile -Force\r\n\r\n# Gets an access token for the specified Microsoft Graph resource from the VM managed identity\r\nfunction Get-GraphAccessToken {\r\n    param (\r\n        [Parameter(Mandatory = $true)]\r\n        [string] $Resource,\r\n\r\n        [Parameter(Mandatory = $true)]\r\n        [string] $ClientId\r\n    )\r\n\r\n    $tokenUri = \"http://169.254.169.254/metadata/identity/oauth2/token?api-version=2018-02-01&resource=$Resource&client_id=$ClientId\"\r\n    $response = Invoke-RestMethod -Headers @{ Metadata = \"true\" } -Uri $tokenUri\r\n    if (-not $response -or -not $response.access_token) {\r\n        throw \"Failed to obtain access token for $Resource from IMDS.\"\r\n    }\r\n    return $response.access_token\r\n}\r\n\r\n# Helper function to invoke Graph API with retry logic for DoD endpoints\r\nfunction Invoke-GraphApiWithRetry {\r\n    param (\r\n        [Parameter(Mandatory = $true)]\r\n        [string] $GraphEndpoint,\r\n        \r\n        [Parameter(Mandatory = $true)]\r\n        [string] $AccessToken,\r\n        \r\n        [Parameter(Mandatory = $true)]\r\n        [ValidateSet('Get', 'Post', 'Patch', 'Delete')]\r\n        [string] $Method,\r\n        \r\n        [Parameter(Mandatory = $true)]\r\n        [string] $Uri,\r\n        \r\n        [Parameter()]\r\n        [string] $Body,\r\n        \r\n        [Parameter()]\r\n        [hashtable] $Headers = @{},\r\n\r\n        [Parameter()]\r\n        [string] $ClientId = $script:ClientId\r\n    )\r\n    \r\n    # Ensure GraphEndpoint doesn't have trailing slash\r\n    $graphBase = if ($GraphEndpoint[-1] -eq '/') { \r\n        $GraphEndpoint.Substring(0, $GraphEndpoint.Length - 1) \r\n    } else { \r\n        $GraphEndpoint \r\n    }\r\n    \r\n    # Setup headers\r\n    $requestHeaders = $Headers.Clone()\r\n    $requestHeaders['Authorization'] = \"Bearer $AccessToken\"\r\n    if (-not $requestHeaders.ContainsKey('Content-Type')) {\r\n        $requestHeaders['Content-Type'] = 'application/json'\r\n    }\r\n    \r\n    # List of endpoints to try. Tokens are audience-specific, so the DoD endpoint gets its own token.\r\n    $endpointsToTry = @(\r\n        @{ Endpoint = $graphBase; Token = $AccessToken }\r\n    )\r\n    \r\n    # If we're using GCCH endpoint, also try DoD with a fresh token\r\n    if ($graphBase -eq 'https://graph.microsoft.us') {\r\n        $endpointsToTry += @{ Endpoint = 'https://dod-graph.microsoft.us'; Token = $null }\r\n    }\r\n    \r\n    $lastError = $null\r\n    foreach ($endpointConfig in $endpointsToTry) {\r\n        $endpoint = $endpointConfig.Endpoint\r\n        try {\r\n            if (-not $endpointConfig.Token) {\r\n                Write-Host \"Requesting access token for $endpoint from IMDS...\"\r\n                $endpointConfig.Token = Get-GraphAccessToken -Resource $endpoint -ClientId $ClientId\r\n            }\r\n            $requestHeaders['Authorization'] = \"Bearer $($endpointConfig.Token)\"\r\n            $attemptUri = \"$endpoint$Uri\"\r\n            \r\n            $params = @{\r\n                Uri     = $attemptUri\r\n                Method  = $Method\r\n                Headers = $requestHeaders\r\n            }\r\n            \r\n            if ($Body -and $Method -in @('Post', 'Patch')) {\r\n                $params['Body'] = $Body\r\n            }\r\n            \r\n            $result = Invoke-RestMethod @params\r\n            \r\n            # If we succeeded with a different endpoint than the one provided, log it\r\n            if ($endpoint -ne $graphBase) {\r\n                Write-Warning \"Graph API call succeeded with alternate endpoint: $endpoint\"\r\n                Write-Warning \"Consider updating GraphEndpoint parameter to: $endpoint\"\r\n            }\r\n            \r\n            return $result\r\n        }\r\n        catch {\r\n            $lastError = $_\r\n            $statusCode = $null\r\n            \r\n            if ($_.Exception.Response) {\r\n                $statusCode = [int]$_.Exception.Response.StatusCode\r\n            }\r\n            \r\n            # Try to extract detailed error from Graph API response\r\n            $errorDetails = \"\"\r\n            try {\r\n                if ($_.Exception.Response) {\r\n                    $responseStream = $_.Exception.Response.GetResponseStream()\r\n                    $reader = New-Object System.IO.StreamReader($responseStream)\r\n                    $responseBody = $reader.ReadToEnd()\r\n                    $reader.Close()\r\n                    $responseStream.Close()\r\n                    \r\n                    $errorObj = $responseBody | ConvertFrom-Json\r\n                    if ($errorObj.error) {\r\n                        $errorDetails = \"`n  Error Code: $($errorObj.error.code)`n  Error Message: $($errorObj.error.message)\"\r\n                        if ($errorObj.error.details) {\r\n                            $errorDetails += \"`n  Details: $($errorObj.error.details | ConvertTo-Json -Compress)\"\r\n                        }\r\n                    }\r\n                }\r\n            }\r\n            catch {\r\n                # If we can't parse error details, just continue\r\n            }\r\n            \r\n            # Retry on authentication/authorization errors (401, 403) against the next Graph endpoint\r\n            if ($statusCode -in @(401, 403) -and $endpoint -ne $endpointsToTry[-1].Endpoint) {\r\n                Write-Warning \"Graph API call to $endpoint failed with status $statusCode$errorDetails. Trying alternate endpoint...\"\r\n                continue\r\n            }\r\n            else {\r\n                # Don't retry - either not an auth error or we've tried all endpoints\r\n                Write-Error \"Graph API call failed with status $statusCode : $($_.Exception.Message)$errorDetails\"\r\n                throw\r\n            }\r\n        }\r\n    }\r\n    \r\n    # If we get here, all endpoints failed\r\n    Write-Error \"All Graph API endpoints failed. Last error: $($lastError.Exception.Message)\"\r\n    throw $lastError\r\n}\r\n\r\ntry {\r\n    Write-Output \"============================================\"\r\n    Write-Output \"PHASE 2: Grant Admin Consent to Storage Account Applications\"\r\n    Write-Output \"This grants delegated permissions for authentication\"\r\n    Write-Output \"============================================\"\r\n    \r\n    # Get Graph Access Token using Managed Identity\r\n    $GraphUri = if ($GraphEndpoint[-1] -eq '/') { $GraphEndpoint.Substring(0, $GraphEndpoint.Length - 1) } else { $GraphEndpoint }\r\n    Write-Output \"Requesting access token from IMDS...\"\r\n    $AccessToken = Get-GraphAccessToken -Resource $GraphUri -ClientId $ClientId\r\n    Write-Output \"Successfully obtained access token\"\r\n        \r\n    # Storage RP completion does not guarantee that every shard is visible in Graph yet.\r\n    $applications = @(\r\n        for ($index = 0; $index -lt $StorageCount; $index++) {\r\n            $accountPrefix = \"$AppDisplayNamePrefix$(($StorageIndex + $index).ToString('00')).file.\"\r\n            $filter = \"startswith(displayName, '$($accountPrefix.Replace(\"'\", \"''\"))')\"\r\n            $searchUri = \"/v1.0/applications?\" + '$filter=' + [uri]::EscapeDataString($filter)\r\n            for ($attempt = 1; $attempt -le 12; $attempt++) {\r\n                $searchResp = Invoke-GraphApiWithRetry -GraphEndpoint $GraphUri -AccessToken $AccessToken -Method Get -Uri $searchUri\r\n                $matches = @($searchResp.value)\r\n                if ($matches.Count -gt 1) {\r\n                    throw \"Multiple applications found for '$accountPrefix'; refusing an ambiguous update.\"\r\n                }\r\n                if ($matches.Count -eq 1) { break }\r\n                if ($attempt -eq 12) {\r\n                    throw \"Application for '$accountPrefix' not found after 12 attempts. Expected all $StorageCount shards.\"\r\n                }\r\n                Write-Host \"Waiting for application '$accountPrefix' (attempt $attempt/12)...\"\r\n                Start-Sleep -Seconds 10\r\n            }\r\n            $matches[0]\r\n        }\r\n    )\r\n    Write-Output \"Found all $StorageCount expected storage account applications.\"\r\n\r\n    foreach ($app in $applications) {\r\n        $appObjectId = $app.id\r\n        $appName = $app.displayName\r\n        Write-Output \"\"\r\n        Write-Output \"Processing Application: $appName\"\r\n        Write-Output \"  ObjectId: $appObjectId\"\r\n        Write-Output \"  AppId: $($app.appId)\"\r\n        \r\n        # Grant Delegated Permissions to Storage Account Enterprise Application\r\n        try {\r\n            # Get Service Principal for the Storage Account App (Enterprise Application)\r\n            $spUri = \"/v1.0/servicePrincipals?`$filter=appId eq '$($app.appId)'\"\r\n            Write-Output \"Looking for Service Principal (Enterprise Application)...\"\r\n            for ($attempt = 1; $attempt -le 12; $attempt++) {\r\n                $spResp = Invoke-GraphApiWithRetry -GraphEndpoint $GraphUri -AccessToken $AccessToken -Method Get -Uri $spUri\r\n                if (@($spResp.value).Count -gt 1) {\r\n                    throw \"Multiple service principals found for AppId: $($app.appId).\"\r\n                }\r\n                if (@($spResp.value).Count -eq 1) { break }\r\n                if ($attempt -eq 12) {\r\n                    throw \"Service principal not found for '$appName' after 12 attempts; admin consent was not granted.\"\r\n                }\r\n                Write-Output \"Waiting for service principal for '$appName' (attempt $attempt/12)...\"\r\n                Start-Sleep -Seconds 10\r\n            }\r\n            \r\n            # This is the Storage Account's Enterprise Application (Service Principal)\r\n            $storageAccountSP = $spResp.value[0]\r\n            $storageAccountServicePrincipalId = $storageAccountSP.id\r\n            $storageAccountSPDisplayName = $storageAccountSP.displayName\r\n            \r\n            Write-Output \"    Found Enterprise Application: $storageAccountSPDisplayName\"\r\n\r\n            # Get Service Principal for Microsoft Graph (this is the resource being accessed)\r\n            $graphSpUri = \"/v1.0/servicePrincipals?`$filter=appId eq '00000003-0000-0000-c000-000000000000'\"\r\n            $graphSpResp = Invoke-GraphApiWithRetry -GraphEndpoint $GraphUri -AccessToken $AccessToken -Method Get -Uri $graphSpUri\r\n            $graphServicePrincipalId = $graphSpResp.value[0].id\r\n\r\n            # Check for existing delegated permission grant\r\n            $grantUri = \"/v1.0/oauth2PermissionGrants?`$filter=clientId eq '$storageAccountServicePrincipalId'\"\r\n            $allGrantsResp = Invoke-GraphApiWithRetry -GraphEndpoint $GraphUri -AccessToken $AccessToken -Method Get -Uri $grantUri\r\n            \r\n            # Filter manually for the specific resource\r\n            $matchingGrants = @($allGrantsResp.value | Where-Object { $_ -and $_.resourceId -eq $graphServicePrincipalId -and $_.consentType -eq 'AllPrincipals' -and $_.id })\r\n            \r\n            # Delegated permissions we want to grant\r\n            $scope = @(\"openid\", \"profile\", \"User.Read\")\r\n            $scopeString = $scope -join \" \"\r\n            \r\n            if ($matchingGrants.Count -gt 0) {\r\n                # Update existing delegated permission grant\r\n                $existingGrant = $matchingGrants[0]\r\n                $grantId = $existingGrant.id\r\n                $existingScope = if ($existingGrant.scope) { $existingGrant.scope } else { \"\" }\r\n                Write-Output \"  Found existing oauth2PermissionGrant\"\r\n                Write-Output \"    Existing scope: '$existingScope'\"\r\n                \r\n                # Validate grantId before attempting update\r\n                if (-not $grantId) {\r\n                    Write-Error \"Grant ID is null or empty. Cannot update grant.\"\r\n                    throw \"Invalid grant object returned from Graph API\"\r\n                }\r\n                \r\n                $newScope = if ($existingScope) { $existingScope } else { \"\" }\r\n                $scopeChanged = $false\r\n                foreach ($s in $scope) {\r\n                    if ($newScope -notmatch \"\\b$s\\b\") {\r\n                        if ($newScope) { $newScope += \" \" }\r\n                        $newScope += $s\r\n                        $scopeChanged = $true\r\n                    }\r\n                }\r\n                \r\n                if ($scopeChanged) {\r\n                    $updateGrantUri = \"/v1.0/oauth2PermissionGrants/$grantId\"\r\n                    $grantBody = @{\r\n                        scope = $newScope.Trim()\r\n                    } | ConvertTo-Json\r\n                    Write-Output \"  Updating oauth2PermissionGrant...\"\r\n                    Write-Output \"    New scope: '$($newScope.Trim())'\"\r\n                    Invoke-GraphApiWithRetry -GraphEndpoint $GraphUri -AccessToken $AccessToken -Method Patch -Uri $updateGrantUri -Body $grantBody\r\n                    Write-Output \"    Successfully updated delegated permissions\"\r\n                } else {\r\n                    Write-Output \"    All required delegated permissions already exist\"\r\n                }\r\n\r\n            } else {\r\n                # Create new delegated permission grant\r\n                Write-Output \"  Creating new oauth2PermissionGrant...\"\r\n                Write-Output \"    Scope: '$scopeString'\"\r\n                \r\n                # Validate required IDs before attempting creation\r\n                if (-not $storageAccountServicePrincipalId) {\r\n                    throw \"Storage Account Service Principal ID is null or empty\"\r\n                }\r\n                if (-not $graphServicePrincipalId) {\r\n                    throw \"Microsoft Graph Service Principal ID is null or empty\"\r\n                }\r\n                \r\n                $grantBody = @{\r\n                    clientId = $storageAccountServicePrincipalId\r\n                    consentType = \"AllPrincipals\"\r\n                    resourceId = $graphServicePrincipalId\r\n                    scope = $scopeString\r\n                } | ConvertTo-Json\r\n                \r\n                try {\r\n                    Invoke-GraphApiWithRetry -GraphEndpoint $GraphUri -AccessToken $AccessToken -Method Post -Uri \"/v1.0/oauth2PermissionGrants\" -Body $grantBody | Out-Null\r\n                    Write-Output \"    Successfully created oauth2PermissionGrant\"\r\n                }\r\n                catch {\r\n                    Write-Error \"Failed to create oauth2PermissionGrant via Graph API\"\r\n                    Write-Error \"Error details: $($_.Exception.Message)\"\r\n                    throw\r\n                }\r\n            }\r\n        }\r\n        catch {\r\n            Write-Error \"Failed to grant delegated permissions for Enterprise Application $appName : $($_.Exception.Message)\"\r\n            throw\r\n        }\r\n    }\r\n    \r\n    Write-Output \"\"\r\n    Write-Output \"============================================\"\r\n    Write-Output \"  PHASE 2 COMPLETE: Admin consent granted successfully\"\r\n    Write-Output \"Storage account applications can now authenticate users\"\r\n    Write-Output \"============================================\"\r\n}\r\ncatch {\r\n    Write-Error \"PHASE 2 FAILED: $($_.Exception.Message)\"\r\n    throw $_\r\n}\r\nfinally {\r\n    Stop-Transcript\r\n}\r\n",
                     "adminRoleDefinitionId": "69566ab7-960f-475b-8e7c-b3118f30c6bd",
                     "defaultSharePermission": "StorageFileDataSmbShareContributor",
-                    "privateEndpointVnetName": "[if(and(not(empty(parameters('privateEndpointSubnetResourceId'))), parameters('privateEndpoint')), split(parameters('privateEndpointSubnetResourceId'), '/')[8], '')]",
+                    "privateEndpointVnetName": "[if(and(not(empty(parameters('storagePrivateEndpointSubnetResourceId'))), parameters('storagePrivateEndpoint')), split(parameters('storagePrivateEndpointSubnetResourceId'), '/')[8], '')]",
                     "smbSettingsValues": {
                       "versions": "SMB3.1.1;",
                       "authenticationMethods": "[if(equals(parameters('identitySolution'), 'EntraId'), 'NTLMv2;', 'Kerberos;')]",
@@ -11027,13 +11131,14 @@
                     },
                     "storageRoles": "[concat(createArray(createObject('prefix', parameters('profileStorageAccountNamePrefix'), 'keyPattern', parameters('fslogixProfileEncryptionKeyNameConv'), 'sku', parameters('profileStorageTier'), 'configuration', __bicep.resolveFilesConfiguration(parameters('profileStorageTier'), parameters('profileStorageRedundancy'), parameters('profileStorageBillingModel'), parameters('profileShareSizeInGB'), parameters('profileProvisionedIops'), parameters('profileProvisionedThroughputMiBps')), 'shareName', parameters('fileShares')[0], 'shareSizeInGB', parameters('profileShareSizeInGB'), 'roleName', 'Profile')), if(greater(length(parameters('fileShares')), 1), createArray(createObject('prefix', if(not(equals(toLower(parameters('officeStorageAccountNamePrefix')), toLower(parameters('profileStorageAccountNamePrefix')))), parameters('officeStorageAccountNamePrefix'), fail('Profile and Office Azure Files storage account prefixes must differ.')), 'keyPattern', if(or(equals(parameters('keyManagementStorageAccounts'), 'PlatformManaged'), not(equals(toLower(parameters('officeEncryptionKeyNameConv')), toLower(parameters('fslogixProfileEncryptionKeyNameConv'))))), parameters('officeEncryptionKeyNameConv'), fail('Profile and Office customer-managed encryption keys must use different name patterns.')), 'sku', parameters('officeStorageTier'), 'configuration', __bicep.resolveFilesConfiguration(parameters('officeStorageTier'), parameters('officeStorageRedundancy'), parameters('officeStorageBillingModel'), parameters('officeShareSizeInGB'), parameters('officeProvisionedIops'), parameters('officeProvisionedThroughputMiBps')), 'shareName', parameters('fileShares')[1], 'shareSizeInGB', parameters('officeShareSizeInGB'), 'roleName', 'Office')), createArray()))]",
                     "accountConfigurations": "[flatten(map(variables('storageRoles'), lambda('role', map(range(0, parameters('storageCount')), lambda('index', union(lambdaVariables('role'), createObject('name', format('{0}{1}', lambdaVariables('role').prefix, padLeft(add(lambdaVariables('index'), parameters('storageIndex')), 2, '0')), 'keyName', replace(lambdaVariables('role').keyPattern, '##', padLeft(add(lambdaVariables('index'), parameters('storageIndex')), 2, '0')))))))))]",
-                    "effectivePermittedIPs": "[filter(parameters('permittedIPs'), lambda('ip', not(empty(trim(lambdaVariables('ip'))))))]",
-                    "networkAccess": "[__bicep.resolveNetworkAccess(parameters('paasPublicNetworkAccess'), parameters('privateEndpoint'), not(empty(variables('effectivePermittedIPs'))))]",
+                    "effectivePermittedIPs": "[filter(parameters('storagePermittedIPs'), lambda('ip', not(empty(trim(lambdaVariables('ip'))))))]",
+                    "storageSubnetIds": "[__bicep.serviceEndpointSubnetIds(parameters('storageServiceEndpointSubnetResourceIds'))]",
+                    "networkAccess": "[__bicep.resolveNetworkAccess(parameters('storagePublicNetworkAccess'), parameters('storagePrivateEndpoint'), or(not(empty(variables('effectivePermittedIPs'))), not(empty(variables('storageSubnetIds')))))]",
                     "storageNetworkAcls": {
                       "bypass": "AzureServices",
                       "defaultAction": "[variables('networkAccess').defaultAction]",
                       "ipRules": "[variables('storageIpRules')]",
-                      "virtualNetworkRules": []
+                      "virtualNetworkRules": "[variables('storageVnetRules')]"
                     },
                     "parentResourceTags": "[if(not(empty(parameters('hostPoolResourceId'))), createObject('cm-resource-parent', parameters('hostPoolResourceId')), createObject())]",
                     "deploymentNameSuffix": "[uniqueString(resourceGroup().id, deployment().name)]",
@@ -11042,12 +11147,12 @@
                   },
                   "resources": {
                     "privateEndpointVirtualNetwork": {
-                      "condition": "[and(parameters('privateEndpoint'), not(empty(parameters('privateEndpointSubnetResourceId'))))]",
+                      "condition": "[and(parameters('storagePrivateEndpoint'), not(empty(parameters('storagePrivateEndpointSubnetResourceId'))))]",
                       "existing": true,
                       "type": "Microsoft.Network/virtualNetworks",
                       "apiVersion": "2024-05-01",
-                      "subscriptionId": "[split(parameters('privateEndpointSubnetResourceId'), '/')[2]]",
-                      "resourceGroup": "[split(parameters('privateEndpointSubnetResourceId'), '/')[4]]",
+                      "subscriptionId": "[split(parameters('storagePrivateEndpointSubnetResourceId'), '/')[2]]",
+                      "resourceGroup": "[split(parameters('storagePrivateEndpointSubnetResourceId'), '/')[4]]",
                       "name": "[variables('privateEndpointVnetName')]"
                     },
                     "appUpdateUai": {
@@ -11088,7 +11193,7 @@
                           "tags": {
                             "value": "[union(variables('parentResourceTags'), coalesce(tryGet(parameters('tags'), 'Microsoft.Storage/storageAccounts'), createObject()))]"
                           },
-                          "allowedCopyScope": "[if(parameters('privateEndpoint'), createObject('value', 'PrivateLink'), createObject('value', 'AAD'))]",
+                          "allowedCopyScope": "[if(parameters('storagePrivateEndpoint'), createObject('value', 'PrivateLink'), createObject('value', 'AAD'))]",
                           "allowSharedKeyAccess": "[if(equals(parameters('identitySolution'), 'EntraId'), createObject('value', true()), createObject('value', false()))]",
                           "supportsHttpsTrafficOnly": {
                             "value": true
@@ -12109,7 +12214,7 @@
                         "name": "privateEndpoints",
                         "count": "[length(variables('accountConfigurations'))]"
                       },
-                      "condition": "[parameters('privateEndpoint')]",
+                      "condition": "[parameters('storagePrivateEndpoint')]",
                       "type": "Microsoft.Resources/deployments",
                       "apiVersion": "2025-04-01",
                       "name": "[format('fslogix-{0}-{1}-endpoint-{2}', toLower(variables('accountConfigurations')[copyIndex()].roleName), variables('accountConfigurations')[copyIndex()].name, variables('deploymentNameSuffix'))]",
@@ -12132,7 +12237,7 @@
                             "value": "[reference('privateEndpointVirtualNetwork', '2024-05-01', 'full').location]"
                           },
                           "subnetResourceId": {
-                            "value": "[parameters('privateEndpointSubnetResourceId')]"
+                            "value": "[parameters('storagePrivateEndpointSubnetResourceId')]"
                           },
                           "privateLinkServiceId": {
                             "value": "[reference(format('storageAccounts[{0}]', copyIndex())).outputs.resourceId.value]"
@@ -12140,7 +12245,7 @@
                           "groupId": {
                             "value": "file"
                           },
-                          "privateDNSZoneIds": "[if(not(empty(parameters('azureFilePrivateDnsZoneResourceId'))), createObject('value', createArray(parameters('azureFilePrivateDnsZoneResourceId'))), createObject('value', createArray()))]"
+                          "privateDNSZoneIds": "[if(not(empty(parameters('filePrivateDnsZoneResourceId'))), createObject('value', createArray(parameters('filePrivateDnsZoneResourceId'))), createObject('value', createArray()))]"
                         },
                         "template": {
                           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
@@ -12986,7 +13091,7 @@
                         "mode": "serial",
                         "batchSize": 1
                       },
-                      "condition": "[and(or(and(equals(parameters('identitySolution'), 'EntraKerberos-Hybrid'), parameters('privateEndpoint')), equals(parameters('identitySolution'), 'EntraKerberos-CloudOnly')), not(empty(parameters('appUpdateUserAssignedIdentityResourceId'))))]",
+                      "condition": "[and(or(and(equals(parameters('identitySolution'), 'EntraKerberos-Hybrid'), parameters('storagePrivateEndpoint')), equals(parameters('identitySolution'), 'EntraKerberos-CloudOnly')), not(empty(parameters('appUpdateUserAssignedIdentityResourceId'))))]",
                       "type": "Microsoft.Resources/deployments",
                       "apiVersion": "2025-04-01",
                       "name": "[format('fslogix-{0}-{1}-manifest-{2}', toLower(variables('storageRoles')[copyIndex()].roleName), variables('shardRange'), variables('deploymentNameSuffix'))]",
@@ -13033,7 +13138,7 @@
                               },
                               {
                                 "name": "PrivateEndpoint",
-                                "value": "[string(parameters('privateEndpoint'))]"
+                                "value": "[string(parameters('storagePrivateEndpoint'))]"
                               },
                               {
                                 "name": "EnableCloudGroupSids",
@@ -13547,7 +13652,7 @@
                         "mode": "serial",
                         "batchSize": 1
                       },
-                      "condition": "[and(or(and(equals(parameters('identitySolution'), 'EntraKerberos-Hybrid'), parameters('privateEndpoint')), equals(parameters('identitySolution'), 'EntraKerberos-CloudOnly')), not(empty(parameters('appUpdateUserAssignedIdentityResourceId'))))]",
+                      "condition": "[and(or(and(equals(parameters('identitySolution'), 'EntraKerberos-Hybrid'), parameters('storagePrivateEndpoint')), equals(parameters('identitySolution'), 'EntraKerberos-CloudOnly')), not(empty(parameters('appUpdateUserAssignedIdentityResourceId'))))]",
                       "type": "Microsoft.Resources/deployments",
                       "apiVersion": "2025-04-01",
                       "name": "[format('fslogix-{0}-{1}-consent-{2}', toLower(variables('storageRoles')[copyIndex()].roleName), variables('shardRange'), variables('deploymentNameSuffix'))]",
@@ -14015,6 +14120,7 @@
       "dependsOn": [
         "controlPlane",
         "monitoring",
+        "network",
         "resourceGroup"
       ]
     },
@@ -14251,19 +14357,19 @@
           "encryptionKeyName": {
             "value": ""
           },
-          "deployPrivateEndpoints": {
+          "deployBackupPrivateEndpoints": {
             "value": false
           },
           "vaultPrivateEndpointSubnetResourceId": {
             "value": ""
           },
-          "azureBackupPrivateDnsZoneResourceId": {
+          "backupPrivateDnsZoneResourceId": {
             "value": ""
           },
-          "azureBlobPrivateDnsZoneResourceId": {
+          "blobPrivateDnsZoneResourceId": {
             "value": ""
           },
-          "azureQueuePrivateDnsZoneResourceId": {
+          "queuePrivateDnsZoneResourceId": {
             "value": ""
           },
           "privateEndpointNameConv": {
@@ -14282,7 +14388,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.49.2.45890",
-              "templateHash": "6834779315331709606"
+              "templateHash": "6444652616322729740"
             }
           },
           "definitions": {
@@ -14648,11 +14754,22 @@
                 "description": "Optional. Key expiration period in days for the vault CMK encryption key. Also controls auto-rotation."
               }
             },
-            "deployPrivateEndpoints": {
+            "deployBackupPrivateEndpoints": {
               "type": "bool",
               "defaultValue": false,
               "metadata": {
                 "description": "Optional. Whether to deploy a private endpoint for the vault."
+              }
+            },
+            "vaultPublicNetworkAccess": {
+              "type": "string",
+              "allowedValues": [
+                "Disabled",
+                "Enabled"
+              ],
+              "defaultValue": "[if(parameters('deployBackupPrivateEndpoints'), 'Disabled', 'Enabled')]",
+              "metadata": {
+                "description": "Optional. Public access for a newly created VM Backup vault, independent of endpoint creation. Omitted values preserve the legacy adapter behavior for existing callers."
               }
             },
             "vaultPrivateEndpointSubnetResourceId": {
@@ -14662,21 +14779,21 @@
                 "description": "Optional. Resource ID of the subnet for the vault private endpoint."
               }
             },
-            "azureBackupPrivateDnsZoneResourceId": {
+            "backupPrivateDnsZoneResourceId": {
               "type": "string",
               "defaultValue": "",
               "metadata": {
                 "description": "Optional. Resource ID of the Azure Backup private DNS zone."
               }
             },
-            "azureBlobPrivateDnsZoneResourceId": {
+            "blobPrivateDnsZoneResourceId": {
               "type": "string",
               "defaultValue": "",
               "metadata": {
                 "description": "Optional. Resource ID of the Azure Blob private DNS zone (needed for backup PE)."
               }
             },
-            "azureQueuePrivateDnsZoneResourceId": {
+            "queuePrivateDnsZoneResourceId": {
               "type": "string",
               "defaultValue": "",
               "metadata": {
@@ -14749,20 +14866,23 @@
                   "logAnalyticsWorkspaceResourceId": {
                     "value": "[parameters('logAnalyticsWorkspaceResourceId')]"
                   },
+                  "publicNetworkAccess": {
+                    "value": "[parameters('vaultPublicNetworkAccess')]"
+                  },
                   "privateEndpoint": {
-                    "value": "[parameters('deployPrivateEndpoints')]"
+                    "value": "[parameters('deployBackupPrivateEndpoints')]"
                   },
                   "privateEndpointSubnetResourceId": {
                     "value": "[parameters('vaultPrivateEndpointSubnetResourceId')]"
                   },
-                  "azureBackupPrivateDnsZoneResourceId": {
-                    "value": "[parameters('azureBackupPrivateDnsZoneResourceId')]"
+                  "backupPrivateDnsZoneResourceId": {
+                    "value": "[parameters('backupPrivateDnsZoneResourceId')]"
                   },
-                  "azureBlobPrivateDnsZoneResourceId": {
-                    "value": "[parameters('azureBlobPrivateDnsZoneResourceId')]"
+                  "blobPrivateDnsZoneResourceId": {
+                    "value": "[parameters('blobPrivateDnsZoneResourceId')]"
                   },
-                  "azureQueuePrivateDnsZoneResourceId": {
-                    "value": "[parameters('azureQueuePrivateDnsZoneResourceId')]"
+                  "queuePrivateDnsZoneResourceId": {
+                    "value": "[parameters('queuePrivateDnsZoneResourceId')]"
                   },
                   "privateEndpointNameConv": {
                     "value": "[parameters('privateEndpointNameConv')]"
@@ -14806,7 +14926,7 @@
                     "_generator": {
                       "name": "bicep",
                       "version": "0.49.2.45890",
-                      "templateHash": "13862731585585037101"
+                      "templateHash": "14179583265009653862"
                     }
                   },
                   "parameters": {
@@ -14854,6 +14974,16 @@
                         "description": "Optional. Resource ID of the Log Analytics workspace for vault diagnostics."
                       }
                     },
+                    "publicNetworkAccess": {
+                      "type": "string",
+                      "allowedValues": [
+                        "Enabled",
+                        "Disabled"
+                      ],
+                      "metadata": {
+                        "description": "Required. Public access for a newly created vault: Enabled or Disabled, independent of privateEndpoint. Existing vault networking is owner-managed. Recovery Services vaults do not expose IP or service-endpoint subnet allowlists."
+                      }
+                    },
                     "privateEndpoint": {
                       "type": "bool",
                       "metadata": {
@@ -14867,21 +14997,21 @@
                         "description": "Optional. Resource ID of the subnet for the vault private endpoint."
                       }
                     },
-                    "azureBackupPrivateDnsZoneResourceId": {
+                    "backupPrivateDnsZoneResourceId": {
                       "type": "string",
                       "defaultValue": "",
                       "metadata": {
                         "description": "Optional. Resource ID of the Azure Backup private DNS zone."
                       }
                     },
-                    "azureBlobPrivateDnsZoneResourceId": {
+                    "blobPrivateDnsZoneResourceId": {
                       "type": "string",
                       "defaultValue": "",
                       "metadata": {
                         "description": "Optional. Resource ID of the Azure Blob private DNS zone (needed for backup PE)."
                       }
                     },
-                    "azureQueuePrivateDnsZoneResourceId": {
+                    "queuePrivateDnsZoneResourceId": {
                       "type": "string",
                       "defaultValue": "",
                       "metadata": {
@@ -14969,7 +15099,7 @@
                   },
                   "variables": {
                     "crossRegionRestoreEnabled": "[equals(parameters('storageRedundancy'), 'GeoRedundant')]",
-                    "backupPrivateDnsZoneResourceIds": "[filter(createArray(parameters('azureBackupPrivateDnsZoneResourceId'), parameters('azureBlobPrivateDnsZoneResourceId'), parameters('azureQueuePrivateDnsZoneResourceId')), lambda('z', not(empty(lambdaVariables('z')))))]",
+                    "backupPrivateDnsZoneResourceIds": "[filter(createArray(parameters('backupPrivateDnsZoneResourceId'), parameters('blobPrivateDnsZoneResourceId'), parameters('queuePrivateDnsZoneResourceId')), lambda('z', not(empty(lambdaVariables('z')))))]",
                     "effectiveVaultSub": "[if(parameters('createVault'), subscription().subscriptionId, split(parameters('existingRecoveryServicesVaultResourceId'), '/')[2])]",
                     "effectiveVaultRG": "[if(parameters('createVault'), parameters('resourceGroupHosts'), split(parameters('existingRecoveryServicesVaultResourceId'), '/')[4])]",
                     "effectiveVaultName": "[if(parameters('createVault'), parameters('vaultName'), last(split(parameters('existingRecoveryServicesVaultResourceId'), '/')))]",
@@ -15192,7 +15322,9 @@
                             "value": "[parameters('location')]"
                           },
                           "diagnosticSettings": "[if(not(empty(parameters('logAnalyticsWorkspaceResourceId'))), createObject('value', createObject('workspaceId', parameters('logAnalyticsWorkspaceResourceId'))), createObject('value', null()))]",
-                          "publicNetworkAccess": "[if(parameters('privateEndpoint'), createObject('value', 'Disabled'), createObject('value', 'Enabled'))]",
+                          "publicNetworkAccess": {
+                            "value": "[parameters('publicNetworkAccess')]"
+                          },
                           "storageType": {
                             "value": "[parameters('storageRedundancy')]"
                           },
@@ -15689,7 +15821,9 @@
                             "value": "[parameters('location')]"
                           },
                           "diagnosticSettings": "[if(not(empty(parameters('logAnalyticsWorkspaceResourceId'))), createObject('value', createObject('workspaceId', parameters('logAnalyticsWorkspaceResourceId'))), createObject('value', null()))]",
-                          "publicNetworkAccess": "[if(parameters('privateEndpoint'), createObject('value', 'Disabled'), createObject('value', 'Enabled'))]",
+                          "publicNetworkAccess": {
+                            "value": "[parameters('publicNetworkAccess')]"
+                          },
                           "storageType": {
                             "value": "[parameters('storageRedundancy')]"
                           },
@@ -16018,7 +16152,9 @@
                             "value": "[parameters('location')]"
                           },
                           "diagnosticSettings": "[if(not(empty(parameters('logAnalyticsWorkspaceResourceId'))), createObject('value', createObject('workspaceId', parameters('logAnalyticsWorkspaceResourceId'))), createObject('value', null()))]",
-                          "publicNetworkAccess": "[if(parameters('privateEndpoint'), createObject('value', 'Disabled'), createObject('value', 'Enabled'))]",
+                          "publicNetworkAccess": {
+                            "value": "[parameters('publicNetworkAccess')]"
+                          },
                           "storageType": {
                             "value": "[parameters('storageRedundancy')]"
                           },
@@ -16437,7 +16573,7 @@
                       ]
                     },
                     "vaultPrivateEndpoint": {
-                      "condition": "[and(and(and(parameters('createVault'), parameters('privateEndpoint')), not(empty(parameters('privateEndpointSubnetResourceId')))), not(empty(parameters('azureBackupPrivateDnsZoneResourceId'))))]",
+                      "condition": "[and(and(and(parameters('createVault'), parameters('privateEndpoint')), not(empty(parameters('privateEndpointSubnetResourceId')))), not(empty(parameters('backupPrivateDnsZoneResourceId'))))]",
                       "type": "Microsoft.Resources/deployments",
                       "apiVersion": "2025-04-01",
                       "name": "[format('vaultPrivateEndpoint-{0}', uniqueString('vaultPrivateEndpoint', deployment().name))]",

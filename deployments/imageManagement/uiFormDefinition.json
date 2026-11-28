@@ -65,89 +65,304 @@
               "toolTip": "Deploy a dedicated storage account for image build logs. Blobs are automatically purged after 7 days. The managed identity is granted Storage Blob Data Contributor. Pass the buildLogsStorageAccountResourceId output to imageBuild deployments as existingLogStorageAccountResourceId."
             },
             {
-              "name": "storageSettings",
+              "name": "serviceEndpointVirtualNetworksApi",
+              "type": "Microsoft.Solutions.ArmApiControl",
+              "condition": "[not(empty(steps('basics').scope.subscription.id))]",
+              "request": {
+                "method": "GET",
+                "path": "[if(empty(steps('basics').scope.subscription.id), '', concat(steps('basics').scope.subscription.id, '/providers/Microsoft.Network/virtualNetworks?api-version=2022-11-01'))]",
+                "transforms": {
+                  "loaded": "`true`",
+                  "vnets": "value",
+                  "subnets": "value[].properties.subnets[]",
+                  "nextLink": "nextLink"
+                }
+              }
+            },
+            {
+              "name": "paasConnectivity",
               "type": "Microsoft.Common.Section",
-              "label": "Storage Configuration",
+              "label": "Deployment-owned PaaS connectivity",
               "visible": "[or(steps('storageAccounts').deployArtifactsStorageAccount, steps('storageAccounts').deployBuildLogsStorageAccount)]",
               "elements": [
                 {
-                  "name": "storageNetworkAccess",
+                  "name": "scenario",
                   "type": "Microsoft.Common.DropDown",
-                  "label": "Network Access",
-                  "defaultValue": "Public Endpoint",
-                  "toolTip": "Connectivity configuration for both storage accounts. Public access is selected separately below. Private Endpoint creates private endpoints. Service Endpoint configures storage subnet ACL rules but does not enable service endpoints on the subnets.",
+                  "label": "Connectivity scenario",
+                  "defaultValue": "Private connectivity",
                   "constraints": {
                     "required": true,
                     "allowedValues": [
                       {
-                        "label": "Public Endpoint",
-                        "value": "PublicEndpoint"
+                        "label": "Private connectivity",
+                        "value": "Private"
                       },
                       {
-                        "label": "Private Endpoint",
-                        "value": "PrivateEndpoint"
+                        "label": "Restricted public connectivity",
+                        "value": "Restricted"
                       },
                       {
-                        "label": "Service Endpoint",
-                        "value": "ServiceEndpoint"
+                        "label": "Custom configuration (advanced)",
+                        "value": "Custom"
                       }
                     ]
                   }
                 },
                 {
-                  "name": "paasPublicNetworkAccess",
-                  "type": "Microsoft.Common.DropDown",
-                  "label": "Public network access",
-                  "defaultValue": "[if(equals(steps('storageAccounts').storageSettings.storageNetworkAccess, 'PrivateEndpoint'), 'Disabled', if(equals(steps('storageAccounts').storageSettings.storageNetworkAccess, 'ServiceEndpoint'), 'Enabled with restrictions', 'Enabled'))]",
-                  "toolTip": "Shared by artifacts and logs storage, independently of private endpoints. Service endpoints require Enabled with restrictions for subnet rules to limit public access.",
+                  "name": "ownershipInfo",
+                  "type": "Microsoft.Common.TextBlock",
+                  "options": {
+                    "text": "One policy applies to both created Storage accounts. The gallery and existing encryption Key Vault are unchanged. Private endpoint placement and public-source allowlists are separate."
+                  }
+                },
+                {
+                  "name": "privateInfo",
+                  "type": "Microsoft.Common.TextBlock",
+                  "visible": "[equals(steps('storageAccounts').paasConnectivity.scenario, 'Private')]",
+                  "options": {
+                    "text": "Create private endpoints and disable public access for applicable deployment-owned resources. Select the shared placement subnet and configure DNS below."
+                  }
+                },
+                {
+                  "name": "restrictedInfo",
+                  "type": "Microsoft.Common.TextBlock",
+                  "visible": "[equals(steps('storageAccounts').paasConnectivity.scenario, 'Restricted')]",
+                  "options": {
+                    "text": "Storage uses restricted public access without private endpoints. Specify IP/CIDR ranges, eligible service-endpoint subnets, or both; these inputs remain separate."
+                  }
+                }
+              ]
+            },
+            {
+              "name": "storagePrivateNetworking",
+              "type": "Microsoft.Common.Section",
+              "label": "Storage networking: Private endpoints",
+              "visible": "[or(steps('storageAccounts').deployArtifactsStorageAccount, steps('storageAccounts').deployBuildLogsStorageAccount)]",
+              "elements": [
+                {
+                  "name": "privateEndpointInfo",
+                  "type": "Microsoft.Common.InfoBox",
+                  "options": {
+                    "style": "Info",
+                    "text": "Applies to both artifacts and build-logs Storage accounts when created. The gallery and existing encryption Key Vault are unchanged. Private endpoints and public endpoint access are independent. Configure DNS for the intended client path; public firewall rules do not restrict Private Link traffic."
+                  }
+                },
+                {
+                  "name": "storagePrivateEndpoint",
+                  "type": "Microsoft.Common.OptionsGroup",
+                  "label": "Deploy Storage private endpoints",
+                  "defaultValue": "Yes",
                   "constraints": {
                     "required": true,
                     "allowedValues": [
-                      { "label": "Disabled", "value": "Disabled" },
-                      { "label": "Enabled with restrictions", "value": "EnabledWithRestrictions" },
-                      { "label": "Enabled", "value": "Enabled" }
+                      {
+                        "label": "Yes",
+                        "value": true
+                      },
+                      {
+                        "label": "No",
+                        "value": false
+                      }
+                    ]
+                  },
+                  "visible": "[equals(steps('storageAccounts').paasConnectivity.scenario, 'Custom')]"
+                },
+                {
+                  "name": "privateEndpointVirtualNetwork",
+                  "type": "Microsoft.Common.DropDown",
+                  "label": "Private endpoint virtual network",
+                  "defaultValue": "",
+                  "multiLine": true,
+                  "visible": "[if(equals(steps('storageAccounts').paasConnectivity.scenario, 'Custom'), steps('storageAccounts').storagePrivateNetworking.storagePrivateEndpoint, equals(steps('storageAccounts').paasConnectivity.scenario, 'Private'))]",
+                  "constraints": {
+                    "required": true,
+                    "allowedValues": "[if(not(equals(steps('storageAccounts').serviceEndpointVirtualNetworksApi.transformed.loaded, true)), parse('[{\"label\":\"Loading VNet inventory\",\"value\":\"\"}]'), if(empty(filter(steps('storageAccounts').serviceEndpointVirtualNetworksApi.transformed.vnets, (vnet) => equals(vnet.location, steps('basics').scope.location.name))), parse('[{\"label\":\"No regional VNets found\",\"value\":\"\"}]'), map(filter(steps('storageAccounts').serviceEndpointVirtualNetworksApi.transformed.vnets, (vnet) => equals(vnet.location, steps('basics').scope.location.name)), (vnet) => parse(concat('{\"label\":\"', vnet.name, '\",\"description\":\"Resource group: ', first(skip(split(vnet.id, '/'), 4)), '\",\"value\":{\"id\":\"', vnet.id, '\"}}')))))]"
+                  }
+                },
+                {
+                  "name": "privateEndpointSubnetsApi",
+                  "type": "Microsoft.Solutions.ArmApiControl",
+                  "condition": "[and(or(steps('storageAccounts').deployArtifactsStorageAccount, steps('storageAccounts').deployBuildLogsStorageAccount), if(equals(steps('storageAccounts').paasConnectivity.scenario, 'Custom'), steps('storageAccounts').storagePrivateNetworking.storagePrivateEndpoint, equals(steps('storageAccounts').paasConnectivity.scenario, 'Private')), not(empty(steps('storageAccounts').storagePrivateNetworking.privateEndpointVirtualNetwork.id)))]",
+                  "request": {
+                    "method": "GET",
+                    "path": "[concat(steps('storageAccounts').storagePrivateNetworking.privateEndpointVirtualNetwork.id, '/subnets?api-version=2022-05-01')]"
+                  }
+                },
+                {
+                  "name": "privateEndpointSubnet",
+                  "type": "Microsoft.Common.DropDown",
+                  "label": "Shared-resource private endpoint subnet",
+                  "defaultValue": "",
+                  "visible": "[if(equals(steps('storageAccounts').paasConnectivity.scenario, 'Custom'), steps('storageAccounts').storagePrivateNetworking.storagePrivateEndpoint, equals(steps('storageAccounts').paasConnectivity.scenario, 'Private'))]",
+                  "toolTip": "One existing nondelegated subnet for all created artifacts and build-logs Storage private endpoints.",
+                  "constraints": {
+                    "required": true,
+                    "allowedValues": "[if(empty(steps('storageAccounts').storagePrivateNetworking.privateEndpointSubnetsApi.value), parse('[{\"label\":\"Select a VNet or check subnet read permissions\",\"value\":\"\"}]'), if(empty(filter(steps('storageAccounts').storagePrivateNetworking.privateEndpointSubnetsApi.value, (snet) => empty(snet.properties.delegations))), parse('[{\"label\":\"No nondelegated subnets found\",\"value\":\"\"}]'), map(filter(steps('storageAccounts').storagePrivateNetworking.privateEndpointSubnetsApi.value, (snet) => empty(snet.properties.delegations)), (snet) => parse(concat('{\"label\":\"', snet.name, '\",\"value\":{\"id\":\"', snet.id, '\"}}')))))]"
+                  }
+                },
+                {
+                  "name": "enablePrivateDNSIntegration",
+                  "type": "Microsoft.Common.OptionsGroup",
+                  "label": "Integrate with Azure Private DNS",
+                  "defaultValue": "Yes",
+                  "constraints": {
+                    "required": true,
+                    "allowedValues": [
+                      {
+                        "label": "Yes",
+                        "value": true
+                      },
+                      {
+                        "label": "No",
+                        "value": false
+                      }
+                    ]
+                  },
+                  "visible": "[if(equals(steps('storageAccounts').paasConnectivity.scenario, 'Custom'), steps('storageAccounts').storagePrivateNetworking.storagePrivateEndpoint, equals(steps('storageAccounts').paasConnectivity.scenario, 'Private'))]"
+                },
+                {
+                  "name": "externalDnsInfo",
+                  "type": "Microsoft.Common.InfoBox",
+                  "options": {
+                    "style": "Warning",
+                    "text": "If Azure Private DNS integration is disabled, provide DNS records through your approved DNS or policy process. Private endpoints alone do not configure client name resolution."
+                  },
+                  "visible": "[and(if(equals(steps('storageAccounts').paasConnectivity.scenario, 'Custom'), steps('storageAccounts').storagePrivateNetworking.storagePrivateEndpoint, equals(steps('storageAccounts').paasConnectivity.scenario, 'Private')), not(steps('storageAccounts').storagePrivateNetworking.enablePrivateDNSIntegration))]"
+                },
+                {
+                  "name": "privateDnsSubscription",
+                  "type": "Microsoft.Common.SubscriptionSelector",
+                  "resourceProviders": [
+                    "Microsoft.Network"
+                  ],
+                  "visible": "[and(if(equals(steps('storageAccounts').paasConnectivity.scenario, 'Custom'), steps('storageAccounts').storagePrivateNetworking.storagePrivateEndpoint, equals(steps('storageAccounts').paasConnectivity.scenario, 'Private')), steps('storageAccounts').storagePrivateNetworking.enablePrivateDNSIntegration)]"
+                },
+                {
+                  "name": "privateDnsZonesApi",
+                  "type": "Microsoft.Solutions.ArmApiControl",
+                  "condition": "[and(or(steps('storageAccounts').deployArtifactsStorageAccount, steps('storageAccounts').deployBuildLogsStorageAccount), if(equals(steps('storageAccounts').paasConnectivity.scenario, 'Custom'), steps('storageAccounts').storagePrivateNetworking.storagePrivateEndpoint, equals(steps('storageAccounts').paasConnectivity.scenario, 'Private')), steps('storageAccounts').storagePrivateNetworking.enablePrivateDNSIntegration, not(empty(steps('storageAccounts').storagePrivateNetworking.privateDnsSubscription.subscriptionId)))]",
+                  "request": {
+                    "method": "GET",
+                    "path": "[concat('/subscriptions/', steps('storageAccounts').storagePrivateNetworking.privateDnsSubscription.subscriptionId, '/providers/Microsoft.Network/privateDnsZones?api-version=2018-09-01')]"
+                  }
+                },
+                {
+                  "name": "blobPrivateDnsZone",
+                  "type": "Microsoft.Common.DropDown",
+                  "filter": true,
+                  "label": "Blob private DNS zone",
+                  "defaultValue": "[if(empty(steps('storageAccounts').storagePrivateNetworking.privateDnsZonesApi.value), 'Select a DNS subscription or check zone availability', if(empty(filter(steps('storageAccounts').storagePrivateNetworking.privateDnsZonesApi.value, (zone) => contains(zone.name, 'privatelink.blob.'))), 'Select a DNS subscription or check zone availability', first(map(filter(steps('storageAccounts').storagePrivateNetworking.privateDnsZonesApi.value, (zone) => contains(zone.name, 'privatelink.blob.')), (zone) => zone.name))))]",
+                  "multiLine": true,
+                  "visible": "[and(if(equals(steps('storageAccounts').paasConnectivity.scenario, 'Custom'), steps('storageAccounts').storagePrivateNetworking.storagePrivateEndpoint, equals(steps('storageAccounts').paasConnectivity.scenario, 'Private')), steps('storageAccounts').storagePrivateNetworking.enablePrivateDNSIntegration)]",
+                  "constraints": {
+                    "required": true,
+                    "allowedValues": "[if(empty(steps('storageAccounts').storagePrivateNetworking.privateDnsZonesApi.value), parse('[{\"label\":\"Select a DNS subscription or check zone availability\",\"value\":\"\"}]'), if(empty(filter(steps('storageAccounts').storagePrivateNetworking.privateDnsZonesApi.value, (zone) => contains(zone.name, 'privatelink.blob.'))), parse('[{\"label\":\"Select a DNS subscription or check zone availability\",\"value\":\"\"}]'), map(filter(steps('storageAccounts').storagePrivateNetworking.privateDnsZonesApi.value, (zone) => contains(zone.name, 'privatelink.blob.')), (zone) => parse(concat('{\"label\":\"', zone.name, '\",\"description\":\"Resource group: ', first(skip(split(zone.id, '/'), 4)), '\",\"value\":\"', zone.id, '\"}')))))]"
+                  }
+                },
+                {
+                  "name": "sharedSubnetPrerequisite",
+                  "type": "Microsoft.Common.TextBox",
+                  "label": "Shared endpoint placement prerequisite",
+                  "defaultValue": "Select a nondelegated subnet for the created Storage private endpoints.",
+                  "readOnly": true,
+                  "visible": "[and(or(steps('storageAccounts').deployArtifactsStorageAccount, steps('storageAccounts').deployBuildLogsStorageAccount), if(equals(steps('storageAccounts').paasConnectivity.scenario, 'Custom'), steps('storageAccounts').storagePrivateNetworking.storagePrivateEndpoint, equals(steps('storageAccounts').paasConnectivity.scenario, 'Private')))]",
+                  "constraints": {
+                    "required": true,
+                    "validations": [
+                      {
+                        "isValid": "[not(empty(steps('storageAccounts').storagePrivateNetworking.privateEndpointSubnet.id))]",
+                        "message": "Select a nondelegated subnet for the created Storage private endpoints."
+                      }
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "storagePublicNetworking",
+              "type": "Microsoft.Common.Section",
+              "label": "Storage networking: Public endpoint access",
+              "visible": "[and(or(steps('storageAccounts').deployArtifactsStorageAccount, steps('storageAccounts').deployBuildLogsStorageAccount), equals(steps('storageAccounts').paasConnectivity.scenario, 'Custom'))]",
+              "elements": [
+                {
+                  "name": "storagePublicNetworkAccess",
+                  "type": "Microsoft.Common.DropDown",
+                  "label": "Public network access",
+                  "defaultValue": "Disabled",
+                  "toolTip": "Applies to both artifacts and build-logs Storage accounts when created. The gallery and existing encryption Key Vault are unchanged.",
+                  "constraints": {
+                    "required": true,
+                    "allowedValues": [
+                      {
+                        "label": "Disabled",
+                        "value": "Disabled"
+                      },
+                      {
+                        "label": "Enabled with restrictions",
+                        "value": "EnabledWithRestrictions"
+                      },
+                      {
+                        "label": "Enabled",
+                        "value": "Enabled"
+                      }
                     ]
                   }
                 },
                 {
-                  "name": "permittedIPsInfo",
+                  "name": "publicAccessDisabledInfo",
                   "type": "Microsoft.Common.TextBlock",
-                  "visible": "[equals(steps('storageAccounts').storageSettings.paasPublicNetworkAccess, 'EnabledWithRestrictions')]",
-                  "options": {
-                    "text": "Permitted IP Addresses / CIDR Ranges (optional)",
-                    "style": "Heading"
-                  }
-                },
-                {
-                  "name": "permittedIPsDisabledInfo",
-                  "type": "Microsoft.Common.TextBlock",
-                  "visible": "[equals(steps('storageAccounts').storageSettings.paasPublicNetworkAccess, 'Disabled')]",
+                  "visible": "[equals(if(equals(steps('storageAccounts').paasConnectivity.scenario, 'Custom'), steps('storageAccounts').storagePublicNetworking.storagePublicNetworkAccess, if(equals(steps('storageAccounts').paasConnectivity.scenario, 'Restricted'), 'EnabledWithRestrictions', 'Disabled')), 'Disabled')]",
                   "options": {
                     "text": "Public network access is disabled. Ensure private connectivity is available. Existing trusted-service exceptions may still apply."
                   }
                 },
                 {
-                  "name": "permittedIPsRestrictedInfo",
+                  "name": "publicAccessEnabledWithRestrictionsInfo",
                   "type": "Microsoft.Common.TextBlock",
-                  "visible": "[equals(steps('storageAccounts').storageSettings.paasPublicNetworkAccess, 'EnabledWithRestrictions')]",
+                  "visible": "[equals(if(equals(steps('storageAccounts').paasConnectivity.scenario, 'Custom'), steps('storageAccounts').storagePublicNetworking.storagePublicNetworkAccess, if(equals(steps('storageAccounts').paasConnectivity.scenario, 'Restricted'), 'EnabledWithRestrictions', 'Disabled')), 'EnabledWithRestrictions')]",
                   "options": {
-                    "text": "Allow the public IPv4 addresses or CIDR ranges below and configured subnet rules. Other public traffic is denied, subject to existing trusted-service exceptions."
+                    "text": "Allow IP addresses, service-endpoint subnets, or both. Other public traffic is denied, subject to existing service exceptions."
                   }
                 },
                 {
-                  "name": "permittedIPsEnabledInfo",
-                  "type": "Microsoft.Common.TextBlock",
-                  "visible": "[equals(steps('storageAccounts').storageSettings.paasPublicNetworkAccess, 'Enabled')]",
+                  "name": "publicAccessEnabledInfo",
+                  "type": "Microsoft.Common.InfoBox",
+                  "visible": "[equals(if(equals(steps('storageAccounts').paasConnectivity.scenario, 'Custom'), steps('storageAccounts').storagePublicNetworking.storagePublicNetworkAccess, if(equals(steps('storageAccounts').paasConnectivity.scenario, 'Restricted'), 'EnabledWithRestrictions', 'Disabled')), 'Enabled')]",
                   "options": {
-                    "text": "Public network access is allowed from all networks. Authentication and authorization still apply."
+                    "text": "Public network access is unrestricted. Stored IP and subnet rules do not limit traffic. Authentication is still required.",
+                    "style": "Warning"
+                  }
+                },
+                {
+                  "name": "noPrivateConnectivityWarning",
+                  "type": "Microsoft.Common.InfoBox",
+                  "options": {
+                    "style": "Warning",
+                    "text": "Public access is disabled and this deployment is not creating private endpoints for this service. Provide an existing approved connectivity path before deploying."
+                  },
+                  "visible": "[and(equals(if(equals(steps('storageAccounts').paasConnectivity.scenario, 'Custom'), steps('storageAccounts').storagePublicNetworking.storagePublicNetworkAccess, if(equals(steps('storageAccounts').paasConnectivity.scenario, 'Restricted'), 'EnabledWithRestrictions', 'Disabled')), 'Disabled'), not(if(equals(steps('storageAccounts').paasConnectivity.scenario, 'Custom'), steps('storageAccounts').storagePrivateNetworking.storagePrivateEndpoint, equals(steps('storageAccounts').paasConnectivity.scenario, 'Private'))))]"
+                }
+              ]
+            },
+            {
+              "name": "storageServiceEndpointAccess",
+              "type": "Microsoft.Common.Section",
+              "label": "Storage networking: Allowed public-endpoint sources",
+              "visible": "[and(or(steps('storageAccounts').deployArtifactsStorageAccount, steps('storageAccounts').deployBuildLogsStorageAccount), equals(if(equals(steps('storageAccounts').paasConnectivity.scenario, 'Custom'), steps('storageAccounts').storagePublicNetworking.storagePublicNetworkAccess, if(equals(steps('storageAccounts').paasConnectivity.scenario, 'Restricted'), 'EnabledWithRestrictions', 'Disabled')), 'EnabledWithRestrictions'))]",
+              "elements": [
+                {
+                  "name": "requirements",
+                  "type": "Microsoft.Common.InfoBox",
+                  "options": {
+                    "style": "Info",
+                    "text": "Applies to both artifacts and build-logs Storage accounts when created. The gallery and existing encryption Key Vault are unchanged. Allow IP addresses, service-endpoint subnets, or both. This deployment never enables endpoints on existing subnets. Service endpoints use the public service endpoint, not a private IP."
                   }
                 },
                 {
                   "name": "storagePermittedIPs",
                   "type": "Microsoft.Common.EditableGrid",
                   "label": "Permitted IP Addresses / CIDR Ranges",
-                  "visible": "[equals(steps('storageAccounts').storageSettings.paasPublicNetworkAccess, 'EnabledWithRestrictions')]",
-                  "toolTip": "",
+                  "visible": "[equals(if(equals(steps('storageAccounts').paasConnectivity.scenario, 'Custom'), steps('storageAccounts').storagePublicNetworking.storagePublicNetworkAccess, if(equals(steps('storageAccounts').paasConnectivity.scenario, 'Restricted'), 'EnabledWithRestrictions', 'Disabled')), 'EnabledWithRestrictions')]",
                   "ariaLabel": "Permitted IP Addresses or CIDR Ranges",
                   "constraints": {
                     "width": "Full",
@@ -167,169 +382,72 @@
                           "placeholder": "e.g. 203.0.113.10 or 203.0.113.0/24",
                           "constraints": {
                             "required": true,
-                            "validations": [
-                              {
-                                "regex": "^(\\d{1,3}\\.){3}\\d{1,3}(\\/\\d{1,2})?$",
-                                "message": "Must be a valid IPv4 address or CIDR range (e.g. 10.0.0.1 or 10.0.0.0/24)."
-                              }
-                            ]
+                            "regex": "^$|^(?:(?:25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])\\.){3}(?:25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])(?:/(?:[0-9]|[12][0-9]|3[0-2]))?$",
+                            "validationMessage": "Enter an IPv4 address or CIDR range with a prefix from 0 to 32."
                           }
                         }
                       }
                     ]
                   }
-                }
-              ]
-            },
-            {
-              "name": "privateEndpointSection",
-              "type": "Microsoft.Common.Section",
-              "label": "Private Endpoint Configuration",
-              "visible": "[and(or(steps('storageAccounts').deployArtifactsStorageAccount, steps('storageAccounts').deployBuildLogsStorageAccount), equals(steps('storageAccounts').storageSettings.storageNetworkAccess, 'PrivateEndpoint'))]",
-              "elements": [
-                {
-                  "name": "virtualNetworksApi",
-                  "type": "Microsoft.Solutions.ArmApiControl",
-                  "condition": "[and(equals(steps('storageAccounts').storageSettings.storageNetworkAccess, 'PrivateEndpoint'), not(empty(steps('basics').scope.subscription)))]",
-                  "request": {
-                    "method": "GET",
-                    "path": "[concat(steps('basics').scope.subscription.id, '/providers/Microsoft.Network/virtualNetworks?api-version=2022-11-01')]"
-                  }
                 },
                 {
-                  "name": "virtualNetwork",
-                  "type": "Microsoft.Common.DropDown",
-                  "label": "Virtual Network",
-                  "multiLine": true,
-                  "toolTip": "Select the virtual network containing the private endpoint subnet. Only virtual networks in the primary region are shown.",
-                  "constraints": {
-                    "required": true,
-                    "allowedValues": "[map(filter(steps('storageAccounts').privateEndpointSection.virtualNetworksApi.value, (vnet) => equals(vnet.location, steps('basics').scope.location.name)), (vnet) => parse(concat('{\"label\":\"', vnet.name, '\",\"description\":\"Resource Group: ', first(skip(split(vnet.id, '/'), 4)), '\",\"value\":{\"name\":\"', vnet.name, '\",\"id\":\"', vnet.id, '\"}}')))]"
-                  }
+                  "name": "inventoryStatus",
+                  "type": "Microsoft.Common.InfoBox",
+                  "options": {
+                    "style": "Info",
+                    "text": "The subnet inventory has not loaded. If this persists, check the subscription and Microsoft.Network read permissions."
+                  },
+                  "visible": "[not(equals(steps('storageAccounts').serviceEndpointVirtualNetworksApi.transformed.loaded, true))]"
                 },
                 {
-                  "name": "subnetsApi",
-                  "type": "Microsoft.Solutions.ArmApiControl",
-                  "condition": "[not(empty(steps('storageAccounts').privateEndpointSection.virtualNetwork))]",
-                  "request": {
-                    "method": "GET",
-                    "path": "[concat(steps('storageAccounts').privateEndpointSection.virtualNetwork.id, '/subnets?api-version=2022-05-01')]"
-                  }
-                },
-                {
-                  "name": "privateEndpointSubnet",
-                  "type": "Microsoft.Common.DropDown",
-                  "label": "Private Endpoint Subnet",
-                  "toolTip": "Select the subnet for storage account private endpoints. Subnets with delegations are excluded.",
-                  "constraints": {
-                    "required": true,
-                    "allowedValues": "[map(filter(steps('storageAccounts').privateEndpointSection.subnetsApi.value, (snet) => empty(snet.properties.delegations)), (snet) => parse(concat('{\"label\":\"', snet.name, '\",\"value\":\"', snet.id, '\"}')))]"
-                  }
-                }
-              ]
-            },
-            {
-              "name": "privateDnsSection",
-              "type": "Microsoft.Common.Section",
-              "label": "Private DNS Zone",
-              "visible": "[and(or(steps('storageAccounts').deployArtifactsStorageAccount, steps('storageAccounts').deployBuildLogsStorageAccount), equals(steps('storageAccounts').storageSettings.storageNetworkAccess, 'PrivateEndpoint'))]",
-              "elements": [
-                {
-                  "name": "enablePrivateDNSIntegration",
-                  "type": "Microsoft.Common.CheckBox",
-                  "label": "Enable Private DNS Zone Integration",
-                  "defaultValue": true,
-                  "toolTip": "Register storage private endpoint A records in an Azure Private DNS Zone for proper name resolution."
-                },
-                {
-                  "name": "privateDNSZonesSubscription",
-                  "type": "Microsoft.Common.DropDown",
-                  "visible": "[steps('storageAccounts').privateDnsSection.enablePrivateDNSIntegration]",
-                  "label": "Private DNS Zone Subscription",
-                  "defaultValue": "[steps('basics').scope.subscription.displayName]",
-                  "toolTip": "Select the subscription containing your Private DNS Zones. In hub-and-spoke topologies this is typically the connectivity subscription.",
-                  "constraints": {
-                    "required": "[steps('storageAccounts').privateDnsSection.enablePrivateDNSIntegration]",
-                    "allowedValues": "[map(steps('basics').subscriptionsApi.value, (sub) => parse(concat('{\"label\":\"', sub.displayName, '\",\"value\":{\"displayName\":\"', sub.displayName, '\",\"id\":\"', sub.id, '\"}}')))]"
-                  }
-                },
-                {
-                  "name": "privateDNSZonesApi",
-                  "type": "Microsoft.Solutions.ArmApiControl",
-                  "condition": "[and(steps('storageAccounts').privateDnsSection.enablePrivateDNSIntegration, not(empty(steps('storageAccounts').privateDnsSection.privateDNSZonesSubscription)))]",
-                  "request": {
-                    "method": "GET",
-                    "path": "[concat(steps('storageAccounts').privateDnsSection.privateDNSZonesSubscription.id, '/providers/Microsoft.Network/privateDnsZones?api-version=2018-09-01')]"
-                  }
-                },
-                {
-                  "name": "blobPrivateDnsZone",
-                  "type": "Microsoft.Common.DropDown",
-                  "visible": "[steps('storageAccounts').privateDnsSection.enablePrivateDNSIntegration]",
-                  "label": "Blob Storage Private DNS Zone",
-                  "multiLine": true,
-                  "defaultValue": "[first(map(filter(steps('storageAccounts').privateDnsSection.privateDNSZonesApi.value, (zone) => contains(zone.name, 'blob')), (zone) => zone.name))]",
-                  "toolTip": "Select the Private DNS Zone for Blob storage (privatelink.blob.core.windows.net or privatelink.blob.core.usgovcloudapi.net for Azure Government).",
-                  "constraints": {
-                    "required": "[steps('storageAccounts').privateDnsSection.enablePrivateDNSIntegration]",
-                    "allowedValues": "[map(filter(steps('storageAccounts').privateDnsSection.privateDNSZonesApi.value, (zone) => contains(zone.name, 'blob')), (zone) => parse(concat('{\"label\":\"', zone.name, '\",\"description\":\"Resource Group: ', first(skip(split(zone.id, '/'), 4)), '\",\"value\":\"', zone.id, '\"}')))]"
-                  }
-                }
-              ]
-            },
-            {
-              "name": "serviceEndpointSection",
-              "type": "Microsoft.Common.Section",
-              "label": "Service Endpoint Configuration",
-              "visible": "[and(or(steps('storageAccounts').deployArtifactsStorageAccount, steps('storageAccounts').deployBuildLogsStorageAccount), equals(steps('storageAccounts').storageSettings.storageNetworkAccess, 'ServiceEndpoint'))]",
-              "elements": [
-                {
-                  "name": "serviceEndpointInfo",
+                  "name": "inventoryPageWarning",
                   "type": "Microsoft.Common.InfoBox",
                   "options": {
                     "style": "Warning",
-                    "text": "This template adds the selected subnets to the storage account network ACL to allow access via service endpoints. It does NOT deploy service endpoints to the subnets. Microsoft.Storage service endpoints must already be configured on each subnet. Only subnets with an existing Microsoft.Storage service endpoint are listed below."
-                  }
+                    "text": "The VNet API returned a partial inventory. Use a parameter-file deployment for subnets on later pages."
+                  },
+                  "visible": "[not(empty(steps('storageAccounts').serviceEndpointVirtualNetworksApi.transformed.nextLink))]"
                 },
                 {
-                  "name": "virtualNetworksApi",
-                  "type": "Microsoft.Solutions.ArmApiControl",
-                  "condition": "[and(equals(steps('storageAccounts').storageSettings.storageNetworkAccess, 'ServiceEndpoint'), not(empty(steps('basics').scope.subscription)))]",
-                  "request": {
-                    "method": "GET",
-                    "path": "[concat(steps('basics').scope.subscription.id, '/providers/Microsoft.Network/virtualNetworks?api-version=2022-11-01')]"
-                  }
-                },
-                {
-                  "name": "virtualNetwork",
+                  "name": "storageServiceEndpointSubnets",
                   "type": "Microsoft.Common.DropDown",
-                  "label": "Virtual Network",
+                  "label": "Storage access subnets",
+                  "multiselect": true,
+                  "selectAll": false,
+                  "filter": true,
                   "multiLine": true,
-                  "toolTip": "Select the virtual network containing the subnets that will access storage via service endpoints.",
+                  "defaultValue": "[parse('[]')]",
+                  "toolTip": "Requires existing Microsoft.Storage in the storage region, or Microsoft.Storage.Global for cross-region access where supported. Applies only to storage accounts created by this deployment; existing topology ACLs remain additive.",
+                  "visible": "[and(or(steps('storageAccounts').deployArtifactsStorageAccount, steps('storageAccounts').deployBuildLogsStorageAccount), equals(if(equals(steps('storageAccounts').paasConnectivity.scenario, 'Custom'), steps('storageAccounts').storagePublicNetworking.storagePublicNetworkAccess, if(equals(steps('storageAccounts').paasConnectivity.scenario, 'Restricted'), 'EnabledWithRestrictions', 'Disabled')), 'EnabledWithRestrictions'))]",
                   "constraints": {
-                    "required": true,
-                    "allowedValues": "[map(filter(steps('storageAccounts').serviceEndpointSection.virtualNetworksApi.value, (vnet) => equals(vnet.location, steps('basics').scope.location.name)), (vnet) => parse(concat('{\"label\":\"', vnet.name, '\",\"description\":\"Resource Group: ', first(skip(split(vnet.id, '/'), 4)), '\",\"value\":{\"name\":\"', vnet.name, '\",\"id\":\"', vnet.id, '\"}}')))]"
+                    "required": false,
+                    "allowedValues": "[if(not(equals(steps('storageAccounts').serviceEndpointVirtualNetworksApi.transformed.loaded, true)), parse('[{\"label\":\"Loading subnet inventory\",\"value\":\"\"}]'), if(or(empty(steps('storageAccounts').serviceEndpointVirtualNetworksApi.transformed.vnets), empty(steps('storageAccounts').serviceEndpointVirtualNetworksApi.transformed.subnets)), parse('[{\"label\":\"No eligible subnets found\",\"value\":\"\"}]'), if(empty(filter(steps('storageAccounts').serviceEndpointVirtualNetworksApi.transformed.subnets, (snet) => if(empty(snet.properties.serviceEndpoints), false, or(not(empty(filter(snet.properties.serviceEndpoints, (se) => equals(se.service, 'Microsoft.Storage.Global')))), and(not(empty(filter(snet.properties.serviceEndpoints, (se) => equals(se.service, 'Microsoft.Storage')))), contains(map(filter(steps('storageAccounts').serviceEndpointVirtualNetworksApi.transformed.vnets, (vnet) => equals(vnet.location, steps('basics').scope.location.name)), (vnet) => vnet.id), first(split(snet.id, '/subnets/')))))))), parse('[{\"label\":\"No eligible subnets found\",\"value\":\"\"}]'), map(filter(steps('storageAccounts').serviceEndpointVirtualNetworksApi.transformed.subnets, (snet) => if(empty(snet.properties.serviceEndpoints), false, or(not(empty(filter(snet.properties.serviceEndpoints, (se) => equals(se.service, 'Microsoft.Storage.Global')))), and(not(empty(filter(snet.properties.serviceEndpoints, (se) => equals(se.service, 'Microsoft.Storage')))), contains(map(filter(steps('storageAccounts').serviceEndpointVirtualNetworksApi.transformed.vnets, (vnet) => equals(vnet.location, steps('basics').scope.location.name)), (vnet) => vnet.id), first(split(snet.id, '/subnets/'))))))), (snet) => parse(concat('{\"label\":\"', first(skip(split(snet.id, '/'), 8)), ' | ', snet.name, '\",\"description\":\"Resource Group: ', first(skip(split(snet.id, '/'), 4)), '\",\"value\":\"', snet.id, '\"}'))))))]"
                   }
                 },
                 {
-                  "name": "subnetsApi",
-                  "type": "Microsoft.Solutions.ArmApiControl",
-                  "condition": "[not(empty(steps('storageAccounts').serviceEndpointSection.virtualNetwork))]",
-                  "request": {
-                    "method": "GET",
-                    "path": "[concat(steps('storageAccounts').serviceEndpointSection.virtualNetwork.id, '/subnets?api-version=2022-05-01')]"
-                  }
+                  "name": "emptyAllowlistWarning",
+                  "type": "Microsoft.Common.InfoBox",
+                  "options": {
+                    "style": "Warning",
+                    "text": "No ordinary public sources are allowed. Private endpoints still work if reachable; existing service exceptions may apply. Add IP or subnet rules if clients need the public path."
+                  },
+                  "visible": "[and(empty(steps('storageAccounts').storageServiceEndpointAccess.storagePermittedIPs), empty(if(empty(steps('storageAccounts').storageServiceEndpointAccess.storageServiceEndpointSubnets), parse('[]'), filter(steps('storageAccounts').storageServiceEndpointAccess.storageServiceEndpointSubnets, (id) => not(empty(id))))))]"
                 },
                 {
-                  "name": "serviceEndpointSubnets",
-                  "type": "Microsoft.Common.DropDown",
-                  "label": "Subnets with Microsoft.Storage Service Endpoint",
-                  "multiSelect": true,
-                  "selectAll": true,
-                  "toolTip": "Select all subnets that need access to the storage accounts via service endpoint. Only subnets with an existing Microsoft.Storage service endpoint are listed.",
+                  "name": "allowlistPrerequisite",
+                  "type": "Microsoft.Common.TextBox",
+                  "label": "Restricted connectivity prerequisite",
+                  "defaultValue": "Restricted public connectivity without a private endpoint requires an IP/CIDR or eligible service-endpoint subnet.",
+                  "readOnly": true,
+                  "visible": "[and(or(steps('storageAccounts').deployArtifactsStorageAccount, steps('storageAccounts').deployBuildLogsStorageAccount), equals(if(equals(steps('storageAccounts').paasConnectivity.scenario, 'Custom'), steps('storageAccounts').storagePublicNetworking.storagePublicNetworkAccess, if(equals(steps('storageAccounts').paasConnectivity.scenario, 'Restricted'), 'EnabledWithRestrictions', 'Disabled')), 'EnabledWithRestrictions'), not(if(equals(steps('storageAccounts').paasConnectivity.scenario, 'Custom'), steps('storageAccounts').storagePrivateNetworking.storagePrivateEndpoint, equals(steps('storageAccounts').paasConnectivity.scenario, 'Private'))))]",
                   "constraints": {
                     "required": true,
-                    "allowedValues": "[map(filter(steps('storageAccounts').serviceEndpointSection.subnetsApi.value, (snet) => not(empty(filter(snet.properties.serviceEndpoints, (se) => equals(se.service, 'Microsoft.Storage'))))), (snet) => parse(concat('{\"label\":\"', snet.name, '\",\"value\":\"', snet.id, '\"}')))]"
+                    "validations": [
+                      {
+                        "isValid": "[or(not(empty(if(or(steps('storageAccounts').deployArtifactsStorageAccount, steps('storageAccounts').deployBuildLogsStorageAccount), if(empty(steps('storageAccounts').storageServiceEndpointAccess.storagePermittedIPs), parse('[]'), filter(map(steps('storageAccounts').storageServiceEndpointAccess.storagePermittedIPs, (item) => item.ipAddress), (ip) => not(empty(ip)))), parse('[]')))), not(empty(if(or(steps('storageAccounts').deployArtifactsStorageAccount, steps('storageAccounts').deployBuildLogsStorageAccount), if(empty(steps('storageAccounts').storageServiceEndpointAccess.storageServiceEndpointSubnets), parse('[]'), filter(steps('storageAccounts').storageServiceEndpointAccess.storageServiceEndpointSubnets, (id) => not(empty(id)))), parse('[]')))))]",
+                        "message": "Restricted public connectivity without a private endpoint requires an IP/CIDR or eligible service-endpoint subnet."
+                      }
+                    ]
                   }
                 }
               ]
@@ -351,7 +469,7 @@
                   "type": "Microsoft.Common.InfoBox",
                   "options": {
                     "style": "Info",
-                    "text": "Storage accounts are encrypted at rest by default. Platform-managed keys require no additional configuration. Customer-managed keys use keys you own in a Premium Key Vault; the same vault and rotation policy are applied to both storage accounts and gallery image versions. Select HSM-backed if your Key Vault is an Azure Managed HSM or a Premium vault with HSM-protected keys."
+                    "text": "Storage accounts are encrypted at rest by default. Choose customer-managed keys when you need customer key control or applicable policies require it. This form uses an existing Premium Key Vault shared with gallery encryption. Select HSM-backed to create RSA-HSM keys in that vault; Azure Managed HSM resources are not supported by this deployment."
                   }
                 },
                 {
@@ -359,7 +477,7 @@
                   "type": "Microsoft.Common.DropDown",
                   "label": "Key Management",
                   "defaultValue": "PlatformManaged",
-                  "toolTip": "Encryption key management applied to all resources in this deployment — storage accounts and gallery image versions. Platform-managed keys (default) require no additional configuration. Customer-managed keys use keys you own in a Premium Key Vault; the same vault and rotation policy are applied to both storage accounts and gallery image versions. Select HSM-backed if your Key Vault is an Azure Managed HSM or a Premium vault with HSM-protected keys.",
+                  "toolTip": "Encryption key management for the deployed storage accounts. Gallery encryption is selected independently. Platform-managed keys require no customer key configuration. CMK uses the selected Premium Key Vault; HSM-backed creates RSA-HSM keys in that vault, not an Azure Managed HSM resource.",
                   "constraints": {
                     "required": true,
                     "allowedValues": [
@@ -390,7 +508,7 @@
                   "type": "Microsoft.Common.InfoBox",
                   "options": {
                     "style": "Info",
-                    "text": "Gallery image versions are encrypted at rest by default. Platform-managed keys require no additional configuration. Customer-managed keys use keys you own in a Premium Key Vault; the same vault and rotation policy are applied to both storage accounts and gallery image versions. Select HSM-backed if your Key Vault is an Azure Managed HSM or a Premium vault with HSM-protected keys."
+                    "text": "Gallery image versions are encrypted at rest by default. Choose CMK, double encryption, or HSM protection according to your key-control, authorization, and policy requirements. CMK uses the selected Premium Key Vault. HSM-backed creates RSA-HSM keys in that vault, not an Azure Managed HSM resource."
                   }
                 },
                 {
@@ -398,7 +516,7 @@
                   "type": "Microsoft.Common.DropDown",
                   "label": "Key Management",
                   "defaultValue": "PlatformManaged",
-                  "toolTip": "Platform-managed keys (default) require no additional configuration. Customer-managed keys use keys you own in a Premium Key Vault; the same vault and rotation policy are applied to both storage accounts and gallery image versions. Select HSM-backed if your Key Vault is an Azure Managed HSM or a Premium vault with HSM-protected keys.",
+                  "toolTip": "Gallery encryption is independent of storage account encryption. Select CMK or double encryption according to applicable requirements. HSM-backed modes create RSA-HSM keys in the selected Premium Key Vault; Azure Managed HSM resources are not supported.",
                   "constraints": {
                     "required": true,
                     "allowedValues": [
@@ -438,7 +556,7 @@
                   "type": "Microsoft.Common.InfoBox",
                   "options": {
                     "style": "Info",
-                    "text": "Customer-managed keys require an existing Premium SKU Key Vault with soft delete and purge protection enabled. Deploy the Key Vault using the keyVaults template before running this deployment. The deploying identity requires the Key Vault Crypto Officer role on the vault. The same vault and key rotation policy apply to both storage accounts and gallery image versions."
+                    "text": "For CMK in this form, select an existing Premium Key Vault with soft delete, purge protection, and appropriate access permissions. AVD Shared Services can create the vault, or you can supply an existing compatible vault. Key creation requires permissions such as the Key Vault Crypto Officer role. Ordinary storage and gallery CMK paths share this vault and rotation interval; confidential secure-release keys require separate lifecycle management."
                   }
                 },
                 {
@@ -465,7 +583,7 @@
                   "name": "keyExpirationInDays",
                   "type": "Microsoft.Common.Slider",
                   "label": "Key Rotation (Days)",
-                  "toolTip": "Number of days before the customer-managed encryption key expires and auto-rotates. Applies to all encrypted resources in this deployment.",
+                  "toolTip": "Expiry interval for ordinary storage and gallery CMK rotation policies; keys rotate seven days before expiry. This automatic rotation policy is not applied to confidential secure-release keys.",
                   "min": 7,
                   "max": 365,
                   "defaultValue": 180,
@@ -1159,12 +1277,6 @@
         "location": "[steps('basics').scope.location.name]",
         "deployArtifactsStorageAccount": "[steps('storageAccounts').deployArtifactsStorageAccount]",
         "deployBuildLogsStorageAccount": "[steps('storageAccounts').deployBuildLogsStorageAccount]",
-        "storageNetworkAccess": "[if(or(steps('storageAccounts').deployArtifactsStorageAccount, steps('storageAccounts').deployBuildLogsStorageAccount), steps('storageAccounts').storageSettings.storageNetworkAccess, 'PublicEndpoint')]",
-        "privateEndpointSubnetResourceId": "[if(equals(steps('storageAccounts').storageSettings.storageNetworkAccess, 'PrivateEndpoint'), steps('storageAccounts').privateEndpointSection.privateEndpointSubnet, '')]",
-        "azureBlobPrivateDnsZoneResourceId": "[if(and(equals(steps('storageAccounts').storageSettings.storageNetworkAccess, 'PrivateEndpoint'), steps('storageAccounts').privateDnsSection.enablePrivateDNSIntegration), steps('storageAccounts').privateDnsSection.blobPrivateDnsZone, '')]",
-        "storageServiceEndpointSubnetResourceIds": "[if(equals(steps('storageAccounts').storageSettings.storageNetworkAccess, 'ServiceEndpoint'), steps('storageAccounts').serviceEndpointSection.serviceEndpointSubnets, parse('[]'))]",
-        "storagePermittedIPs": "[filter(map(steps('storageAccounts').storageSettings.storagePermittedIPs, (item) => item.ipAddress), (ip) => not(empty(ip)))]",
-        "paasPublicNetworkAccess": "[if(or(steps('storageAccounts').deployArtifactsStorageAccount, steps('storageAccounts').deployBuildLogsStorageAccount), steps('storageAccounts').storageSettings.paasPublicNetworkAccess, 'Auto')]",
         "keyManagementStorageAccounts": "[if(or(steps('storageAccounts').deployArtifactsStorageAccount, steps('storageAccounts').deployBuildLogsStorageAccount), steps('encryption').storage.keyManagement, 'PlatformManaged')]",
         "keyManagementGalleryImageVersions": "[steps('encryption').gallery.keyManagement]",
         "encryptionKeyVaultResourceId": "[if(or(and(or(steps('storageAccounts').deployArtifactsStorageAccount, steps('storageAccounts').deployBuildLogsStorageAccount), not(equals(steps('encryption').storage.keyManagement, 'PlatformManaged'))), not(equals(steps('encryption').gallery.keyManagement, 'PlatformManaged'))), steps('encryption').keyVaultSection.encryptionKeyVault, '')]",
@@ -1173,7 +1285,10 @@
         "confidentialVMOrchestratorObjectId": "[if(steps('encryption').cvmDesSection.createConfidentialVmGalleryDes, steps('encryption').cvmDesSection.confidentialVMOrchestratorObjectId, '')]",
         "deployImageBuildResourceGroup": "[steps('imageBuildRg').deployImageBuildResourceGroup]",
         "namingConvention": "[parse(concat('{\"components\":[\"', steps('tagsAndNaming').naming.component1, '\",\"', if(empty(steps('tagsAndNaming').naming.component2),'none',steps('tagsAndNaming').naming.component2), '\",\"', if(empty(steps('tagsAndNaming').naming.component3),'none',steps('tagsAndNaming').naming.component3), '\",\"', if(empty(steps('tagsAndNaming').naming.component4),'none',steps('tagsAndNaming').naming.component4), '\",\"', if(empty(steps('tagsAndNaming').naming.component5),'none',steps('tagsAndNaming').naming.component5), '\",\"', if(empty(steps('tagsAndNaming').naming.component6),'none',steps('tagsAndNaming').naming.component6), '\"],\"delimiter\":\"', steps('tagsAndNaming').naming.delimiter, '\",\"freeform1\":\"', if(empty(steps('tagsAndNaming').naming.freeform1Value),'',steps('tagsAndNaming').naming.freeform1Value), '\",\"environment\":\"', if(empty(steps('tagsAndNaming').naming.environmentValue),'',steps('tagsAndNaming').naming.environmentValue), '\",\"freeform2\":\"', if(empty(steps('tagsAndNaming').naming.freeform2Value),'',steps('tagsAndNaming').naming.freeform2Value), '\",\"workload\":\"', if(empty(steps('tagsAndNaming').naming.workloadValue),'',steps('tagsAndNaming').naming.workloadValue), '\",\"locationAbbreviation\":\"', if(empty(steps('tagsAndNaming').naming.locationAbbreviationOverride),'',steps('tagsAndNaming').naming.locationAbbreviationOverride), '\",\"imageManagementStoragePrefix\":\"', if(empty(steps('tagsAndNaming').naming.imageManagementStoragePrefix),'',steps('tagsAndNaming').naming.imageManagementStoragePrefix), '\",\"resourceTypeCodes\":{\"resourceGroups\":\"', if(empty(steps('tagsAndNaming').naming.rtCodeRg),'rg',steps('tagsAndNaming').naming.rtCodeRg), '\",\"computeGalleries\":\"', if(empty(steps('tagsAndNaming').naming.rtCodeGal),'gal',steps('tagsAndNaming').naming.rtCodeGal), '\",\"userAssignedIdentities\":\"', if(empty(steps('tagsAndNaming').naming.rtCodeUai),'uai',steps('tagsAndNaming').naming.rtCodeUai), '\",\"storageAccounts\":\"', if(empty(steps('tagsAndNaming').naming.rtCodeSa),'sa',steps('tagsAndNaming').naming.rtCodeSa), '\",\"privateEndpoints\":\"', if(empty(steps('tagsAndNaming').naming.rtCodePe),'pe',steps('tagsAndNaming').naming.rtCodePe), '\",\"networkInterfaces\":\"', if(empty(steps('tagsAndNaming').naming.rtCodeNic),'nic',steps('tagsAndNaming').naming.rtCodeNic), '\",\"diskEncryptionSets\":\"', if(empty(steps('tagsAndNaming').naming.rtCodeDes),'des',steps('tagsAndNaming').naming.rtCodeDes), '\"}}'))]",
-        "tags": "[steps('tagsAndNaming').tags.resourceTags]"
+        "tags": "[steps('tagsAndNaming').tags.resourceTags]",
+        "paasNetworking": "[first(map(parse('[0]'), (_) => {\"publicNetworkAccess\": if(equals(steps('storageAccounts').paasConnectivity.scenario, 'Restricted'), 'EnabledWithRestrictions', 'Disabled'), \"privateEndpoint\": not(equals(steps('storageAccounts').paasConnectivity.scenario, 'Restricted')), \"storage\": if(or(steps('storageAccounts').deployArtifactsStorageAccount, steps('storageAccounts').deployBuildLogsStorageAccount), first(map(parse('[0]'), (_) => {\"publicNetworkAccess\": if(equals(steps('storageAccounts').paasConnectivity.scenario, 'Custom'), steps('storageAccounts').storagePublicNetworking.storagePublicNetworkAccess, if(equals(steps('storageAccounts').paasConnectivity.scenario, 'Restricted'), 'EnabledWithRestrictions', 'Disabled')), \"privateEndpoint\": if(equals(steps('storageAccounts').paasConnectivity.scenario, 'Custom'), steps('storageAccounts').storagePrivateNetworking.storagePrivateEndpoint, equals(steps('storageAccounts').paasConnectivity.scenario, 'Private')), \"permittedIPs\": if(equals(if(equals(steps('storageAccounts').paasConnectivity.scenario, 'Custom'), steps('storageAccounts').storagePublicNetworking.storagePublicNetworkAccess, if(equals(steps('storageAccounts').paasConnectivity.scenario, 'Restricted'), 'EnabledWithRestrictions', 'Disabled')), 'EnabledWithRestrictions'), if(or(steps('storageAccounts').deployArtifactsStorageAccount, steps('storageAccounts').deployBuildLogsStorageAccount), if(empty(steps('storageAccounts').storageServiceEndpointAccess.storagePermittedIPs), parse('[]'), filter(map(steps('storageAccounts').storageServiceEndpointAccess.storagePermittedIPs, (item) => item.ipAddress), (ip) => not(empty(ip)))), parse('[]')), parse('[]')), \"serviceEndpointSubnetResourceIds\": if(equals(if(equals(steps('storageAccounts').paasConnectivity.scenario, 'Custom'), steps('storageAccounts').storagePublicNetworking.storagePublicNetworkAccess, if(equals(steps('storageAccounts').paasConnectivity.scenario, 'Restricted'), 'EnabledWithRestrictions', 'Disabled')), 'EnabledWithRestrictions'), if(or(steps('storageAccounts').deployArtifactsStorageAccount, steps('storageAccounts').deployBuildLogsStorageAccount), if(empty(steps('storageAccounts').storageServiceEndpointAccess.storageServiceEndpointSubnets), parse('[]'), filter(steps('storageAccounts').storageServiceEndpointAccess.storageServiceEndpointSubnets, (id) => not(empty(id)))), parse('[]')), parse('[]'))})), parse('{}'))}))]",
+        "privateEndpointSubnetResourceIds": "[first(map(parse('[0]'), (_) => {\"sharedResources\": if(empty(if(and(or(steps('storageAccounts').deployArtifactsStorageAccount, steps('storageAccounts').deployBuildLogsStorageAccount), if(equals(steps('storageAccounts').paasConnectivity.scenario, 'Custom'), steps('storageAccounts').storagePrivateNetworking.storagePrivateEndpoint, equals(steps('storageAccounts').paasConnectivity.scenario, 'Private'))), steps('storageAccounts').storagePrivateNetworking.privateEndpointSubnet.id, '')), '', if(and(or(steps('storageAccounts').deployArtifactsStorageAccount, steps('storageAccounts').deployBuildLogsStorageAccount), if(equals(steps('storageAccounts').paasConnectivity.scenario, 'Custom'), steps('storageAccounts').storagePrivateNetworking.storagePrivateEndpoint, equals(steps('storageAccounts').paasConnectivity.scenario, 'Private'))), steps('storageAccounts').storagePrivateNetworking.privateEndpointSubnet.id, ''))}))]",
+        "privateDnsZoneResourceIds": "[first(map(parse('[0]'), (_) => {\"blob\": if(empty(if(and(or(steps('storageAccounts').deployArtifactsStorageAccount, steps('storageAccounts').deployBuildLogsStorageAccount), and(if(equals(steps('storageAccounts').paasConnectivity.scenario, 'Custom'), steps('storageAccounts').storagePrivateNetworking.storagePrivateEndpoint, equals(steps('storageAccounts').paasConnectivity.scenario, 'Private')), steps('storageAccounts').storagePrivateNetworking.enablePrivateDNSIntegration)), steps('storageAccounts').storagePrivateNetworking.blobPrivateDnsZone, '')), '', if(and(or(steps('storageAccounts').deployArtifactsStorageAccount, steps('storageAccounts').deployBuildLogsStorageAccount), and(if(equals(steps('storageAccounts').paasConnectivity.scenario, 'Custom'), steps('storageAccounts').storagePrivateNetworking.storagePrivateEndpoint, equals(steps('storageAccounts').paasConnectivity.scenario, 'Private')), steps('storageAccounts').storagePrivateNetworking.enablePrivateDNSIntegration)), steps('storageAccounts').storagePrivateNetworking.blobPrivateDnsZone, ''))}))]"
       }
     }
   }

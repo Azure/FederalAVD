@@ -36,11 +36,11 @@ it does not migrate an existing deployment.
 | `imageLicenseType` | `Windows_Client`; also accepts `Windows_Server` |
 | `virtualMachineSize` | Required VM size compatible with the image, security settings, and region |
 | `keyVaultResourceId` | Required existing credentials vault ID containing `LocalAdminUsername` and `LocalAdminPassword`; enable template deployment and authorize deployment principals |
-| `subnetResourceId` | Required existing VM subnet; also used for all private endpoints and service-mode subnet rules |
+| `virtualMachineSubnetResourceId` | Required existing validation-VM subnet; separate from all PaaS PE and service-endpoint inputs |
 | `privateIPAddress` | Required available static IPv4 address in the VM subnet |
-| `endpointType` | `private`; also accepts `service` and `public`; see [networking](#networking) |
-| `functionAppDelegatedSubnetResourceId` | Empty; supply a separate same-region `Microsoft.Web/serverFarms`-delegated integration subnet for private or service mode |
-| `azureBlobPrivateDnsZoneResourceId`, `azureFunctionAppPrivateDnsZoneResourceId`, `azureKeyVaultPrivateDnsZoneResourceId` | Empty; required for private mode, with existing target-cloud zones linked to the integration VNet |
+| `${service}PublicNetworkAccess` | `Disabled`; independently accepts `EnabledWithRestrictions` and `Enabled` for Storage, Key Vault, and Function App |
+| `functionAppDelegatedSubnetResourceId` | Empty; optionally supply a separate same-region `Microsoft.Web/serverFarms`-delegated subnet for outbound VNet integration |
+| `blobPrivateDnsZoneResourceId`, `websitesPrivateDnsZoneResourceId`, `vaultPrivateDnsZoneResourceId` | Empty; required only for the corresponding enabled family PE, with existing target-cloud zones linked to its client/integration VNet |
 | `diskEncryptionSetName` | Empty disables the disk encryption set; otherwise creates a set and its encryption key |
 | `diskEncryptionType` | `EncryptionAtRestWithPlatformAndCustomerKeys`; also accepts `EncryptionAtRestWithCustomerKey` and `ConfidentialVmEncryptedWithCustomerKey`; used only when a disk encryption set is created |
 | `diskAccessName` | Empty; supply a name when selecting `diskNetworkAccess: AllowPrivate` |
@@ -120,33 +120,30 @@ access on the artifact store.
 
 ## Networking
 
-The VM subnet and all private endpoints use `subnetResourceId`. Function outbound
-VNet integration uses the separate `functionAppDelegatedSubnetResourceId`; VNet
-integration does not provide private inbound access.
+The validation VM uses required `virtualMachineSubnetResourceId` (formerly
+`subnetResourceId`). It is independent of all PaaS PE and service-endpoint inputs.
+Function outbound integration uses only `functionAppDelegatedSubnetResourceId`,
+optionally supplied for a VNet runtime-storage path.
 
-| Mode | Function App and runtime storage | Encryption Key Vault |
-| --- | --- | --- |
-| `private` | Public access disabled; app/blob private endpoints in the VM subnet; outbound integration enabled when the delegated subnet is supplied | Public access disabled; private endpoint in the VM subnet |
-| `service` | Public endpoints enabled with default-deny rules; the VM and delegated integration subnets are allowed | Public endpoint enabled with default-deny rules allowing the VM subnet and `AzureServices` bypass |
-| `public` | Public endpoints enabled without network restrictions | Public endpoint enabled; the entry supplies an empty network ACL object |
+Storage, Key Vault, and Function App each have their own `${service}PublicNetworkAccess`
+policy, default `Disabled`, and `${service}PermittedIPs` list. Each independently accepts
+`Disabled`, `EnabledWithRestrictions`, or `Enabled`. Supplied rules remain configured
+in Disabled mode; restricted mode denies unmatched traffic even with empty allowlists;
+Enabled permits all networks.
 
-For service mode, enable Storage service endpoints on the permitted subnets,
-`Microsoft.Web` endpoints for subnet-based inbound Function access, and
-`Microsoft.KeyVault` on the VM subnet for the encryption-vault rule. Supply the
-delegated integration subnet so the Function can reach its restricted host
-storage. The Bicep missing-subnet guard currently covers private mode only.
-The deployment does not create subnets or enable their service endpoints.
+Each `${service}PrivateEndpoint` flag defaults true, with its own required-when-enabled
+`${service}PrivateEndpointSubnetResourceId`. Existing blob, app, and vault DNS IDs are
+required only for the corresponding enabled endpoint. The former combined `endpointType`
+is removed; neither a PE choice nor a service allowlist sets public mode or outbound
+integration. Explicit `${service}ServiceEndpointSubnetResourceIds` authorize only their
+own service family; no VM/PE/integration subnet is implicitly allowed. Subnets and service
+endpoints remain customer-managed.
 
-The shared Function module retains an `AzureCloud` inbound exception and storage
-retains `AzureServices` bypass. Service mode therefore is not a subnet-only
-allowlist. Network access does not replace managed-identity authorization.
-See [App Service subnet restrictions](https://learn.microsoft.com/azure/app-service/app-service-ip-restrictions)
-and [Storage subnet rules](https://learn.microsoft.com/azure/storage/common/storage-network-security-virtual-networks).
-
-For private mode, pre-create the cloud-specific blob, Function App, and Key Vault
-DNS zones and VNet links. Verify resolution, routing, NSGs, subnet separation,
-delegation, available addresses, and any required SCM access. Monitoring remains
-separate: private app/storage connectivity alone does not make Insights private.
+Storage and Key Vault retain `AzureServices` bypass; app/SCM retains `AzureCloud`.
+Network access does not replace managed-identity authorization. Pre-create selected
+private DNS zones and VNet links, then verify DNS, routing, NSGs, delegation, available
+addresses, runtime Storage connectivity, and any required SCM access. Monitoring remains
+independent.
 
 ## Encryption and permissions
 
@@ -223,14 +220,19 @@ resource IDs, and DNS zones for your cloud before using this private-mode exampl
   "networkInterfaceName": "nic-test-imgv",
   "imageVersionResourceId": "/subscriptions/<subscription>/resourceGroups/<image-group>/providers/Microsoft.Compute/galleries/<gallery>/images/<definition>/versions/1.0.0",
   "keyVaultResourceId": "/subscriptions/<subscription>/resourceGroups/<credentials-group>/providers/Microsoft.KeyVault/vaults/<credentials-vault>",
-  "subnetResourceId": "/subscriptions/<subscription>/resourceGroups/<network-group>/providers/Microsoft.Network/virtualNetworks/<vnet>/subnets/<vm-and-endpoint-subnet>",
+  "virtualMachineSubnetResourceId": "/subscriptions/<subscription>/resourceGroups/<network-group>/providers/Microsoft.Network/virtualNetworks/<vnet>/subnets/<vm-and-endpoint-subnet>",
   "privateIPAddress": "10.0.0.4",
   "virtualMachineSize": "Standard_D4s_v5",
-  "endpointType": "private",
+  "storagePrivateEndpoint": true,
+  "storagePrivateEndpointSubnetResourceId": "/subscriptions/<subscription>/resourceGroups/<network-group>/providers/Microsoft.Network/virtualNetworks/<vnet>/subnets/<storage-pe-subnet>",
+  "keyVaultPrivateEndpoint": true,
+  "keyVaultPrivateEndpointSubnetResourceId": "/subscriptions/<subscription>/resourceGroups/<network-group>/providers/Microsoft.Network/virtualNetworks/<vnet>/subnets/<vault-pe-subnet>",
+  "functionAppPrivateEndpoint": true,
+  "functionAppPrivateEndpointSubnetResourceId": "/subscriptions/<subscription>/resourceGroups/<network-group>/providers/Microsoft.Network/virtualNetworks/<vnet>/subnets/<app-pe-subnet>",
   "functionAppDelegatedSubnetResourceId": "/subscriptions/<subscription>/resourceGroups/<network-group>/providers/Microsoft.Network/virtualNetworks/<vnet>/subnets/<integration-subnet>",
-  "azureBlobPrivateDnsZoneResourceId": "/subscriptions/<subscription>/resourceGroups/<dns-group>/providers/Microsoft.Network/privateDnsZones/<cloud-blob-zone>",
-  "azureFunctionAppPrivateDnsZoneResourceId": "/subscriptions/<subscription>/resourceGroups/<dns-group>/providers/Microsoft.Network/privateDnsZones/<cloud-app-zone>",
-  "azureKeyVaultPrivateDnsZoneResourceId": "/subscriptions/<subscription>/resourceGroups/<dns-group>/providers/Microsoft.Network/privateDnsZones/<cloud-vault-zone>"
+  "blobPrivateDnsZoneResourceId": "/subscriptions/<subscription>/resourceGroups/<dns-group>/providers/Microsoft.Network/privateDnsZones/<cloud-blob-zone>",
+  "websitesPrivateDnsZoneResourceId": "/subscriptions/<subscription>/resourceGroups/<dns-group>/providers/Microsoft.Network/privateDnsZones/<cloud-app-zone>",
+  "vaultPrivateDnsZoneResourceId": "/subscriptions/<subscription>/resourceGroups/<dns-group>/providers/Microsoft.Network/privateDnsZones/<cloud-vault-zone>"
 }
 ```
 
@@ -252,8 +254,9 @@ The [form](./uiFormDefinition.json) contains four steps:
 2. **Virtual Machine:** size, gallery/image, credentials, VM subnet/IP, security,
    disks, and optional artifact customizations.
 3. **Function App:** new/existing plan, schedule/time zone, networking, DNS zones,
-   and monitoring. Integration is selected for private/service modes; DNS controls
-   are shown only in private mode. Monitoring defaults to enabled in the form,
+   and monitoring. Outbound integration is explicitly selected independently of
+   public mode and family PE radio choices; DNS controls follow the corresponding
+   family PE choice. Monitoring defaults to enabled in the form,
    whereas parameter-file deployments omit monitoring by default.
 4. **Naming and Tags:** complete resource names and resource-type tags. Replace
    naming placeholders; they are not automatically resolved conventions.

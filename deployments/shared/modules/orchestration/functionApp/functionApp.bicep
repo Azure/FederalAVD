@@ -5,23 +5,23 @@ metadata description = 'Deploys Windows PowerShell Function App infrastructure, 
 // private endpoints, and storage RBAC in the deployment resource group. Requires a caller-provided
 // plan; function code and storage CMK provisioning are separate.
 
-import { publicNetworkAccessMode, resolveNetworkAccess } from '../networking/functions.bicep'
+import { servicePublicNetworkAccessMode, resolveNetworkAccess, serviceEndpointSubnetIds } from '../networking/functions.bicep'
 import { privateEndpointName } from '../naming/internal.bicep'
 
 @description('Optional. Name of the Application Insights resource to create when enableApplicationInsights is true.')
 param applicationInsightsName string = ''
 
-@description('Required input; may be empty when blob private DNS integration is not selected. Resource ID of the target-cloud blob private DNS zone. Zone groups are created only when privateEndpoint is true.')
-param azureBlobPrivateDnsZoneResourceId string
+@description('Required input; may be empty when blob private DNS integration is not selected. Resource ID of the target-cloud blob private DNS zone. Used only with storagePrivateEndpoint.')
+param blobPrivateDnsZoneResourceId string
 
-@description('Required input; may be empty when Function App private DNS integration is not selected. Resource ID of the target-cloud Function App private DNS zone. Zone groups are created only when privateEndpoint is true.')
-param azureFunctionAppPrivateDnsZoneResourceId string
+@description('Required input; may be empty when Function App private DNS integration is not selected. Resource ID of the target-cloud Function App private DNS zone. Used only with functionAppPrivateEndpoint.')
+param websitesPrivateDnsZoneResourceId string
 
 @description('Optional. Resource ID of the private DNS zone for queue endpoints (typically privatelink.queue.core.windows.net).')
-param azureQueuePrivateDnsZoneResourceId string = ''
+param queuePrivateDnsZoneResourceId string = ''
 
 @description('Optional. Resource ID of the private DNS zone for table endpoints (typically privatelink.table.core.windows.net).')
-param azureTablePrivateDnsZoneResourceId string = ''
+param tablePrivateDnsZoneResourceId string = ''
 
 @description('Optional. Enables creation and wiring of Application Insights for the Function App.')
 param enableApplicationInsights bool = false
@@ -74,8 +74,11 @@ param location string
 @description('Optional. Log Analytics workspace resource ID used for Application Insights workspace-based mode.')
 param logAnalyticsWorkspaceResourceId string = ''
 
-@description('Required. Creates storage and Function App private endpoints when true. Public access is controlled separately by paasPublicNetworkAccess.')
-param privateEndpoint bool
+@description('Optional. Creates private endpoints for runtime storage, independently of app inbound access.')
+param storagePrivateEndpoint bool = false
+
+@description('Optional. Creates the Function App inbound private endpoint, independently of runtime storage.')
+param functionAppPrivateEndpoint bool = false
 
 @description('Required. Naming convention template for private endpoint resources (supports RESOURCE/SUBRESOURCE/VNETID placeholders).')
 param privateEndpointNameConv string
@@ -83,8 +86,11 @@ param privateEndpointNameConv string
 @description('Required. Naming convention template for private endpoint NIC resources (supports RESOURCE/SUBRESOURCE/VNETID placeholders).')
 param privateEndpointNICNameConv string
 
-@description('Required when privateEndpoint is true. Subnet resource ID used by private endpoints.')
-param privateEndpointSubnetResourceId string
+@description('Required when storagePrivateEndpoint is true. Subnet resource ID for runtime storage private endpoints.')
+param storagePrivateEndpointSubnetResourceId string = ''
+
+@description('Required when functionAppPrivateEndpoint is true. Subnet resource ID for the app inbound private endpoint.')
+param functionAppPrivateEndpointSubnetResourceId string = ''
 
 @description('Optional. Azure Monitor Private Link Scope resource ID used to associate Application Insights over Private Link.')
 param privateLinkScopeResourceId string = ''
@@ -106,32 +112,51 @@ param storageAccountName string
 
 // Function App restrictions include AzureCloud; storage retains AzureServices bypass.
 // Explicit Disabled retains these rules without enabling the public endpoint.
-@description('Optional. Allowed app/storage public IPs/CIDRs, retained in all access modes. AzureCloud/AzureServices exceptions also apply; reachability does not grant authorization.')
-param permittedIPs array = []
+@description('Optional. Allowed runtime-storage public IPs/CIDRs, retained in all access modes. AzureServices bypass also applies.')
+param storagePermittedIPs array = []
 
-@description('Optional. Shared app/storage public-access mode. Auto preserves legacy private-endpoint/IP inference. Monitoring access remains separately configured.')
-param paasPublicNetworkAccess publicNetworkAccessMode = 'Auto'
+@description('Optional. Allowed app inbound public IPs/CIDRs, retained in all access modes. AzureCloud service-tag exception also applies.')
+param functionAppPermittedIPs array = []
+
+@description('Optional. Allowed runtime-storage subnet IDs with existing Storage service endpoints. Does not modify subnets or consumed profile storage.')
+param storageServiceEndpointSubnetResourceIds string[] = []
+
+@description('Optional. Allowed inbound client subnet IDs with existing Microsoft.Web service endpoints. Independent of outbound VNet integration.')
+param functionAppServiceEndpointSubnetResourceIds string[] = []
+
+@description('Optional. Runtime-storage public endpoint policy, independent of app inbound access and private endpoints.')
+param storagePublicNetworkAccess servicePublicNetworkAccessMode = 'Disabled'
+
+@description('Optional. App inbound public endpoint policy, independent of outbound integration and runtime storage.')
+param functionAppPublicNetworkAccess servicePublicNetworkAccessMode = 'Disabled'
 
 @description('Optional. Key-value pairs to apply as tags to the Azure resources.')
 param tags object = {}
 
 var cloudSuffix = replace(replace(environment().resourceManager, 'https://management.', ''), '/', '')
-var privateEndpointVnetName = !empty(privateEndpointSubnetResourceId) && privateEndpoint
-  ? split(privateEndpointSubnetResourceId, '/')[8]
+var storagePrivateEndpointVnetName = !empty(storagePrivateEndpointSubnetResourceId) && storagePrivateEndpoint
+  ? split(storagePrivateEndpointSubnetResourceId, '/')[8]
+  : ''
+var functionAppPrivateEndpointVnetName = !empty(functionAppPrivateEndpointSubnetResourceId) && functionAppPrivateEndpoint
+  ? split(functionAppPrivateEndpointSubnetResourceId, '/')[8]
   : ''
 
-var effectivePermittedIPs = filter(permittedIPs, ip => !empty(trim(ip)))
-var networkAccess = resolveNetworkAccess(paasPublicNetworkAccess, privateEndpoint, !empty(effectivePermittedIPs))
+var effectiveStoragePermittedIPs = filter(storagePermittedIPs, ip => !empty(trim(ip)))
+var effectiveFunctionAppPermittedIPs = filter(functionAppPermittedIPs, ip => !empty(trim(ip)))
+var storageSubnetIds = serviceEndpointSubnetIds(storageServiceEndpointSubnetResourceIds)
+var functionAppSubnetIds = serviceEndpointSubnetIds(functionAppServiceEndpointSubnetResourceIds)
+var networkAccess = resolveNetworkAccess(functionAppPublicNetworkAccess, functionAppPrivateEndpoint, !empty(effectiveFunctionAppPermittedIPs) || !empty(functionAppSubnetIds))
+var storageNetworkAccess = resolveNetworkAccess(storagePublicNetworkAccess, storagePrivateEndpoint, !empty(effectiveStoragePermittedIPs) || !empty(storageSubnetIds))
 var parentTag = empty(hostPoolResourceId) ? {} : { 'cm-resource-parent': hostPoolResourceId }
 var restrictPublicAccess = networkAccess.defaultAction == 'Deny'
-var storagePermittedIPs = [
-  for ip in effectivePermittedIPs: endsWith(trim(ip), '/32') ? replace(trim(ip), '/32', '') : trim(ip)
+var normalizedStoragePermittedIPs = [
+  for ip in effectiveStoragePermittedIPs: endsWith(trim(ip), '/32') ? replace(trim(ip), '/32', '') : trim(ip)
 ]
-var functionAppPermittedIPs = [for ip in effectivePermittedIPs: contains(trim(ip), '/') ? trim(ip) : '${trim(ip)}/32']
-var storageIpRules = [for ip in storagePermittedIPs: { value: ip, action: 'Allow' }]
+var normalizedFunctionAppPermittedIPs = [for ip in effectiveFunctionAppPermittedIPs: contains(trim(ip), '/') ? trim(ip) : '${trim(ip)}/32']
+var storageIpRules = [for ip in normalizedStoragePermittedIPs: { value: ip, action: 'Allow' }]
 
 var permittedIPRestrictions = [
-  for (ip, i) in functionAppPermittedIPs: {
+  for (ip, i) in normalizedFunctionAppPermittedIPs: {
     ipAddress: ip
     action: 'Allow'
     priority: 100 + i
@@ -156,12 +181,8 @@ var azureCloudRestriction = [
   }
 ]
 
-var permittedSubnetIds = paasPublicNetworkAccess == 'EnabledWithRestrictions' && !privateEndpoint
-  ? filter(union([privateEndpointSubnetResourceId], [functionAppDelegatedSubnetResourceId]), id => !empty(id))
-  : []
-
 var permittedSubnetRestrictions = [
-  for (id, i) in permittedSubnetIds: {
+  for (id, i) in functionAppSubnetIds: {
     vnetSubnetResourceId: id
     action: 'Allow'
     priority: 300 + i
@@ -171,7 +192,7 @@ var permittedSubnetRestrictions = [
 
 // An explicit deny-all rule would override Allow in unrestricted mode. Retain allow entries,
 // but emit the catch-all deny only in restricted/disabled modes.
-var resolvedIpSecurityRestrictions = (restrictPublicAccess || !empty(effectivePermittedIPs))
+var resolvedIpSecurityRestrictions = (restrictPublicAccess || !empty(effectiveFunctionAppPermittedIPs) || !empty(functionAppSubnetIds))
   ? union(
       permittedIPRestrictions,
       permittedSubnetRestrictions,
@@ -193,16 +214,16 @@ var storagePrivateEndpointNames = [
     privateEndpointNameConv,
     storageAccountName,
     subResource,
-    privateEndpointVnetName
+    storagePrivateEndpointVnetName
   )
 ]
 
 var azureStoragePrivateDnsZoneResourceIds = concat(
-  [azureBlobPrivateDnsZoneResourceId],
+  [blobPrivateDnsZoneResourceId],
   // Always required
   // Keep empty slots aligned with storageSubResources when DNS is managed externally.
-  enableQueueStorage ? [azureQueuePrivateDnsZoneResourceId] : [],
-  enableTableStorage ? [azureTablePrivateDnsZoneResourceId] : []
+  enableQueueStorage ? [queuePrivateDnsZoneResourceId] : [],
+  enableTableStorage ? [tablePrivateDnsZoneResourceId] : []
 )
 
 resource functionAppUAI 'Microsoft.ManagedIdentity/userAssignedIdentities@2024-11-30' existing = if (!empty(functionAppUserAssignedIdentityResourceId)) {
@@ -256,7 +277,7 @@ resource storageAccount 'Microsoft.Storage/storageAccounts@2024-01-01' = {
     accessTier: 'Hot'
     allowBlobPublicAccess: false
     allowCrossTenantReplication: false
-    allowedCopyScope: privateEndpoint ? 'PrivateLink' : 'AAD'
+    allowedCopyScope: storagePrivateEndpoint ? 'PrivateLink' : 'AAD'
     allowSharedKeyAccess: false
     defaultToOAuthAuthentication: true
     dnsEndpointType: 'Standard'
@@ -303,15 +324,15 @@ resource storageAccount 'Microsoft.Storage/storageAccounts@2024-01-01' = {
     networkAcls: {
       bypass: 'AzureServices'
       virtualNetworkRules: [
-        for id in permittedSubnetIds: {
+        for id in storageSubnetIds: {
           id: id
           action: 'Allow'
         }
       ]
       ipRules: storageIpRules
-      defaultAction: networkAccess.defaultAction
+      defaultAction: storageNetworkAccess.defaultAction
     }
-    publicNetworkAccess: networkAccess.publicNetworkAccess
+    publicNetworkAccess: storageNetworkAccess.publicNetworkAccess
     sasPolicy: {
       expirationAction: 'Log'
       sasExpirationPeriod: '180.00:00:00'
@@ -324,7 +345,7 @@ resource storageAccount 'Microsoft.Storage/storageAccounts@2024-01-01' = {
 }
 
 resource privateEndpoints_storage 'Microsoft.Network/privateEndpoints@2023-04-01' = [
-  for (subResource, i) in storageSubResources: if (privateEndpoint) {
+  for (subResource, i) in storageSubResources: if (storagePrivateEndpoint) {
     name: storagePrivateEndpointNames[i]
     location: location
     properties: {
@@ -332,7 +353,7 @@ resource privateEndpoints_storage 'Microsoft.Network/privateEndpoints@2023-04-01
         privateEndpointNICNameConv,
         storageAccountName,
         subResource,
-        privateEndpointVnetName
+        storagePrivateEndpointVnetName
       )
       privateLinkServiceConnections: [
         {
@@ -346,7 +367,7 @@ resource privateEndpoints_storage 'Microsoft.Network/privateEndpoints@2023-04-01
         }
       ]
       subnet: {
-        id: privateEndpointSubnetResourceId
+        id: storagePrivateEndpointSubnetResourceId
       }
     }
     tags: union(parentTag, tags[?'Microsoft.Network/privateEndpoints'] ?? {})
@@ -354,7 +375,7 @@ resource privateEndpoints_storage 'Microsoft.Network/privateEndpoints@2023-04-01
 ]
 
 resource privateDnsZoneGroups_storage 'Microsoft.Network/privateEndpoints/privateDnsZoneGroups@2021-08-01' = [
-  for i in range(0, length(azureStoragePrivateDnsZoneResourceIds)): if (privateEndpoint && !empty(azureStoragePrivateDnsZoneResourceIds[i])) {
+  for i in range(0, length(azureStoragePrivateDnsZoneResourceIds)): if (storagePrivateEndpoint && !empty(azureStoragePrivateDnsZoneResourceIds[i])) {
     parent: privateEndpoints_storage[i]
     name: 'default'
     properties: {
@@ -513,9 +534,7 @@ resource functionApp 'Microsoft.Web/sites@2024-11-01' = {
       netFrameworkVersion: 'v10.0'
       powerShellVersion: powerShellVersion
       ipSecurityRestrictions: resolvedIpSecurityRestrictions
-      ipSecurityRestrictionsDefaultAction: (paasPublicNetworkAccess != 'Auto' || restrictPublicAccess)
-        ? networkAccess.defaultAction
-        : null
+      ipSecurityRestrictionsDefaultAction: networkAccess.defaultAction
       scmIpSecurityRestrictions: restrictPublicAccess
         ? [
             {
@@ -527,10 +546,8 @@ resource functionApp 'Microsoft.Web/sites@2024-11-01' = {
             }
           ]
         : null
-      scmIpSecurityRestrictionsDefaultAction: (paasPublicNetworkAccess != 'Auto' || restrictPublicAccess)
-        ? networkAccess.defaultAction
-        : null
-      scmIpSecurityRestrictionsUseMain: (paasPublicNetworkAccess != 'Auto' || restrictPublicAccess) ? true : null
+      scmIpSecurityRestrictionsDefaultAction: networkAccess.defaultAction
+      scmIpSecurityRestrictionsUseMain: true
       publicNetworkAccess: networkAccess.publicNetworkAccess
       use32BitWorkerProcess: false
     }
@@ -558,19 +575,19 @@ resource functionAppDiagnosticSettings 'Microsoft.Insights/diagnosticSettings@20
   }
 }
 
-resource privateEndpoint_functionApp 'Microsoft.Network/privateEndpoints@2023-04-01' = if (privateEndpoint) {
-  name: privateEndpointName(privateEndpointNameConv, functionApp.name, 'sites', privateEndpointVnetName)
+resource privateEndpoint_functionApp 'Microsoft.Network/privateEndpoints@2023-04-01' = if (functionAppPrivateEndpoint) {
+  name: privateEndpointName(privateEndpointNameConv, functionApp.name, 'sites', functionAppPrivateEndpointVnetName)
   location: location
   properties: {
     customNetworkInterfaceName: privateEndpointName(
       privateEndpointNICNameConv,
       functionApp.name,
       'sites',
-      privateEndpointVnetName
+      functionAppPrivateEndpointVnetName
     )
     privateLinkServiceConnections: [
       {
-        name: privateEndpointName(privateEndpointNameConv, functionApp.name, 'sites', privateEndpointVnetName)
+        name: privateEndpointName(privateEndpointNameConv, functionApp.name, 'sites', functionAppPrivateEndpointVnetName)
         properties: {
           privateLinkServiceId: functionApp.id
           groupIds: [
@@ -580,22 +597,22 @@ resource privateEndpoint_functionApp 'Microsoft.Network/privateEndpoints@2023-04
       }
     ]
     subnet: {
-      id: privateEndpointSubnetResourceId
+      id: functionAppPrivateEndpointSubnetResourceId
     }
   }
   tags: union(parentTag, tags[?'Microsoft.Network/privateEndpoints'] ?? {})
 }
 
-resource privateDnsZoneGroup_functionApp 'Microsoft.Network/privateEndpoints/privateDnsZoneGroups@2021-08-01' = if (privateEndpoint && !empty(azureFunctionAppPrivateDnsZoneResourceId)) {
+resource privateDnsZoneGroup_functionApp 'Microsoft.Network/privateEndpoints/privateDnsZoneGroups@2021-08-01' = if (functionAppPrivateEndpoint && !empty(websitesPrivateDnsZoneResourceId)) {
   parent: privateEndpoint_functionApp
   name: 'default'
   properties: {
     privateDnsZoneConfigs: [
       {
-        name: replace(last(split(azureFunctionAppPrivateDnsZoneResourceId, '/'))!, '.', '-')
+        name: replace(last(split(websitesPrivateDnsZoneResourceId, '/'))!, '.', '-')
         properties: {
           #disable-next-line use-resource-id-functions
-          privateDnsZoneId: azureFunctionAppPrivateDnsZoneResourceId
+          privateDnsZoneId: websitesPrivateDnsZoneResourceId
         }
       }
     ]

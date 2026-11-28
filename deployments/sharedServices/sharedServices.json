@@ -6,7 +6,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.49.2.45890",
-      "templateHash": "15109459092470504540"
+      "templateHash": "10969983918715529021"
     }
   },
   "definitions": {
@@ -254,6 +254,201 @@
         }
       }
     },
+    "_4.servicePublicNetworkAccessMode": {
+      "type": "string",
+      "allowedValues": [
+        "Disabled",
+        "Enabled",
+        "EnabledWithRestrictions"
+      ],
+      "metadata": {
+        "description": "Explicit service-family public endpoint policy. Independent of private endpoints and allowlists.",
+        "__bicep_imported_from!": {
+          "sourceTemplate": "../shared/modules/orchestration/networking/functions.bicep"
+        }
+      }
+    },
+    "_5.backupNetworkingType": {
+      "type": "object",
+      "properties": {
+        "publicNetworkAccess": {
+          "type": "string",
+          "allowedValues": [
+            "Disabled",
+            "Enabled"
+          ],
+          "nullable": true
+        },
+        "privateEndpoint": {
+          "type": "bool",
+          "nullable": true
+        }
+      },
+      "additionalProperties": false,
+      "metadata": {
+        "__bicep_imported_from!": {
+          "sourceTemplate": "../shared/modules/orchestration/networking/scenarios.bicep"
+        }
+      }
+    },
+    "_5.diskNetworkingType": {
+      "type": "object",
+      "properties": {
+        "privateEndpoint": {
+          "type": "bool",
+          "nullable": true
+        }
+      },
+      "additionalProperties": false,
+      "metadata": {
+        "__bicep_imported_from!": {
+          "sourceTemplate": "../shared/modules/orchestration/networking/scenarios.bicep"
+        }
+      }
+    },
+    "_5.paasNetworkingType": {
+      "type": "object",
+      "properties": {
+        "publicNetworkAccess": {
+          "$ref": "#/definitions/_4.servicePublicNetworkAccessMode",
+          "nullable": true
+        },
+        "privateEndpoint": {
+          "type": "bool",
+          "nullable": true
+        },
+        "storage": {
+          "$ref": "#/definitions/_5.serviceNetworkingType",
+          "nullable": true
+        },
+        "keyVault": {
+          "$ref": "#/definitions/_5.serviceNetworkingType",
+          "nullable": true
+        },
+        "backup": {
+          "$ref": "#/definitions/_5.backupNetworkingType",
+          "nullable": true
+        },
+        "disk": {
+          "$ref": "#/definitions/_5.diskNetworkingType",
+          "nullable": true
+        }
+      },
+      "additionalProperties": false,
+      "metadata": {
+        "__bicep_imported_from!": {
+          "sourceTemplate": "../shared/modules/orchestration/networking/scenarios.bicep"
+        }
+      }
+    },
+    "_5.resolvedBackupNetworkingType": {
+      "type": "object",
+      "properties": {
+        "publicNetworkAccess": {
+          "type": "string",
+          "allowedValues": [
+            "Disabled",
+            "Enabled"
+          ]
+        },
+        "privateEndpoint": {
+          "type": "bool"
+        }
+      },
+      "metadata": {
+        "__bicep_imported_from!": {
+          "sourceTemplate": "../shared/modules/orchestration/networking/scenarios.bicep"
+        }
+      }
+    },
+    "_5.resolvedPaasNetworkingType": {
+      "type": "object",
+      "properties": {
+        "storage": {
+          "$ref": "#/definitions/_5.resolvedServiceNetworkingType"
+        },
+        "keyVault": {
+          "$ref": "#/definitions/_5.resolvedServiceNetworkingType"
+        },
+        "backup": {
+          "$ref": "#/definitions/_5.resolvedBackupNetworkingType"
+        },
+        "disk": {
+          "type": "object",
+          "properties": {
+            "privateEndpoint": {
+              "type": "bool"
+            }
+          }
+        }
+      },
+      "metadata": {
+        "__bicep_imported_from!": {
+          "sourceTemplate": "../shared/modules/orchestration/networking/scenarios.bicep"
+        }
+      }
+    },
+    "_5.resolvedServiceNetworkingType": {
+      "type": "object",
+      "properties": {
+        "publicNetworkAccess": {
+          "$ref": "#/definitions/_4.servicePublicNetworkAccessMode"
+        },
+        "privateEndpoint": {
+          "type": "bool"
+        },
+        "permittedIPs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "serviceEndpointSubnetResourceIds": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "metadata": {
+        "__bicep_imported_from!": {
+          "sourceTemplate": "../shared/modules/orchestration/networking/scenarios.bicep"
+        }
+      }
+    },
+    "_5.serviceNetworkingType": {
+      "type": "object",
+      "properties": {
+        "publicNetworkAccess": {
+          "$ref": "#/definitions/_4.servicePublicNetworkAccessMode",
+          "nullable": true
+        },
+        "privateEndpoint": {
+          "type": "bool",
+          "nullable": true
+        },
+        "permittedIPs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "nullable": true
+        },
+        "serviceEndpointSubnetResourceIds": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "nullable": true
+        }
+      },
+      "additionalProperties": false,
+      "metadata": {
+        "__bicep_imported_from!": {
+          "sourceTemplate": "../shared/modules/orchestration/networking/scenarios.bicep"
+        }
+      }
+    },
     "namingConventionConfig": {
       "$ref": "#/definitions/_1.namingConventionConfig",
       "metadata": {
@@ -263,18 +458,80 @@
         }
       }
     },
-    "publicNetworkAccessMode": {
-      "type": "string",
-      "allowedValues": [
-        "Auto",
-        "Disabled",
-        "Enabled",
-        "EnabledWithRestrictions"
-      ],
+    "sharedPrivateEndpointSubnetResourceIdsType": {
+      "type": "object",
+      "properties": {
+        "sharedResources": {
+          "type": "string",
+          "nullable": true
+        }
+      },
+      "additionalProperties": false,
       "metadata": {
-        "description": "Public endpoint mode. Auto preserves legacy private-endpoint/firewall inference and is not offered in Portal forms.",
         "__bicep_imported_from!": {
-          "sourceTemplate": "../shared/modules/orchestration/networking/functions.bicep"
+          "sourceTemplate": "../shared/modules/orchestration/networking/scenarios.bicep"
+        }
+      }
+    },
+    "sharedServicesPaasNetworkingType": {
+      "type": "object",
+      "properties": {
+        "publicNetworkAccess": {
+          "$ref": "#/definitions/_4.servicePublicNetworkAccessMode",
+          "nullable": true
+        },
+        "privateEndpoint": {
+          "type": "bool",
+          "nullable": true
+        },
+        "keyVault": {
+          "$ref": "#/definitions/_5.serviceNetworkingType",
+          "nullable": true
+        },
+        "backup": {
+          "$ref": "#/definitions/_5.backupNetworkingType",
+          "nullable": true
+        }
+      },
+      "additionalProperties": false,
+      "metadata": {
+        "__bicep_imported_from!": {
+          "sourceTemplate": "../shared/modules/orchestration/networking/scenarios.bicep"
+        }
+      }
+    },
+    "sharedServicesPrivateDnsZoneResourceIdsType": {
+      "type": "object",
+      "properties": {
+        "vault": {
+          "type": "string",
+          "nullable": true
+        },
+        "backup": {
+          "type": "string",
+          "nullable": true
+        },
+        "blob": {
+          "type": "string",
+          "nullable": true
+        },
+        "queue": {
+          "type": "string",
+          "nullable": true
+        },
+        "avdFeed": {
+          "type": "string",
+          "nullable": true
+        },
+        "avdGlobalFeed": {
+          "type": "string",
+          "nullable": true
+        }
+      },
+      "additionalProperties": false,
+      "metadata": {
+        "__bicep_imported_from!": {
+          "sourceTemplate": "../shared/modules/orchestration/networking/scenarios.bicep"
         }
       }
     }
@@ -1223,6 +1480,69 @@
     {
       "namespace": "__bicep",
       "members": {
+        "requirePrivateEndpointSubnet": {
+          "parameters": [
+            {
+              "type": "string",
+              "name": "id"
+            },
+            {
+              "type": "bool",
+              "name": "required"
+            },
+            {
+              "type": "string",
+              "name": "ownership"
+            }
+          ],
+          "output": {
+            "type": "string",
+            "value": "[if(parameters('required'), if(empty(trim(parameters('id'))), fail(format('privateEndpointSubnetResourceIds.{0} is required for the selected private endpoints.', parameters('ownership'))), if(equals(length(_4.serviceEndpointSubnetIds(createArray(parameters('id')))), 1), trim(parameters('id')), fail(format('privateEndpointSubnetResourceIds.{0} requires a complete subnet resource ID.', parameters('ownership'))))), parameters('id'))]"
+          },
+          "metadata": {
+            "description": "Requires an explicit subnet for applicable private endpoint consumers. Never falls back to public access or to the session-host subnet.",
+            "__bicep_imported_from!": {
+              "sourceTemplate": "../shared/modules/orchestration/networking/scenarios.bicep"
+            }
+          }
+        },
+        "resolvePaasNetworking": {
+          "parameters": [
+            {
+              "$ref": "#/definitions/_5.paasNetworkingType",
+              "name": "config"
+            },
+            {
+              "type": "bool",
+              "name": "storageCreated"
+            },
+            {
+              "type": "bool",
+              "name": "keyVaultCreated"
+            },
+            {
+              "type": "bool",
+              "name": "backupCreated"
+            }
+          ],
+          "output": {
+            "$ref": "#/definitions/_5.resolvedPaasNetworkingType",
+            "value": {
+              "storage": "[_5.resolveServiceNetworking(coalesce(tryGet(parameters('config'), 'storage'), createObject()), coalesce(tryGet(parameters('config'), 'publicNetworkAccess'), 'Disabled'), coalesce(tryGet(parameters('config'), 'privateEndpoint'), true()), parameters('storageCreated'), 'Storage')]",
+              "keyVault": "[_5.resolveServiceNetworking(coalesce(tryGet(parameters('config'), 'keyVault'), createObject()), coalesce(tryGet(parameters('config'), 'publicNetworkAccess'), 'Disabled'), coalesce(tryGet(parameters('config'), 'privateEndpoint'), true()), parameters('keyVaultCreated'), 'Key Vault')]",
+              "backup": "[_5.resolveBackupNetworking(coalesce(tryGet(parameters('config'), 'backup'), createObject()), coalesce(tryGet(parameters('config'), 'publicNetworkAccess'), 'Disabled'), coalesce(tryGet(parameters('config'), 'privateEndpoint'), true()), parameters('backupCreated'))]",
+              "disk": {
+                "privateEndpoint": "[coalesce(coalesce(tryGet(tryGet(parameters('config'), 'disk'), 'privateEndpoint'), tryGet(parameters('config'), 'privateEndpoint')), true())]"
+              }
+            }
+          },
+          "metadata": {
+            "description": "Resolves omitted networking fields to private endpoints and disabled public access. Overrides preserve explicit false and independent service allowlists; only newly created resources require usable restricted-access inputs.",
+            "__bicep_imported_from!": {
+              "sourceTemplate": "../shared/modules/orchestration/networking/scenarios.bicep"
+            }
+          }
+        },
         "sharedServicesNames": {
           "parameters": [
             {
@@ -1246,6 +1566,110 @@
             "description": "Names Shared Services resources using the effective owning scope and explicit name overrides. Shared vaults never depend on a host-pool identifier.",
             "__bicep_imported_from!": {
               "sourceTemplate": "../shared/modules/orchestration/naming/naming.bicep"
+            }
+          }
+        }
+      }
+    },
+    {
+      "namespace": "_5",
+      "members": {
+        "resolveBackupNetworking": {
+          "parameters": [
+            {
+              "$ref": "#/definitions/_5.backupNetworkingType",
+              "name": "config"
+            },
+            {
+              "$ref": "#/definitions/_4.servicePublicNetworkAccessMode",
+              "name": "publicAccess"
+            },
+            {
+              "type": "bool",
+              "name": "privateEndpoint"
+            },
+            {
+              "type": "bool",
+              "name": "created"
+            }
+          ],
+          "output": {
+            "$ref": "#/definitions/_5.resolvedBackupNetworkingType",
+            "value": {
+              "publicNetworkAccess": "[if(not(equals(tryGet(parameters('config'), 'publicNetworkAccess'), null())), parameters('config').publicNetworkAccess, if(and(parameters('created'), equals(parameters('publicAccess'), 'EnabledWithRestrictions')), fail('Restricted public connectivity requires an explicit paasNetworking.backup.publicNetworkAccess choice: Enabled or Disabled. Recovery Services vaults cannot enforce IP or service-endpoint subnet allowlists.'), if(equals(parameters('publicAccess'), 'Enabled'), 'Enabled', 'Disabled')))]",
+              "privateEndpoint": "[coalesce(tryGet(parameters('config'), 'privateEndpoint'), parameters('privateEndpoint'))]"
+            }
+          },
+          "metadata": {
+            "__bicep_imported_from!": {
+              "sourceTemplate": "../shared/modules/orchestration/networking/scenarios.bicep"
+            }
+          }
+        },
+        "resolveServiceNetworking": {
+          "parameters": [
+            {
+              "$ref": "#/definitions/_5.serviceNetworkingType",
+              "name": "config"
+            },
+            {
+              "$ref": "#/definitions/_4.servicePublicNetworkAccessMode",
+              "name": "publicAccess"
+            },
+            {
+              "type": "bool",
+              "name": "privateEndpoint"
+            },
+            {
+              "type": "bool",
+              "name": "created"
+            },
+            {
+              "type": "string",
+              "name": "family"
+            }
+          ],
+          "output": {
+            "$ref": "#/definitions/_5.resolvedServiceNetworkingType",
+            "value": {
+              "publicNetworkAccess": "[if(and(and(and(and(parameters('created'), equals(coalesce(tryGet(parameters('config'), 'publicNetworkAccess'), parameters('publicAccess')), 'EnabledWithRestrictions')), not(coalesce(tryGet(parameters('config'), 'privateEndpoint'), parameters('privateEndpoint')))), empty(filter(coalesce(tryGet(parameters('config'), 'permittedIPs'), createArray()), lambda('ip', not(empty(trim(lambdaVariables('ip')))))))), empty(coalesce(tryGet(parameters('config'), 'serviceEndpointSubnetResourceIds'), createArray()))), fail(format('{0} restricted public connectivity requires permittedIPs, serviceEndpointSubnetResourceIds, or a private endpoint.', parameters('family'))), coalesce(tryGet(parameters('config'), 'publicNetworkAccess'), parameters('publicAccess')))]",
+              "privateEndpoint": "[coalesce(tryGet(parameters('config'), 'privateEndpoint'), parameters('privateEndpoint'))]",
+              "permittedIPs": "[coalesce(tryGet(parameters('config'), 'permittedIPs'), createArray())]",
+              "serviceEndpointSubnetResourceIds": "[coalesce(tryGet(parameters('config'), 'serviceEndpointSubnetResourceIds'), createArray())]"
+            }
+          },
+          "metadata": {
+            "__bicep_imported_from!": {
+              "sourceTemplate": "../shared/modules/orchestration/networking/scenarios.bicep"
+            }
+          }
+        }
+      }
+    },
+    {
+      "namespace": "_4",
+      "members": {
+        "serviceEndpointSubnetIds": {
+          "parameters": [
+            {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "name": "ids"
+            }
+          ],
+          "output": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "value": "[union(map(parameters('ids'), lambda('id', if(and(and(and(and(and(and(and(and(and(and(equals(length(split(trim(lambdaVariables('id')), '/')), 11), startsWith(toLower(trim(lambdaVariables('id'))), '/subscriptions/')), equals(toLower(coalesce(tryGet(split(trim(lambdaVariables('id')), '/'), 3), '')), 'resourcegroups')), equals(toLower(coalesce(tryGet(split(trim(lambdaVariables('id')), '/'), 5), '')), 'providers')), equals(toLower(coalesce(tryGet(split(trim(lambdaVariables('id')), '/'), 6), '')), 'microsoft.network')), equals(toLower(coalesce(tryGet(split(trim(lambdaVariables('id')), '/'), 7), '')), 'virtualnetworks')), equals(toLower(coalesce(tryGet(split(trim(lambdaVariables('id')), '/'), 9), '')), 'subnets')), not(empty(coalesce(tryGet(split(trim(lambdaVariables('id')), '/'), 2), '')))), not(empty(coalesce(tryGet(split(trim(lambdaVariables('id')), '/'), 4), '')))), not(empty(coalesce(tryGet(split(trim(lambdaVariables('id')), '/'), 8), '')))), not(empty(coalesce(tryGet(split(trim(lambdaVariables('id')), '/'), 10), '')))), toLower(trim(lambdaVariables('id'))), fail('Service endpoint allowlists require complete Microsoft.Network/virtualNetworks/subnets resource IDs.')))), createArray())]"
+          },
+          "metadata": {
+            "description": "Validates subnet resource IDs and deduplicates them case-insensitively. Does not enable service endpoints or change subnets.",
+            "__bicep_imported_from!": {
+              "sourceTemplate": "../shared/modules/orchestration/networking/functions.bicep"
             }
           }
         }
@@ -1355,39 +1779,25 @@
         "description": "Optional. Soft delete retention days for the Encryption Key Vault. Use 7 in test environments to minimise the wait before a deleted vault name can be reused; keep 90 in production."
       }
     },
-    "privateEndpoint": {
-      "type": "bool",
-      "defaultValue": false,
+    "paasNetworking": {
+      "$ref": "#/definitions/sharedServicesPaasNetworkingType",
+      "defaultValue": {},
       "metadata": {
-        "description": "Optional. Deploy private endpoints for the Key Vaults. Public access is controlled separately by paasPublicNetworkAccess."
+        "description": "Optional. Common secure networking defaults and Key Vault/Backup overrides for newly created resources. Restricted public Backup requires an explicit Enabled or Disabled choice; vaults have no IP/subnet ACL equivalent."
       }
     },
-    "privateEndpointSubnetResourceId": {
-      "type": "string",
-      "defaultValue": "",
+    "privateEndpointSubnetResourceIds": {
+      "$ref": "#/definitions/sharedPrivateEndpointSubnetResourceIdsType",
+      "defaultValue": {},
       "metadata": {
-        "description": "Conditional. The resource ID of the subnet for Key Vault private endpoints. Required when privateEndpoint is true."
+        "description": "Conditional. One shared-resource subnet for all selected Key Vault, Backup and AVD private endpoints. Required when any applicable endpoint is selected; no public or session-host subnet fallback."
       }
     },
-    "azureKeyVaultPrivateDnsZoneResourceId": {
-      "type": "string",
-      "defaultValue": "",
+    "privateDnsZoneResourceIds": {
+      "$ref": "#/definitions/sharedServicesPrivateDnsZoneResourceIdsType",
+      "defaultValue": {},
       "metadata": {
-        "description": "Conditional. The resource ID of the Azure Key Vault Private DNS Zone. Required when privateEndpoint is true."
-      }
-    },
-    "permittedIPs": {
-      "type": "array",
-      "defaultValue": [],
-      "metadata": {
-        "description": "Optional. Array of permitted IP addresses or CIDR blocks allowed through the firewall of all Key Vaults deployed by this module. Use when managing from a trusted workstation outside the Azure network boundary."
-      }
-    },
-    "paasPublicNetworkAccess": {
-      "$ref": "#/definitions/publicNetworkAccessMode",
-      "defaultValue": "Auto",
-      "metadata": {
-        "description": "Optional. Public-access mode for newly deployed Key Vaults. Auto preserves legacy behavior; IP rules remain configured and AzureServices bypass still applies."
+        "description": "Optional. Existing private DNS zone IDs by namespace, including AVD feed/global feed. Backup is required when a new Backup private endpoint is selected."
       }
     },
     "deployMonitoring": {
@@ -1505,18 +1915,11 @@
         "description": "Optional. Public network access mode managed on the shared AVD workspace."
       }
     },
-    "workspaceFeedPrivateEndpointSubnetResourceId": {
-      "type": "string",
-      "defaultValue": "",
+    "deployWorkspaceFeedPrivateEndpoint": {
+      "type": "bool",
+      "defaultValue": false,
       "metadata": {
-        "description": "Optional. Subnet resource ID for the deterministically named workspace feed private endpoint. Empty disables feed endpoint management."
-      }
-    },
-    "avdPrivateDnsZoneResourceId": {
-      "type": "string",
-      "defaultValue": "",
-      "metadata": {
-        "description": "Optional. AVD feed Private DNS zone resource ID for the workspace feed private endpoint."
+        "description": "Optional. Create or update the deterministic workspace feed private endpoint when manageAvdWorkspace is true, using sharedResourcesPrivateEndpointSubnetResourceId. Does not enable Key Vault, Backup, or global-feed endpoints."
       }
     },
     "manageGlobalAvdWorkspace": {
@@ -1556,20 +1959,6 @@
       "defaultValue": "",
       "metadata": {
         "description": "Optional. Complete name override for a newly created global-feed workspace."
-      }
-    },
-    "globalFeedPrivateEndpointSubnetResourceId": {
-      "type": "string",
-      "defaultValue": "",
-      "metadata": {
-        "description": "Conditional. Subnet resource ID for the deterministically named global-feed private endpoint. Required when manageGlobalAvdWorkspace is true."
-      }
-    },
-    "globalFeedPrivateDnsZoneResourceId": {
-      "type": "string",
-      "defaultValue": "",
-      "metadata": {
-        "description": "Optional. AVD global-feed Private DNS zone resource ID."
       }
     },
     "deployFSLogixBackupVault": {
@@ -1614,27 +2003,6 @@
       "defaultValue": "UTC",
       "metadata": {
         "description": "Optional. Time zone used by the shared Azure Files snapshot backup policy."
-      }
-    },
-    "azureBackupPrivateDnsZoneResourceId": {
-      "type": "string",
-      "defaultValue": "",
-      "metadata": {
-        "description": "Conditional. Resource ID of the Azure Backup private DNS zone used by the FSLogix backup vault private endpoint."
-      }
-    },
-    "azureBlobPrivateDnsZoneResourceId": {
-      "type": "string",
-      "defaultValue": "",
-      "metadata": {
-        "description": "Conditional. Resource ID of the Azure Blob private DNS zone used by the FSLogix backup vault private endpoint."
-      }
-    },
-    "azureQueuePrivateDnsZoneResourceId": {
-      "type": "string",
-      "defaultValue": "",
-      "metadata": {
-        "description": "Conditional. Resource ID of the Azure Queue private DNS zone used by the FSLogix backup vault private endpoint."
       }
     },
     "tags": {
@@ -1683,6 +2051,21 @@
     "createEncryptionKeyVault": "[and(parameters('deployEncryptionKeyVault'), empty(parameters('existingEncryptionKeyVaultResourceId')))]",
     "createFSLogixBackupVault": "[and(parameters('deployFSLogixBackupVault'), empty(parameters('existingFSLogixBackupVaultResourceId')))]",
     "deployOperationsResourceGroup": "[or(or(variables('createSecretsKeyVault'), variables('createEncryptionKeyVault')), variables('createFSLogixBackupVault'))]",
+    "keyVaultCreated": "[or(variables('createSecretsKeyVault'), variables('createEncryptionKeyVault'))]",
+    "resolvedNetworking": "[__bicep.resolvePaasNetworking(parameters('paasNetworking'), false(), variables('keyVaultCreated'), variables('createFSLogixBackupVault'))]",
+    "keyVaultPublicNetworkAccess": "[variables('resolvedNetworking').keyVault.publicNetworkAccess]",
+    "keyVaultPrivateEndpoint": "[variables('resolvedNetworking').keyVault.privateEndpoint]",
+    "keyVaultPermittedIPs": "[variables('resolvedNetworking').keyVault.permittedIPs]",
+    "keyVaultServiceEndpointSubnetResourceIds": "[variables('resolvedNetworking').keyVault.serviceEndpointSubnetResourceIds]",
+    "deployBackupPrivateEndpoints": "[variables('resolvedNetworking').backup.privateEndpoint]",
+    "backupPublicNetworkAccess": "[variables('resolvedNetworking').backup.publicNetworkAccess]",
+    "sharedResourcesPrivateEndpointSubnetResourceId": "[__bicep.requirePrivateEndpointSubnet(coalesce(tryGet(parameters('privateEndpointSubnetResourceIds'), 'sharedResources'), ''), or(or(or(and(variables('keyVaultCreated'), variables('keyVaultPrivateEndpoint')), and(variables('createFSLogixBackupVault'), variables('deployBackupPrivateEndpoints'))), and(parameters('manageAvdWorkspace'), parameters('deployWorkspaceFeedPrivateEndpoint'))), parameters('manageGlobalAvdWorkspace')), 'sharedResources')]",
+    "vaultPrivateDnsZoneResourceId": "[coalesce(tryGet(parameters('privateDnsZoneResourceIds'), 'vault'), '')]",
+    "backupPrivateDnsZoneResourceId": "[if(and(and(variables('createFSLogixBackupVault'), variables('deployBackupPrivateEndpoints')), empty(trim(coalesce(tryGet(parameters('privateDnsZoneResourceIds'), 'backup'), '')))), fail('privateDnsZoneResourceIds.backup is required for the selected new Backup private endpoint.'), coalesce(tryGet(parameters('privateDnsZoneResourceIds'), 'backup'), ''))]",
+    "blobPrivateDnsZoneResourceId": "[coalesce(tryGet(parameters('privateDnsZoneResourceIds'), 'blob'), '')]",
+    "queuePrivateDnsZoneResourceId": "[coalesce(tryGet(parameters('privateDnsZoneResourceIds'), 'queue'), '')]",
+    "avdPrivateDnsZoneResourceId": "[coalesce(tryGet(parameters('privateDnsZoneResourceIds'), 'avdFeed'), '')]",
+    "globalFeedPrivateDnsZoneResourceId": "[coalesce(tryGet(parameters('privateDnsZoneResourceIds'), 'avdGlobalFeed'), '')]",
     "naming": "[__bicep.sharedServicesNames(parameters('namingConvention'), createObject('subscriptionId', subscription().subscriptionId, 'cloud', environment().name, 'location', parameters('location')), createObject('consolidatedResourceGroupName', parameters('consolidatedResourceGroupName'), 'secretsKeyVaultName', parameters('secretsKeyVaultNameOverride'), 'encryptionKeyVaultName', parameters('encryptionKeyVaultNameOverride'), 'controlPlaneResourceGroupName', parameters('avdControlPlaneResourceGroupNameOverride'), 'workspaceName', parameters('avdWorkspaceNameOverride'), 'globalFeedResourceGroupName', parameters('globalFeedResourceGroupNameOverride'), 'globalFeedWorkspaceName', parameters('globalFeedWorkspaceNameOverride')))]",
     "operationsResourceGroupName": "[variables('naming').operationsResourceGroupName]",
     "monitoringResourceGroupName": "[variables('naming').monitoringResourceGroupName]",
@@ -1699,7 +2082,7 @@
     "privateEndpointNICNameConv": "[variables('naming').privateEndpointNICNameConv]",
     "effectiveAzureMonitorPrivateLinkScopeResourceId": "[if(parameters('deployMonitoring'), parameters('azureMonitorPrivateLinkScopeResourceId'), '')]",
     "avdWorkspaceConfigurationIsValid": "[if(or(or(not(parameters('manageAvdWorkspace')), and(equals(parameters('avdWorkspaceMode'), 'Create'), empty(parameters('existingAvdWorkspaceResourceId')))), and(equals(parameters('avdWorkspaceMode'), 'Update'), not(empty(parameters('existingAvdWorkspaceResourceId'))))), true(), fail('AVD workspace management requires an empty existingAvdWorkspaceResourceId for Create, or a workspace resource ID for Update.'))]",
-    "globalAvdWorkspaceConfigurationIsValid": "[if(or(not(parameters('manageGlobalAvdWorkspace')), and(not(empty(parameters('globalFeedPrivateEndpointSubnetResourceId'))), or(and(equals(parameters('globalAvdWorkspaceMode'), 'Create'), empty(parameters('existingGlobalAvdWorkspaceResourceId'))), and(equals(parameters('globalAvdWorkspaceMode'), 'Update'), not(empty(parameters('existingGlobalAvdWorkspaceResourceId'))))))), true(), fail('Global-feed workspace management requires an endpoint subnet and an empty existingGlobalAvdWorkspaceResourceId for Create, or a workspace resource ID for Update.'))]",
+    "globalAvdWorkspaceConfigurationIsValid": "[if(or(not(parameters('manageGlobalAvdWorkspace')), and(not(empty(variables('sharedResourcesPrivateEndpointSubnetResourceId'))), or(and(equals(parameters('globalAvdWorkspaceMode'), 'Create'), empty(parameters('existingGlobalAvdWorkspaceResourceId'))), and(equals(parameters('globalAvdWorkspaceMode'), 'Update'), not(empty(parameters('existingGlobalAvdWorkspaceResourceId'))))))), true(), fail('Global-feed workspace management requires sharedResourcesPrivateEndpointSubnetResourceId and an empty existingGlobalAvdWorkspaceResourceId for Create, or a workspace resource ID for Update.'))]",
     "_1._2": {
       "applicationInsights": "appi",
       "appServicePlans": "asp",
@@ -3582,11 +3965,9 @@
           "workspacePublicNetworkAccess": {
             "value": "[parameters('avdWorkspacePublicNetworkAccess')]"
           },
-          "workspaceFeedPrivateEndpointSubnetResourceId": {
-            "value": "[parameters('workspaceFeedPrivateEndpointSubnetResourceId')]"
-          },
+          "workspaceFeedPrivateEndpointSubnetResourceId": "[if(and(parameters('manageAvdWorkspace'), parameters('deployWorkspaceFeedPrivateEndpoint')), createObject('value', variables('sharedResourcesPrivateEndpointSubnetResourceId')), createObject('value', ''))]",
           "avdPrivateDnsZoneResourceId": {
-            "value": "[parameters('avdPrivateDnsZoneResourceId')]"
+            "value": "[variables('avdPrivateDnsZoneResourceId')]"
           },
           "logAnalyticsWorkspaceResourceId": "[if(parameters('deployMonitoring'), createObject('value', reference('monitoring').outputs.logAnalyticsWorkspaceResourceId.value), createObject('value', parameters('existingLogAnalyticsWorkspaceResourceId')))]",
           "manageGlobalWorkspace": {
@@ -3604,11 +3985,9 @@
           "globalWorkspaceResourceGroupName": {
             "value": "[variables('globalFeedResourceGroupName')]"
           },
-          "globalFeedPrivateEndpointSubnetResourceId": {
-            "value": "[parameters('globalFeedPrivateEndpointSubnetResourceId')]"
-          },
+          "globalFeedPrivateEndpointSubnetResourceId": "[if(parameters('manageGlobalAvdWorkspace'), createObject('value', variables('sharedResourcesPrivateEndpointSubnetResourceId')), createObject('value', ''))]",
           "globalFeedPrivateDnsZoneResourceId": {
-            "value": "[parameters('globalFeedPrivateDnsZoneResourceId')]"
+            "value": "[variables('globalFeedPrivateDnsZoneResourceId')]"
           },
           "privateEndpointNameConv": {
             "value": "[variables('privateEndpointNameConv')]"
@@ -5061,14 +5440,14 @@
           "encryptionKeyVaultRetentionInDays": {
             "value": "[parameters('encryptionKeyVaultRetentionInDays')]"
           },
-          "privateEndpoint": {
-            "value": "[parameters('privateEndpoint')]"
+          "keyVaultPrivateEndpoint": {
+            "value": "[variables('keyVaultPrivateEndpoint')]"
           },
-          "privateEndpointSubnetResourceId": {
-            "value": "[parameters('privateEndpointSubnetResourceId')]"
+          "keyVaultPrivateEndpointSubnetResourceId": {
+            "value": "[variables('sharedResourcesPrivateEndpointSubnetResourceId')]"
           },
-          "azureKeyVaultPrivateDnsZoneResourceId": {
-            "value": "[parameters('azureKeyVaultPrivateDnsZoneResourceId')]"
+          "vaultPrivateDnsZoneResourceId": {
+            "value": "[variables('vaultPrivateDnsZoneResourceId')]"
           },
           "privateEndpointNameConv": {
             "value": "[variables('privateEndpointNameConv')]"
@@ -5076,11 +5455,14 @@
           "privateEndpointNICNameConv": {
             "value": "[variables('privateEndpointNICNameConv')]"
           },
-          "permittedIPs": {
-            "value": "[parameters('permittedIPs')]"
+          "keyVaultPermittedIPs": {
+            "value": "[variables('keyVaultPermittedIPs')]"
           },
-          "paasPublicNetworkAccess": {
-            "value": "[parameters('paasPublicNetworkAccess')]"
+          "keyVaultServiceEndpointSubnetResourceIds": {
+            "value": "[variables('keyVaultServiceEndpointSubnetResourceIds')]"
+          },
+          "keyVaultPublicNetworkAccess": {
+            "value": "[variables('keyVaultPublicNetworkAccess')]"
           },
           "logAnalyticsWorkspaceResourceId": "[if(parameters('deployMonitoring'), createObject('value', reference('monitoring').outputs.logAnalyticsWorkspaceResourceId.value), createObject('value', parameters('existingLogAnalyticsWorkspaceResourceId')))]",
           "tags": {
@@ -5095,13 +5477,13 @@
             "_generator": {
               "name": "bicep",
               "version": "0.49.2.45890",
-              "templateHash": "15204831344553603813"
+              "templateHash": "2965668138654334760"
             },
             "name": "Shared Key Vault orchestration",
             "description": "Deploys optional credential and encryption vaults in an existing resource group, with optional credential secrets, diagnostics, firewall allowances, and private endpoints."
           },
           "definitions": {
-            "publicNetworkAccessMode": {
+            "_2.publicNetworkAccessMode": {
               "type": "string",
               "allowedValues": [
                 "Auto",
@@ -5111,6 +5493,20 @@
               ],
               "metadata": {
                 "description": "Public endpoint mode. Auto preserves legacy private-endpoint/firewall inference and is not offered in Portal forms.",
+                "__bicep_imported_from!": {
+                  "sourceTemplate": "../networking/functions.bicep"
+                }
+              }
+            },
+            "servicePublicNetworkAccessMode": {
+              "type": "string",
+              "allowedValues": [
+                "Disabled",
+                "Enabled",
+                "EnabledWithRestrictions"
+              ],
+              "metadata": {
+                "description": "Explicit service-family public endpoint policy. Independent of private endpoints and allowlists.",
                 "__bicep_imported_from!": {
                   "sourceTemplate": "../networking/functions.bicep"
                 }
@@ -5154,7 +5550,7 @@
                 "resolveNetworkAccess": {
                   "parameters": [
                     {
-                      "$ref": "#/definitions/publicNetworkAccessMode",
+                      "$ref": "#/definitions/_2.publicNetworkAccessMode",
                       "name": "mode"
                     },
                     {
@@ -5175,6 +5571,30 @@
                   },
                   "metadata": {
                     "description": "Resolves publicNetworkAccess and firewall defaultAction without modifying configured rules or service exceptions.",
+                    "__bicep_imported_from!": {
+                      "sourceTemplate": "../networking/functions.bicep"
+                    }
+                  }
+                },
+                "serviceEndpointSubnetIds": {
+                  "parameters": [
+                    {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      },
+                      "name": "ids"
+                    }
+                  ],
+                  "output": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "value": "[union(map(parameters('ids'), lambda('id', if(and(and(and(and(and(and(and(and(and(and(equals(length(split(trim(lambdaVariables('id')), '/')), 11), startsWith(toLower(trim(lambdaVariables('id'))), '/subscriptions/')), equals(toLower(coalesce(tryGet(split(trim(lambdaVariables('id')), '/'), 3), '')), 'resourcegroups')), equals(toLower(coalesce(tryGet(split(trim(lambdaVariables('id')), '/'), 5), '')), 'providers')), equals(toLower(coalesce(tryGet(split(trim(lambdaVariables('id')), '/'), 6), '')), 'microsoft.network')), equals(toLower(coalesce(tryGet(split(trim(lambdaVariables('id')), '/'), 7), '')), 'virtualnetworks')), equals(toLower(coalesce(tryGet(split(trim(lambdaVariables('id')), '/'), 9), '')), 'subnets')), not(empty(coalesce(tryGet(split(trim(lambdaVariables('id')), '/'), 2), '')))), not(empty(coalesce(tryGet(split(trim(lambdaVariables('id')), '/'), 4), '')))), not(empty(coalesce(tryGet(split(trim(lambdaVariables('id')), '/'), 8), '')))), not(empty(coalesce(tryGet(split(trim(lambdaVariables('id')), '/'), 10), '')))), toLower(trim(lambdaVariables('id'))), fail('Service endpoint allowlists require complete Microsoft.Network/virtualNetworks/subnets resource IDs.')))), createArray())]"
+                  },
+                  "metadata": {
+                    "description": "Validates subnet resource IDs and deduplicates them case-insensitively. Does not enable service endpoints or change subnets.",
                     "__bicep_imported_from!": {
                       "sourceTemplate": "../networking/functions.bicep"
                     }
@@ -5219,7 +5639,7 @@
                 "description": "Required. Azure region for both vaults, independent of resource group metadata location. Private endpoints use their subnet virtual network region."
               }
             },
-            "azureKeyVaultPrivateDnsZoneResourceId": {
+            "vaultPrivateDnsZoneResourceId": {
               "type": "string",
               "defaultValue": "",
               "metadata": {
@@ -5281,14 +5701,14 @@
                 "description": "Optional. Resource ID of an existing Log Analytics workspace; empty omits optional diagnostic settings."
               }
             },
-            "privateEndpoint": {
+            "keyVaultPrivateEndpoint": {
               "type": "bool",
               "defaultValue": false,
               "metadata": {
-                "description": "Optional. Whether to create private endpoints. Public access is controlled separately by paasPublicNetworkAccess."
+                "description": "Optional. Whether to create Key Vault private endpoints. Public access is controlled separately by keyVaultPublicNetworkAccess."
               }
             },
-            "privateEndpointSubnetResourceId": {
+            "keyVaultPrivateEndpointSubnetResourceId": {
               "type": "string",
               "defaultValue": "",
               "metadata": {
@@ -5352,18 +5772,28 @@
                 "description": "Optional. Soft delete retention days specifically for the Encryption Key Vault. Defaults to keyVaultRetentionInDays."
               }
             },
-            "permittedIPs": {
+            "keyVaultPermittedIPs": {
               "type": "array",
               "defaultValue": [],
               "metadata": {
                 "description": "Optional. Array of permitted IP addresses or CIDR blocks allowed through the firewall of all Key Vaults deployed by this module."
               }
             },
-            "paasPublicNetworkAccess": {
-              "$ref": "#/definitions/publicNetworkAccessMode",
-              "defaultValue": "Auto",
+            "keyVaultServiceEndpointSubnetResourceIds": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "defaultValue": [],
               "metadata": {
-                "description": "Optional. Public-access mode for both vaults. Auto preserves legacy behavior; configured IP rules and AzureServices bypass are retained in all modes."
+                "description": "Optional. Allowed subnet IDs for both new vaults with existing Microsoft.KeyVault service endpoints. Does not modify subnets."
+              }
+            },
+            "keyVaultPublicNetworkAccess": {
+              "$ref": "#/definitions/servicePublicNetworkAccessMode",
+              "defaultValue": "Disabled",
+              "metadata": {
+                "description": "Optional. One explicit public-access policy for both newly created vaults. IP/subnet rules and AzureServices bypass are retained in all modes."
               }
             }
           },
@@ -5376,27 +5806,38 @@
                   "value": "[variables('effectivePermittedIPs')[copyIndex('ipRules')]]",
                   "action": "Allow"
                 }
+              },
+              {
+                "name": "keyVaultVnetRules",
+                "count": "[length(variables('keyVaultSubnetIds'))]",
+                "input": {
+                  "id": "[variables('keyVaultSubnetIds')[copyIndex('keyVaultVnetRules')]]",
+                  "ignoreMissingVnetServiceEndpoint": false
+                }
               }
             ],
-            "privateEndpointVnetName": "[if(and(not(empty(parameters('privateEndpointSubnetResourceId'))), parameters('privateEndpoint')), split(parameters('privateEndpointSubnetResourceId'), '/')[8], '')]",
+            "privateEndpointVnetName": "[if(and(not(empty(parameters('keyVaultPrivateEndpointSubnetResourceId'))), parameters('keyVaultPrivateEndpoint')), split(parameters('keyVaultPrivateEndpointSubnetResourceId'), '/')[8], '')]",
             "secretList": "[union(if(not(empty(parameters('domainJoinUserPassword'))), createArray(createObject('name', 'DomainJoinUserPassword', 'value', parameters('domainJoinUserPassword'))), createArray()), if(not(empty(parameters('domainJoinUserPrincipalName'))), createArray(createObject('name', 'DomainJoinUserPrincipalName', 'value', parameters('domainJoinUserPrincipalName'))), createArray()), if(not(empty(parameters('virtualMachineAdminPassword'))), createArray(createObject('name', 'VirtualMachineAdminPassword', 'value', parameters('virtualMachineAdminPassword'))), createArray()), if(not(empty(parameters('virtualMachineAdminUserName'))), createArray(createObject('name', 'VirtualMachineAdminUserName', 'value', parameters('virtualMachineAdminUserName'))), createArray()))]",
             "deploySecretsKv": "[parameters('deploySecretsKeyVault')]",
-            "deploySecretsKvPe": "[and(and(variables('deploySecretsKv'), parameters('privateEndpoint')), not(empty(parameters('privateEndpointSubnetResourceId'))))]",
-            "deployEncryptionKvPe": "[and(and(parameters('deployEncryptionKeyVault'), parameters('privateEndpoint')), not(empty(parameters('privateEndpointSubnetResourceId'))))]",
+            "deploySecretsKvPe": "[and(and(variables('deploySecretsKv'), parameters('keyVaultPrivateEndpoint')), not(empty(parameters('keyVaultPrivateEndpointSubnetResourceId'))))]",
+            "deployEncryptionKvPe": "[and(and(parameters('deployEncryptionKeyVault'), parameters('keyVaultPrivateEndpoint')), not(empty(parameters('keyVaultPrivateEndpointSubnetResourceId'))))]",
             "deployKeyVaultPrivateEndpoint": "[or(variables('deploySecretsKvPe'), variables('deployEncryptionKvPe'))]",
-            "effectivePermittedIPs": "[filter(parameters('permittedIPs'), lambda('ip', not(empty(trim(lambdaVariables('ip'))))))]",
-            "networkAccess": "[__bicep.resolveNetworkAccess(parameters('paasPublicNetworkAccess'), parameters('privateEndpoint'), not(empty(variables('effectivePermittedIPs'))))]",
+            "effectivePermittedIPs": "[filter(parameters('keyVaultPermittedIPs'), lambda('ip', not(empty(trim(lambdaVariables('ip'))))))]",
+            "keyVaultSubnetIds": "[__bicep.serviceEndpointSubnetIds(parameters('keyVaultServiceEndpointSubnetResourceIds'))]",
+            "networkAccess": "[__bicep.resolveNetworkAccess(parameters('keyVaultPublicNetworkAccess'), parameters('keyVaultPrivateEndpoint'), or(not(empty(variables('effectivePermittedIPs'))), not(empty(variables('keyVaultSubnetIds')))))]",
             "secretsKvPublicNetworkAccess": "[variables('networkAccess').publicNetworkAccess]",
             "encryptionKvPublicNetworkAccess": "[variables('networkAccess').publicNetworkAccess]",
             "secretsKvNetworkAcls": {
               "bypass": "AzureServices",
               "defaultAction": "[variables('networkAccess').defaultAction]",
-              "ipRules": "[variables('ipRules')]"
+              "ipRules": "[variables('ipRules')]",
+              "virtualNetworkRules": "[variables('keyVaultVnetRules')]"
             },
             "encryptionKvNetworkAcls": {
               "bypass": "AzureServices",
               "defaultAction": "[variables('networkAccess').defaultAction]",
-              "ipRules": "[variables('ipRules')]"
+              "ipRules": "[variables('ipRules')]",
+              "virtualNetworkRules": "[variables('keyVaultVnetRules')]"
             }
           },
           "resources": {
@@ -5405,9 +5846,9 @@
               "existing": true,
               "type": "Microsoft.Network/virtualNetworks",
               "apiVersion": "2024-05-01",
-              "subscriptionId": "[split(parameters('privateEndpointSubnetResourceId'), '/')[2]]",
-              "resourceGroup": "[split(parameters('privateEndpointSubnetResourceId'), '/')[4]]",
-              "name": "[split(parameters('privateEndpointSubnetResourceId'), '/')[8]]"
+              "subscriptionId": "[split(parameters('keyVaultPrivateEndpointSubnetResourceId'), '/')[2]]",
+              "resourceGroup": "[split(parameters('keyVaultPrivateEndpointSubnetResourceId'), '/')[4]]",
+              "name": "[split(parameters('keyVaultPrivateEndpointSubnetResourceId'), '/')[8]]"
             },
             "secretsKeyVault": {
               "condition": "[variables('deploySecretsKv')]",
@@ -5778,7 +6219,7 @@
                     "value": "[reference('privateEndpointVirtualNetwork', '2024-05-01', 'full').location]"
                   },
                   "subnetResourceId": {
-                    "value": "[parameters('privateEndpointSubnetResourceId')]"
+                    "value": "[parameters('keyVaultPrivateEndpointSubnetResourceId')]"
                   },
                   "privateLinkServiceId": {
                     "value": "[reference('secretsKeyVault').outputs.resourceId.value]"
@@ -5786,7 +6227,7 @@
                   "groupId": {
                     "value": "vault"
                   },
-                  "privateDNSZoneIds": "[if(not(empty(parameters('azureKeyVaultPrivateDnsZoneResourceId'))), createObject('value', createArray(parameters('azureKeyVaultPrivateDnsZoneResourceId'))), createObject('value', createArray()))]"
+                  "privateDNSZoneIds": "[if(not(empty(parameters('vaultPrivateDnsZoneResourceId'))), createObject('value', createArray(parameters('vaultPrivateDnsZoneResourceId'))), createObject('value', createArray()))]"
                 },
                 "template": {
                   "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
@@ -6404,7 +6845,7 @@
                     "value": "[reference('privateEndpointVirtualNetwork', '2024-05-01', 'full').location]"
                   },
                   "subnetResourceId": {
-                    "value": "[parameters('privateEndpointSubnetResourceId')]"
+                    "value": "[parameters('keyVaultPrivateEndpointSubnetResourceId')]"
                   },
                   "privateLinkServiceId": {
                     "value": "[reference('encryptionKeyVault').outputs.resourceId.value]"
@@ -6412,7 +6853,7 @@
                   "groupId": {
                     "value": "vault"
                   },
-                  "privateDNSZoneIds": "[if(not(empty(parameters('azureKeyVaultPrivateDnsZoneResourceId'))), createObject('value', createArray(parameters('azureKeyVaultPrivateDnsZoneResourceId'))), createObject('value', createArray()))]"
+                  "privateDNSZoneIds": "[if(not(empty(parameters('vaultPrivateDnsZoneResourceId'))), createObject('value', createArray(parameters('vaultPrivateDnsZoneResourceId'))), createObject('value', createArray()))]"
                 },
                 "template": {
                   "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
@@ -6614,20 +7055,23 @@
             "value": "[parameters('location')]"
           },
           "logAnalyticsWorkspaceResourceId": "[if(parameters('deployMonitoring'), createObject('value', reference('monitoring').outputs.logAnalyticsWorkspaceResourceId.value), createObject('value', parameters('existingLogAnalyticsWorkspaceResourceId')))]",
+          "publicNetworkAccess": {
+            "value": "[variables('backupPublicNetworkAccess')]"
+          },
           "privateEndpoint": {
-            "value": "[parameters('privateEndpoint')]"
+            "value": "[variables('deployBackupPrivateEndpoints')]"
           },
           "privateEndpointSubnetResourceId": {
-            "value": "[parameters('privateEndpointSubnetResourceId')]"
+            "value": "[variables('sharedResourcesPrivateEndpointSubnetResourceId')]"
           },
-          "azureBackupPrivateDnsZoneResourceId": {
-            "value": "[parameters('azureBackupPrivateDnsZoneResourceId')]"
+          "backupPrivateDnsZoneResourceId": {
+            "value": "[variables('backupPrivateDnsZoneResourceId')]"
           },
-          "azureBlobPrivateDnsZoneResourceId": {
-            "value": "[parameters('azureBlobPrivateDnsZoneResourceId')]"
+          "blobPrivateDnsZoneResourceId": {
+            "value": "[variables('blobPrivateDnsZoneResourceId')]"
           },
-          "azureQueuePrivateDnsZoneResourceId": {
-            "value": "[parameters('azureQueuePrivateDnsZoneResourceId')]"
+          "queuePrivateDnsZoneResourceId": {
+            "value": "[variables('queuePrivateDnsZoneResourceId')]"
           },
           "privateEndpointNameConv": {
             "value": "[variables('privateEndpointNameConv')]"
@@ -6656,7 +7100,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.49.2.45890",
-              "templateHash": "7365231393870551114"
+              "templateHash": "1139311775846783489"
             },
             "name": "FSLogix Azure Files backup vault",
             "description": "Creates or adopts a Recovery Services vault and optionally manages a daily Azure Files snapshot policy."
@@ -6707,6 +7151,16 @@
                 "description": "Optional. Resource ID of the Log Analytics workspace for vault diagnostics."
               }
             },
+            "publicNetworkAccess": {
+              "type": "string",
+              "allowedValues": [
+                "Enabled",
+                "Disabled"
+              ],
+              "metadata": {
+                "description": "Required. Public access for a newly created vault: Enabled or Disabled, independent of privateEndpoint. Existing vault networking is owner-managed. Recovery Services vaults do not expose IP or service-endpoint subnet allowlists."
+              }
+            },
             "privateEndpoint": {
               "type": "bool",
               "metadata": {
@@ -6720,21 +7174,21 @@
                 "description": "Optional. Resource ID of the subnet for the vault private endpoint."
               }
             },
-            "azureBackupPrivateDnsZoneResourceId": {
+            "backupPrivateDnsZoneResourceId": {
               "type": "string",
               "defaultValue": "",
               "metadata": {
                 "description": "Optional. Resource ID of the Azure Backup private DNS zone."
               }
             },
-            "azureBlobPrivateDnsZoneResourceId": {
+            "blobPrivateDnsZoneResourceId": {
               "type": "string",
               "defaultValue": "",
               "metadata": {
                 "description": "Optional. Resource ID of the Azure Blob private DNS zone required by the backup private endpoint."
               }
             },
-            "azureQueuePrivateDnsZoneResourceId": {
+            "queuePrivateDnsZoneResourceId": {
               "type": "string",
               "defaultValue": "",
               "metadata": {
@@ -6783,7 +7237,7 @@
             }
           },
           "variables": {
-            "backupPrivateDnsZoneResourceIds": "[filter(createArray(parameters('azureBackupPrivateDnsZoneResourceId'), parameters('azureBlobPrivateDnsZoneResourceId'), parameters('azureQueuePrivateDnsZoneResourceId')), lambda('zoneResourceId', not(empty(lambdaVariables('zoneResourceId')))))]",
+            "backupPrivateDnsZoneResourceIds": "[filter(createArray(parameters('backupPrivateDnsZoneResourceId'), parameters('blobPrivateDnsZoneResourceId'), parameters('queuePrivateDnsZoneResourceId')), lambda('zoneResourceId', not(empty(lambdaVariables('zoneResourceId')))))]",
             "effectiveVaultSubscriptionId": "[if(parameters('createVault'), subscription().subscriptionId, split(parameters('existingRecoveryServicesVaultResourceId'), '/')[2])]",
             "effectiveVaultResourceGroupName": "[if(parameters('createVault'), parameters('resourceGroupOperations'), split(parameters('existingRecoveryServicesVaultResourceId'), '/')[4])]",
             "effectiveVaultName": "[if(parameters('createVault'), parameters('vaultName'), last(split(parameters('existingRecoveryServicesVaultResourceId'), '/')))]"
@@ -6817,7 +7271,9 @@
                     "value": "[parameters('location')]"
                   },
                   "diagnosticSettings": "[if(not(empty(parameters('logAnalyticsWorkspaceResourceId'))), createObject('value', createObject('workspaceId', parameters('logAnalyticsWorkspaceResourceId'))), createObject('value', null()))]",
-                  "publicNetworkAccess": "[if(parameters('privateEndpoint'), createObject('value', 'Disabled'), createObject('value', 'Enabled'))]",
+                  "publicNetworkAccess": {
+                    "value": "[parameters('publicNetworkAccess')]"
+                  },
                   "storageType": {
                     "value": "LocallyRedundant"
                   },
@@ -7230,7 +7686,7 @@
               ]
             },
             "vaultPrivateEndpoint": {
-              "condition": "[and(and(and(parameters('createVault'), parameters('privateEndpoint')), not(empty(parameters('privateEndpointSubnetResourceId')))), not(empty(parameters('azureBackupPrivateDnsZoneResourceId'))))]",
+              "condition": "[and(and(and(parameters('createVault'), parameters('privateEndpoint')), not(empty(parameters('privateEndpointSubnetResourceId')))), not(empty(parameters('backupPrivateDnsZoneResourceId'))))]",
               "type": "Microsoft.Resources/deployments",
               "apiVersion": "2025-04-01",
               "name": "[format('vaultPrivateEndpoint-{0}', uniqueString('vaultPrivateEndpoint', deployment().name))]",

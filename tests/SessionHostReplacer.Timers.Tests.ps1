@@ -20,14 +20,14 @@ Describe 'SHR mandatory two-timer deployment contract' {
 
     It 'has one mandatory execution model with initiation and progress timeout controls' {
         $arm.parameters.PSObject.Properties.Name | Should -Not -Contain 'enableQueueContinuation'
-        $arm.parameters.PSObject.Properties.Name | Should -Not -Contain 'azureQueuePrivateDnsZoneResourceId'
+        $arm.parameters.PSObject.Properties.Name | Should -Not -Contain 'queuePrivateDnsZoneResourceId'
         $arm.parameters.initiationEnabled.defaultValue | Should -Be $true
         $arm.parameters.continuationTimeoutHours.defaultValue | Should -Be 168
         $arm.parameters.continuationTimeoutHours.minValue | Should -Be 1
         $arm.parameters.continuationTimeoutHours.maxValue | Should -Be 720
         $form.view.outputs.parameters.initiationEnabled | Should -Be "[bool(steps('replacerConfig').initiationEnabled)]"
         $form.view.outputs.parameters.PSObject.Properties.Name | Should -Not -Contain 'enableQueueContinuation'
-        $form.view.outputs.parameters.PSObject.Properties.Name | Should -Not -Contain 'azureQueuePrivateDnsZoneResourceId'
+        $form.view.outputs.parameters.PSObject.Properties.Name | Should -Not -Contain 'queuePrivateDnsZoneResourceId'
     }
 
     It 'replaces the existing worker binding with the derived schedule setting after the code upload' {
@@ -62,7 +62,7 @@ Describe 'SHR mandatory two-timer deployment contract' {
         $schedule.options.text | Should -Match ':04, :09, :14'
         $schedule.options.text | Should -Not -Match '^\['
         $network.options.text | Should -Not -Match '^\['
-        ($infrastructure.elements | Where-Object name -eq 'azureQueuePrivateDnsZone') | Should -BeNullOrEmpty
+        ($infrastructure.elements | Where-Object name -eq 'queuePrivateDnsZone') | Should -BeNullOrEmpty
     }
 
     It 'preserves the configurable initiation schedule and explicitly enables the reconciler on upgrade' {
@@ -95,9 +95,9 @@ Describe 'SHR mandatory two-timer deployment contract' {
     It 'requires private Blob and Table runtime storage but does not provision queue storage' {
         $appParameters.enableQueueStorage.value | Should -Be $false
         $appParameters.enableTableStorage.value | Should -Be $true
-        $appParameters.PSObject.Properties.Name | Should -Not -Contain 'azureQueuePrivateDnsZoneResourceId'
-        $appParameters.azureBlobPrivateDnsZoneResourceId.value | Should -Not -BeNullOrEmpty
-        $appParameters.azureTablePrivateDnsZoneResourceId.value | Should -Not -BeNullOrEmpty
+        $appParameters.PSObject.Properties.Name | Should -Not -Contain 'queuePrivateDnsZoneResourceId'
+        $appParameters.blobPrivateDnsZoneResourceId.value | Should -Not -BeNullOrEmpty
+        $appParameters.tablePrivateDnsZoneResourceId.value | Should -Not -BeNullOrEmpty
     }
 
     It 'gates automatic queue RBAC on the shared queue capability while preserving host Blob and caller-supplied roles' {

@@ -48,6 +48,54 @@ BeforeAll {
     $automatedControlPlanePath = Join-Path $repoRoot 'deployments\automatedHostPools\modules\controlPlane.bicep'
     $repoRoot = Split-Path -Parent $PSScriptRoot
     $standardFormPath = Join-Path $repoRoot 'deployments\hostpools\uiFormDefinition.json'
+
+    function Get-NativeObjectFieldBinding([string] $Expression, [string] $Property) {
+        $marker = "`"$Property`": "
+        $start = $Expression.IndexOf($marker, [StringComparison]::Ordinal)
+        if ($start -lt 0) { throw "Missing native object field: $Property" }
+        $start += $marker.Length
+        $depth = 0
+        $quote = ''
+        for ($i = $start; $i -lt $Expression.Length; $i++) {
+            $character = $Expression[$i]
+            if ($quote) {
+                if ($character -eq $quote) {
+                    if ($quote -eq "'" -and $i + 1 -lt $Expression.Length -and $Expression[$i + 1] -eq "'") { $i++; continue }
+                    $quote = ''
+                }
+            } elseif ($character -eq "'" -or $character -eq '"') {
+                $quote = [string] $character
+            } else {
+                if ($depth -eq 0 -and ($character -eq ',' -or $character -eq '}')) {
+                    return "[$($Expression.Substring($start, $i - $start))]"
+                }
+                if ($character -eq '(' -or $character -eq '{') { $depth++ }
+                elseif ($character -eq ')' -or $character -eq '}') { $depth-- }
+            }
+        }
+        throw "Unbalanced native object field: $Property"
+    }
+
+    function Get-StandardPortalNetworkingBindings($Parameters) {
+        $result = $Parameters | ConvertTo-Json -Depth 100 | ConvertFrom-Json
+        foreach ($pair in @(
+            @{ Key = 'sharedResources'; Old = 'sharedResourcesPrivateEndpointSubnetResourceId' }
+            @{ Key = 'hostPoolResources'; Old = 'hostPoolResourcesPrivateEndpointSubnetResourceId' }
+        )) {
+            $result | Add-Member -NotePropertyName $pair.Old -NotePropertyValue (
+                Get-NativeObjectFieldBinding $Parameters.privateEndpointSubnetResourceIds $pair.Key)
+        }
+        foreach ($pair in @(
+            @{ Key = 'backup'; Old = 'backup' }; @{ Key = 'blob'; Old = 'blob' }
+            @{ Key = 'file'; Old = 'file' }; @{ Key = 'vault'; Old = 'vault' }
+            @{ Key = 'queue'; Old = 'queue' }; @{ Key = 'avdFeed'; Old = 'avd' }
+            @{ Key = 'avdGlobalFeed'; Old = 'globalFeed' }
+        )) {
+            $result | Add-Member -NotePropertyName "$($pair.Old)PrivateDnsZoneResourceId" -NotePropertyValue (
+                Get-NativeObjectFieldBinding $Parameters.privateDnsZoneResourceIds $pair.Key)
+        }
+        return $result
+    }
 }
 
 Describe 'Host-pool availability-zone controls' {
@@ -205,14 +253,14 @@ Describe 'AVD workspace ownership contract' {
         $standardBicep | Should -Match "module sharedMonitoring '../shared/modules/orchestration/monitoring/monitoring.bicep'"
         $standardBicep | Should -Match "module sharedKeyVaults '../shared/modules/orchestration/keyVaults/keyVaults.bicep'"
         $standardBicep | Should -Match "module sharedAvdWorkspace '../shared/modules/orchestration/avdWorkspace/avdWorkspace.bicep'"
-        $standardBicep | Should -Match "module sharedFilesBackup '../shared/modules/resourceModules/recoveryServices/fslogixBackupVault.bicep'"
+        $standardBicep | Should -Match "module sharedFilesBackup '../shared/modules/orchestration/recoveryServices/fslogixBackupVault.bicep'"
         $automatedBicep | Should -Not -Match "module sharedServices '../sharedServices/sharedServices.bicep'"
         $automatedBicep | Should -Not -Match 'automatedHostPoolCore\.bicep'
         $automatedBicep | Should -Match "module controlPlane 'modules/controlPlane.bicep'"
         $automatedBicep | Should -Match "module sharedMonitoring '../shared/modules/orchestration/monitoring/monitoring.bicep'"
         $automatedBicep | Should -Match "module sharedKeyVaults '../shared/modules/orchestration/keyVaults/keyVaults.bicep'"
         $automatedBicep | Should -Match "module sharedAvdWorkspace '../shared/modules/orchestration/avdWorkspace/avdWorkspace.bicep'"
-        $automatedBicep | Should -Match "module sharedFilesBackup '../shared/modules/resourceModules/recoveryServices/fslogixBackupVault.bicep'"
+        $automatedBicep | Should -Match "module sharedFilesBackup '../shared/modules/orchestration/recoveryServices/fslogixBackupVault.bicep'"
     }
 
     It 'passes the desktop friendly name to application groups in compiled control planes' {
@@ -230,11 +278,13 @@ Describe 'AVD workspace ownership contract' {
             Should -Be "[parameters('desktopFriendlyName')]"
     }
 
-    It 'enables Shared Services private endpoints for new Key Vaults or backup vaults' {
-        $standardBicep | Should -Match 'var sharedPrivateEndpoint = deployPrivateEndpoints && \(deploySharedKeyVaults \|\| deploySharedFilesBackup\)'
-        $automatedBicep | Should -Match 'var sharedPrivateEndpoint = deployPrivateEndpoints && \(deploySharedKeyVaults \|\| deploySharedFilesBackup\)'
+    It 'keeps Shared Services backup PEs independent of new Key Vault PEs' {
+        $standardBicep | Should -Match 'var sharedPrivateEndpoint = backupPrivateEndpoint && deploySharedFilesBackup'
+        $automatedBicep | Should -Match 'var backupPrivateEndpoint = deploySharedFilesBackup && networking\.backup\.privateEndpoint'
         $standardBicep | Should -Match 'privateEndpoint: sharedPrivateEndpoint'
-        $automatedBicep | Should -Match 'privateEndpoint: sharedPrivateEndpoint'
+        $automatedBicep | Should -Match 'privateEndpoint: backupPrivateEndpoint'
+        $standardBicep | Should -Match 'privateEndpoint: keyVaultPrivateEndpoint'
+        $automatedBicep | Should -Match 'privateEndpoint: keyVaultPrivateEndpoint'
     }
 
     It 'skips the shared Key Vault orchestration when both vaults are existing or unnecessary' {
@@ -344,13 +394,15 @@ Describe 'AVD workspace ownership contract' {
 
     It 'passes global endpoint networking whenever a new global workspace is required' {
         $standardOutputs = (Get-Content -LiteralPath $standardFormPath -Raw | ConvertFrom-Json).view.outputs.parameters
+        $standardOutputs = Get-StandardPortalNetworkingBindings $standardOutputs
         $automatedOutputs = (Get-Content -LiteralPath $automatedFormPath -Raw | ConvertFrom-Json).view.outputs.parameters
+        $automatedOutputs = Get-StandardPortalNetworkingBindings $automatedOutputs
 
         foreach ($outputs in @($standardOutputs, $automatedOutputs)) {
             $outputs.existingGlobalFeedResourceId | Should -Match "empty\(filter\(.+contains\(.+global-feed"
-            $outputs.globalFeedPrivateEndpointSubnetResourceId | Should -Match "empty\(filter\(.+contains\(.+global-feed"
-            $outputs.globalFeedPrivateEndpointSubnetResourceId | Should -Not -Match 'createOption'
-            $outputs.globalFeedPrivateEndpointSubnetResourceId | Should -Not -Match 'enablePrivateDNSIntegration'
+            $outputs.sharedResourcesPrivateEndpointSubnetResourceId | Should -Match 'avdPrivateLink'
+            $outputs.sharedResourcesPrivateEndpointSubnetResourceId | Should -Not -Match 'createOption'
+            $outputs.sharedResourcesPrivateEndpointSubnetResourceId | Should -Not -Match 'enablePrivateDNSIntegration'
             $outputs.globalFeedPrivateDnsZoneResourceId | Should -Match 'enablePrivateDNSIntegration'
             $outputs.globalFeedPrivateDnsZoneResourceId | Should -Not -Match 'createOption'
         }
@@ -358,11 +410,13 @@ Describe 'AVD workspace ownership contract' {
 
     It 'passes feed endpoint settings for new and existing workspaces' {
         $standardOutputs = (Get-Content -LiteralPath $standardFormPath -Raw | ConvertFrom-Json).view.outputs.parameters
+        $standardOutputs = Get-StandardPortalNetworkingBindings $standardOutputs
         $automatedOutputs = (Get-Content -LiteralPath $automatedFormPath -Raw | ConvertFrom-Json).view.outputs.parameters
+        $automatedOutputs = Get-StandardPortalNetworkingBindings $automatedOutputs
 
         foreach ($outputs in @($standardOutputs, $automatedOutputs)) {
-            $outputs.workspaceFeedPrivateEndpointSubnetResourceId | Should -Match 'HostPool'
-            $outputs.workspaceFeedPrivateEndpointSubnetResourceId | Should -Not -Match 'createOption'
+            $outputs.sharedResourcesPrivateEndpointSubnetResourceId | Should -Match 'HostPool'
+            $outputs.sharedResourcesPrivateEndpointSubnetResourceId | Should -Not -Match 'createOption'
             $outputs.workspaceFeedPublicNetworkAccess | Should -Match 'HostPool'
             $outputs.workspaceFeedPublicNetworkAccess | Should -Not -Match 'createOption'
         }
@@ -374,7 +428,7 @@ Describe 'Standard host-pool Private DNS visibility' {
         $form = Get-Content -LiteralPath $standardFormPath -Raw | ConvertFrom-Json
         $zeroTrust = $form.view.properties.steps | Where-Object name -eq 'zeroTrust'
         $paas = $zeroTrust.elements | Where-Object name -eq 'privateEndpoints'
-        $outputs = $form.view.outputs.parameters
+        $outputs = Get-StandardPortalNetworkingBindings $form.view.outputs.parameters
         $fileArgs = "not(equals(steps('controlPlane').hostPool.type, 'Personal')), equals(steps('userProfiles').profileSolution, 'FSLogix'), steps('userProfiles').deployStorage, equals(steps('userProfiles').storageService, 'AzureFiles')"
         $newFiles = "and($fileArgs)"
         $vmBackup = "and(equals(steps('controlPlane').hostPool.type, 'Personal'), steps('operationsAndMonitoring').backup.recoveryServices)"
@@ -385,45 +439,70 @@ Describe 'Standard host-pool Private DNS visibility' {
         $newFileBackup = "and($fileArgs, steps('operationsAndMonitoring').backup.recoveryServices, not(steps('operationsAndMonitoring').backup.useExistingRecoveryServicesVault))"
     }
 
-    It 'requires active consumers for endpoint and DNS checkboxes and the endpoint output' {
-        $paas.visible | Should -Be "[$consumerCondition]"
-        ($paas.elements | Where-Object name -eq 'deployPrivateEndpoints').visible | Should -Be $paas.visible
+    It 'keeps Backup and disk controls independent and scenario-specific' {
+        $paas.visible | Should -Match 'backup\.recoveryServices'
+        ($paas.elements | Where-Object name -eq 'backupPrivateEndpoint').visible | Should -Match "scenario, 'Custom'"
+        ($paas.elements | Where-Object name -eq 'diskPrivateEndpoint').visible | Should -Match "scenario, 'Custom'"
         $dns = $paas.elements | Where-Object name -eq 'enablePrivateDNSIntegration'
-        $dns.visible | Should -Be "[and(steps('zeroTrust').privateEndpoints.deployPrivateEndpoints, $consumerCondition)]"
-        $outputs.deployPrivateEndpoints | Should -Be $dns.visible
+        $dns.visible | Should -Match 'privateEndpoints\.backupPrivateEndpoint'
+        $dns.visible | Should -Match 'privateEndpoints\.diskPrivateEndpoint'
+        $form.view.outputs.parameters.paasNetworking | Should -Match '"backup":'
+        $form.view.outputs.parameters.paasNetworking | Should -Match '"disk":'
+        $form.view.outputs.parameters.psobject.Properties.Name | Should -Not -Contain 'deployBackupAndDiskPrivateEndpoints'
     }
 
     It 'gates PaaS DNS discovery by enabled integration and actual resource consumers' {
-        $dnsArgs = "steps('zeroTrust').privateEndpoints.deployPrivateEndpoints, steps('zeroTrust').privateEndpoints.enablePrivateDNSIntegration, $consumerCondition"
-        ($paas.elements | Where-Object name -eq 'privateDNSZonesSubscription').visible | Should -Be "[and($dnsArgs)]"
-        ($paas.elements | Where-Object name -eq 'privateDNSZonesApi').condition |
-            Should -Be "[and($dnsArgs, not(empty(steps('zeroTrust').privateEndpoints.privateDNSZonesSubscription)))]"
-    }
-
-    It 'keeps new credentials vault DNS independent of adopting an encryption vault' {
-        ($paas.elements | Where-Object name -eq 'azureKeyVaultPrivateDnsZone').visible |
-            Should -Be "[and(steps('zeroTrust').privateEndpoints.deployPrivateEndpoints, steps('zeroTrust').privateEndpoints.enablePrivateDNSIntegration, $keyVaultConsumer)]"
-        ($paas.elements | Where-Object name -eq 'operationsVirtualNetwork').visible |
-            Should -Be "[and(steps('zeroTrust').privateEndpoints.deployPrivateEndpoints, or(steps('hosts').identity.deploySecretsKeyVault, $newEncryptionVault, $newFileBackup))]"
-    }
-
-    It 'requires active pooled FSLogix Azure Files storage for its DNS selector' {
-        ($paas.elements | Where-Object name -eq 'azureFilesPrivateDnsZone').visible |
-            Should -Be "[and(steps('zeroTrust').privateEndpoints.deployPrivateEndpoints, steps('zeroTrust').privateEndpoints.enablePrivateDNSIntegration, $fileArgs)]"
-    }
-
-    It 'limits Backup and Queue DNS to new VM or active Azure Files backup vaults' {
-        foreach ($name in @('azureBackupPrivateDnsZone', 'azureQueuePrivateDnsZone')) {
-            ($paas.elements | Where-Object name -eq $name).visible |
-                Should -Be "[and(steps('zeroTrust').privateEndpoints.deployPrivateEndpoints, steps('zeroTrust').privateEndpoints.enablePrivateDNSIntegration, steps('operationsAndMonitoring').backup.recoveryServices, not(steps('operationsAndMonitoring').backup.useExistingRecoveryServicesVault), or(equals(steps('controlPlane').hostPool.type, 'Personal'), $newFiles))]"
+        foreach ($condition in @(
+            ($paas.elements | Where-Object name -eq 'privateDNSZonesSubscription').visible
+            ($paas.elements | Where-Object name -eq 'privateDNSZonesApi').condition
+        )) {
+            $condition | Should -Match 'privateEndpoints\.backupPrivateEndpoint'
+            $condition | Should -Match 'privateEndpoints\.diskPrivateEndpoint'
+            $condition | Should -Match 'privateEndpoints\.enablePrivateDNSIntegration'
+            $condition | Should -Match 'backup\.recoveryServices'
+            $condition | Should -Not -Match 'deploySecretsKeyVault|keyVaultPrivateNetworking|storagePrivateNetworking'
         }
     }
 
+    It 'keeps new credentials vault DNS independent of adopting an encryption vault' {
+        $vaultNetworking = $zeroTrust.elements | Where-Object name -eq 'keyVaultPrivateNetworking'
+        ($vaultNetworking.elements | Where-Object name -eq 'vaultPrivateDnsZone').visible |
+            Should -Match "keyVaultPrivateNetworking\.keyVaultPrivateEndpoint"
+        $outputs.vaultPrivateDnsZoneResourceId | Should -Match "keyVaultPrivateNetworking\.keyVaultPrivateEndpoint"
+        $outputs.vaultPrivateDnsZoneResourceId | Should -Not -Match 'privateEndpoints\.'
+        $ownership = $zeroTrust.elements | Where-Object name -eq 'privateEndpointSubnets'
+        ($ownership.elements | Where-Object name -eq 'sharedVirtualNetwork').visible |
+            Should -Match 'backup\.recoveryServices'
+        ($ownership.elements | Where-Object name -eq 'sharedVirtualNetwork').visible |
+            Should -Match 'keyVaultPrivateEndpoint'
+    }
+
+    It 'requires active pooled FSLogix Azure Files storage for its DNS selector' {
+        $storageNetworking = $zeroTrust.elements | Where-Object name -eq 'storagePrivateNetworking'
+        ($storageNetworking.elements | Where-Object name -eq 'filePrivateDnsZone').visible |
+            Should -Match "storagePrivateNetworking\.storagePrivateEndpoint"
+        $outputs.filePrivateDnsZoneResourceId | Should -Match 'storagePrivateNetworking\.storagePrivateEndpoint'
+        $outputs.filePrivateDnsZoneResourceId | Should -Not -Match 'privateEndpoints\.'
+    }
+
+    It 'requires Backup DNS while preserving optional Queue integration' {
+        $backupDns = $paas.elements | Where-Object name -eq 'backupPrivateDnsZone'
+        $queueDns = $paas.elements | Where-Object name -eq 'queuePrivateDnsZone'
+        $backupDns.visible | Should -Match 'privateEndpoints\.backupPrivateEndpoint'
+        $backupDns.visible | Should -Match 'useExistingRecoveryServicesVault'
+        $backupDns.visible | Should -Not -Match 'enablePrivateDNSIntegration'
+        $queueDns.visible | Should -Match 'privateEndpoints\.backupPrivateEndpoint'
+        $queueDns.visible | Should -Match 'enablePrivateDNSIntegration'
+    }
+
     It 'preserves Disk Access subnet and Blob DNS controls when adopting a Personal backup vault' {
-        ($paas.elements | Where-Object name -eq 'hostpoolVirtualNetwork').visible |
-            Should -Be "[and(steps('zeroTrust').privateEndpoints.deployPrivateEndpoints, or($vmBackup, $newFiles))]"
-        ($paas.elements | Where-Object name -eq 'azureBlobPrivateDnsZone').visible |
-            Should -Be "[and(steps('zeroTrust').privateEndpoints.deployPrivateEndpoints, steps('zeroTrust').privateEndpoints.enablePrivateDNSIntegration, steps('operationsAndMonitoring').backup.recoveryServices, or(equals(steps('controlPlane').hostPool.type, 'Personal'), and(not(steps('operationsAndMonitoring').backup.useExistingRecoveryServicesVault), $fileArgs)))]"
+        $ownership = $zeroTrust.elements | Where-Object name -eq 'privateEndpointSubnets'
+        ($ownership.elements | Where-Object name -eq 'hostPoolVirtualNetwork').visible |
+            Should -Match 'diskPrivateEndpoint'
+        ($paas.elements | Where-Object name -eq 'blobPrivateDnsZone').visible |
+            Should -Match 'diskPrivateEndpoint'
+        $standardBicep = Get-Content -LiteralPath $standardBicepPath -Raw
+        $standardBicep | Should -Match 'blobPrivateDnsZoneResourceId: blobPrivateDnsZoneResourceId'
     }
 
     It 'ignores retained vault encryption choices when adopting a VM backup vault' {
@@ -432,24 +511,30 @@ Describe 'Standard host-pool Private DNS visibility' {
     }
 
     It 'aligns every PaaS zone and subnet output with its selector visibility' {
-        foreach ($name in @('azureFilesPrivateDnsZone', 'azureKeyVaultPrivateDnsZone', 'azureBackupPrivateDnsZone', 'azureBlobPrivateDnsZone', 'azureQueuePrivateDnsZone')) {
+        foreach ($name in @('backupPrivateDnsZone', 'blobPrivateDnsZone', 'queuePrivateDnsZone')) {
             $selector = $paas.elements | Where-Object name -eq $name
             $condition = $selector.visible.Substring(1, $selector.visible.Length - 2)
             $outputs."${name}ResourceId" | Should -Be "[if($condition, steps('zeroTrust').privateEndpoints.$name, '')]"
         }
+        $outputs.filePrivateDnsZoneResourceId | Should -Match "steps\('zeroTrust'\)\.storagePrivateNetworking\.filePrivateDnsZone"
+        $outputs.vaultPrivateDnsZoneResourceId | Should -Match "steps\('zeroTrust'\)\.keyVaultPrivateNetworking\.vaultPrivateDnsZone"
         foreach ($pair in @(
-            @{ Selector = 'operationsSubnet'; Output = 'operationsPrivateEndpointSubnetResourceId' }
-            @{ Selector = 'hostpoolSubnet'; Output = 'hostPoolResourcesPrivateEndpointSubnetResourceId' }
+            @{ Selector = 'sharedSubnet'; Output = 'sharedResourcesPrivateEndpointSubnetResourceId' }
+            @{ Selector = 'hostPoolSubnet'; Output = 'hostPoolResourcesPrivateEndpointSubnetResourceId' }
         )) {
-            $selector = $paas.elements | Where-Object name -eq $pair.Selector
+            $ownership = ($form.view.properties.steps | Where-Object name -eq 'zeroTrust').elements | Where-Object name -eq 'privateEndpointSubnets'
+            $selector = $ownership.elements | Where-Object name -eq $pair.Selector
             $condition = $selector.visible.Substring(1, $selector.visible.Length - 2)
-            $outputs.($pair.Output) | Should -Be "[if($condition, steps('zeroTrust').privateEndpoints.$($pair.Selector).id, '')]"
+            $outputs.($pair.Output) | Should -Be "[if($condition, steps('zeroTrust').privateEndpointSubnets.$($pair.Selector).id, '')]"
         }
     }
 
-    It 'uses literal headers for the operations and host-pool endpoint groups' {
-        ($paas.elements | Where-Object name -eq 'operationsHeader').options.text | Should -Be 'Shared Operations Resources'
-        ($paas.elements | Where-Object name -eq 'hostpoolHeader').options.text | Should -Be 'Host-pool Resources'
+    It 'uses literal ownership headers without nested sections' {
+        $ownership = ($form.view.properties.steps | Where-Object name -eq 'zeroTrust').elements |
+            Where-Object name -eq 'privateEndpointSubnets'
+        ($ownership.elements | Where-Object name -eq 'sharedHeader').options.text | Should -Match 'Shared: Key Vaults'
+        ($ownership.elements | Where-Object name -eq 'hostPoolHeader').options.text | Should -Match 'Host pool: FSLogix Storage'
+        $ownership.elements.type | Should -Not -Contain 'Microsoft.Common.Section'
     }
 }
 
@@ -501,34 +586,36 @@ Describe 'Common host-pool UI form behavior' {
         $standardBicep | Should -Not -Match 'tags: hostTags'
     }
 
-    It 'groups permitted IP addresses with PaaS settings before AVD Private Link in both forms' {
+    It 'groups each family access policy before AVD Private Link in both forms' {
         foreach ($form in @($standardForm, $automatedForm)) {
             $zeroTrust = $form.view.properties.steps | Where-Object name -eq 'zeroTrust'
             $names = @($zeroTrust.elements.name)
-            @($names | Where-Object { $_ -eq 'permittedIPsSection' }).Count | Should -Be 1
-            $paasIndex = [array]::IndexOf($names, 'privateEndpoints')
-            $ipIndex = [array]::IndexOf($names, 'permittedIPsSection')
             $avdIndex = [array]::IndexOf($names, 'avdPrivateLink')
-            ($paasIndex -ge 0 -and $paasIndex -lt $ipIndex -and $ipIndex -lt $avdIndex) | Should -Be $true
+            foreach ($family in @('storage', 'keyVault')) {
+                $privateIndex = [array]::IndexOf($names, "${family}PrivateNetworking")
+                $publicIndex = [array]::IndexOf($names, "${family}PublicNetworking")
+                $sourcesIndex = [array]::IndexOf($names, "${family}ServiceEndpointAccess")
+                ($privateIndex -ge 0 -and $privateIndex -lt $publicIndex -and $publicIndex -lt $sourcesIndex -and $sourcesIndex -lt $avdIndex) | Should -Be $true
+            }
         }
     }
 
-    It 'uses consistent DNS labels and respects the integration checkbox in both forms' {
+    It 'uses scope-specific DNS labels and respects separate AVD integration in both forms' {
         foreach ($case in @(
-            @{ Form = $standardForm; Connection = 'wvdPrivateLinkDnsZone'; SubscriptionStep = 'zeroTrust'; SubscriptionControls = @('avdPrivateLink', 'privateDNSZonesSubscription') }
-            @{ Form = $automatedForm; Connection = 'avdPrivateDnsZone'; SubscriptionStep = 'zeroTrust'; SubscriptionControls = @('avdPrivateLink', 'privateDNSZonesSubscription') }
+            @{ Form = $standardForm; Connection = 'wvdPrivateLinkDnsZone'; PaaSDnsLabel = 'Integrate Blob and Queue with Azure Private DNS'; Output = (Get-NativeObjectFieldBinding $standardForm.view.outputs.parameters.privateDnsZoneResourceIds 'avdFeed'); SubscriptionStep = 'zeroTrust'; SubscriptionControls = @('avdPrivateLink', 'privateDNSZonesSubscription') }
+            @{ Form = $automatedForm; Connection = 'avdPrivateDnsZone'; PaaSDnsLabel = 'Integrate Blob and Queue with Azure Private DNS'; Output = (Get-NativeObjectFieldBinding $automatedForm.view.outputs.parameters.privateDnsZoneResourceIds 'avdFeed'); SubscriptionStep = 'zeroTrust'; SubscriptionControls = @('avdPrivateLink', 'privateDNSZonesSubscription') }
         )) {
             $zeroTrust = $case.Form.view.properties.steps | Where-Object name -eq 'zeroTrust'
             $paas = $zeroTrust.elements | Where-Object name -eq 'privateEndpoints'
             $avd = $zeroTrust.elements | Where-Object name -eq 'avdPrivateLink'
             ($paas.elements | Where-Object name -eq 'enablePrivateDNSIntegration').label |
-                Should -Be 'Enable PaaS Private DNS Zone Integration'
+                Should -Be $case.PaaSDnsLabel
             ($avd.elements | Where-Object name -eq 'enablePrivateDNSIntegration').label |
                 Should -Be 'Enable AVD Private DNS Zone Integration'
             $connection = $avd.elements | Where-Object name -eq $case.Connection
             $connection.label | Should -Be 'AVD Connection and Feed Private DNS Zone'
             $condition = $connection.visible.Substring(1, $connection.visible.Length - 2)
-            $case.Form.view.outputs.parameters.avdPrivateDnsZoneResourceId |
+            $case.Output |
                 Should -Be "[if($condition, steps('zeroTrust').avdPrivateLink.$($case.Connection), '')]"
             $subscriptionExpression = "steps('$($case.SubscriptionStep)').$($case.SubscriptionControls -join '.')"
             $subscriptionControl = $case.Form.view.properties.steps | Where-Object name -eq $case.SubscriptionStep
@@ -547,17 +634,15 @@ Describe 'Common host-pool UI form behavior' {
     It 'gates standard subnet lookups with the corresponding endpoint visibility' {
         $zeroTrust = $standardForm.view.properties.steps | Where-Object name -eq 'zeroTrust'
         foreach ($pair in @(
-            @{ Section = 'privateEndpoints'; Api = 'operationsSubnetsApi'; Selector = 'operationsVirtualNetwork' }
-            @{ Section = 'privateEndpoints'; Api = 'hostpoolSubnetsApi'; Selector = 'hostpoolVirtualNetwork' }
-            @{ Section = 'avdPrivateLink'; Api = 'hostpoolSubnetsApi'; Selector = 'hostpoolVirtualNetwork' }
-            @{ Section = 'avdPrivateLink'; Api = 'feedWorkspaceSubnetsApi'; Selector = 'feedWorkspaceVirtualNetwork' }
-            @{ Section = 'avdPrivateLink'; Api = 'globalFeedSubnetsApi'; Selector = 'globalFeedVirtualNetwork' }
+            @{ Section = 'privateEndpointSubnets'; Api = 'sharedSubnetsApi'; Selector = 'sharedVirtualNetwork' }
+            @{ Section = 'privateEndpointSubnets'; Api = 'hostPoolSubnetsApi'; Selector = 'hostPoolVirtualNetwork' }
         )) {
             $section = $zeroTrust.elements | Where-Object name -eq $pair.Section
             $api = $section.elements | Where-Object name -eq $pair.Api
             $selector = $section.elements | Where-Object name -eq $pair.Selector
             $condition = $selector.visible.Substring(1, $selector.visible.Length - 2)
-            $networkCheck = "not(empty(steps('zeroTrust').$($pair.Section).$($pair.Selector)))"
+            $property = '.id'
+            $networkCheck = "not(empty(steps('zeroTrust').$($pair.Section).$($pair.Selector)$property))"
             if ($condition.StartsWith('and(')) {
                 $expectedCondition = $condition.Substring(0, $condition.Length - 1) + ", $networkCheck)"
             } else {
@@ -1048,7 +1133,7 @@ Describe 'Standard host-pool PoC form' {
         $pocBicep | Should -Match "hostPoolRDPProperties: 'enablerdsaadauth:i:1;'"
         $pocBicep | Should -Match 'deployScalingPlan: false'
         $pocBicep | Should -Match 'deployRecoveryServices: false'
-        $pocBicep | Should -Match 'deployPrivateEndpoints: false'
+        $pocBicep | Should -Match 'deployBackupPrivateEndpoints: false'
         $pocBicep | Should -Match "avdPrivateLinkPrivateRoutes: 'None'"
         $pocBicep | Should -Match 'workspaceResourceGroupName: resourceGroupName'
     }
@@ -1193,7 +1278,9 @@ Describe 'Standard host-pool PoC form' {
         $pocBicep | Should -Match 'subnetResourceId: sessionHostSubnetResourceId'
         $pocBicep | Should -Match 'publicIPName:'
         $pocBicep | Should -Match 'natGatewayName:'
-        $pocFormJson | Should -Not -Match 'virtualNetworksApi'
+        $pocOutputs.PSObject.Properties.Name | Should -Not -Contain 'virtualNetworkResourceId'
+        $pocOutputs.PSObject.Properties.Name | Should -Not -Contain 'subnetResourceId'
+        $pocOutputs.storageServiceEndpointSubnetResourceIds | Should -Match 'storageServiceEndpointSubnets'
         $pocFormJson | Should -Not -Match '"name": "subnet"'
 
         $pocParameters = Get-Content -LiteralPath $pocParametersPath -Raw | ConvertFrom-Json

@@ -1,7 +1,8 @@
 targetScope = 'subscription'
 
 import { imageManagementNames, namingConventionConfig } from '../shared/modules/orchestration/naming/naming.bicep'
-import { publicNetworkAccessMode, resolveNetworkAccess } from '../shared/modules/orchestration/networking/functions.bicep'
+import { resolveNetworkAccess, serviceEndpointSubnetIds } from '../shared/modules/orchestration/networking/functions.bicep'
+import { imageManagementPaasNetworkingType, sharedPrivateEndpointSubnetResourceIdsType, imageManagementPrivateDnsZoneResourceIdsType, resolvePaasNetworking, requirePrivateEndpointSubnet } from '../shared/modules/orchestration/networking/scenarios.bicep'
 
 // Deploys the Azure Virtual Desktop image management infrastructure: storage account for build artifacts,
 // Azure Compute Gallery, and image definitions. Required before running any custom image build.
@@ -11,28 +12,14 @@ param location string = deployment().location
 @description('Optional. Indicates whether the storage account permits requests to be authorized with the account access key via Shared Key. If false, then all requests, including shared access signatures, must be authorized with Azure Active Directory (Azure AD). The default value is null, which is equivalent to true.')
 param storageAllowSharedKeyAccess bool = false
 
-@description('Optional. The Resource Id of the Private DNS Zone where the Private Endpoint (if configured) A record will be registered.')
-param azureBlobPrivateDnsZoneResourceId string = ''
+@description('Optional. Common networking defaults and Storage overrides for artifacts and build logs. Omitted fields use private endpoints and disabled public access; IP and service-endpoint subnet allowlists remain independent.')
+param paasNetworking imageManagementPaasNetworkingType = {}
 
-@description('Optional. Network access configuration for the artifacts storage account.')
-@allowed([
-  'PublicEndpoint'
-  'PrivateEndpoint'
-  'ServiceEndpoint'
-])
-param storageNetworkAccess string = 'PublicEndpoint'
+@description('Conditional. Shared-resource private endpoint subnet. Required when private endpoints are selected for either created storage account; never falls back to public access.')
+param privateEndpointSubnetResourceIds sharedPrivateEndpointSubnetResourceIdsType = {}
 
-@description('Optional. The ResourceId of the private endpoint subnet.')
-param privateEndpointSubnetResourceId string = ''
-
-@description('Optional. Array of permitted IPs or IP CIDR blocks that can access the storage account using the Public Endpoint.')
-param storagePermittedIPs array = []
-
-@description('Optional. Public-access mode for artifacts and logs storage. Auto preserves legacy network/IP/subnet inference; firewall rules and AzureServices bypass remain configured.')
-param paasPublicNetworkAccess publicNetworkAccessMode = 'Auto'
-
-@description('Optional. An array of subnet resource IDs where Service Endpoints will be created to allow access to the storage account through the public endpoint.')
-param storageServiceEndpointSubnetResourceIds array = []
+@description('Optional. Existing Blob private DNS zone resource ID. Empty omits the private endpoint DNS zone group.')
+param privateDnsZoneResourceIds imageManagementPrivateDnsZoneResourceIdsType = {}
 
 @description('Optional. The tags by resource type to apply to the resources created by this template.')
 param tags object = {}
@@ -140,6 +127,15 @@ param namingConvention namingConventionConfig = {
   workload: 'avd'
 }
 
+var storageCreated = deployArtifactsStorageAccount || deployBuildLogsStorageAccount
+var resolvedNetworking = resolvePaasNetworking(paasNetworking, storageCreated, false, false)
+var storagePublicNetworkAccess = resolvedNetworking.storage.publicNetworkAccess
+var storagePrivateEndpoint = resolvedNetworking.storage.privateEndpoint
+var storagePermittedIPs = resolvedNetworking.storage.permittedIPs
+var storageServiceEndpointSubnetResourceIds = resolvedNetworking.storage.serviceEndpointSubnetResourceIds
+var storagePrivateEndpointSubnetResourceId = requirePrivateEndpointSubnet(privateEndpointSubnetResourceIds.?sharedResources ?? '', storageCreated && storagePrivateEndpoint, 'sharedResources')
+var blobPrivateDnsZoneResourceId = privateDnsZoneResourceIds.?blob ?? ''
+
 var naming = imageManagementNames(namingConvention, {
   subscriptionId: subscription().subscriptionId
   cloud: environment().name
@@ -152,7 +148,7 @@ var imageBuildRgName = naming.imageBuildResourceGroupName
 var artifactsBlobContainerName = 'artifacts'
 var galleryName = naming.galleryName
 var identityName = naming.identityName
-var vnetName = !empty(privateEndpointSubnetResourceId) ? split(privateEndpointSubnetResourceId, '/')[8] : ''
+var vnetName = !empty(storagePrivateEndpointSubnetResourceId) ? split(storagePrivateEndpointSubnetResourceId, '/')[8] : ''
 var privateEndpointNameConv = replace(naming.privateEndpointNameConv, 'VNETID', vnetName)
 
 var privateEndpointName = replace(
@@ -331,13 +327,14 @@ module confidentialVmCmk '../shared/modules/orchestration/customerManagedKeys/cu
 // Network ACLs applied to all storage accounts in this deployment.
 // Azure Compute Gallery requires trusted-service access to ingest private VM Application packages.
 var effectiveStoragePermittedIPs = filter(storagePermittedIPs, ip => !empty(trim(ip)))
+var storageSubnetIds = serviceEndpointSubnetIds(storageServiceEndpointSubnetResourceIds)
 var networkAccess = resolveNetworkAccess(
-  paasPublicNetworkAccess,
-  storageNetworkAccess == 'PrivateEndpoint',
-  !empty(effectiveStoragePermittedIPs) || !empty(storageServiceEndpointSubnetResourceIds)
+  storagePublicNetworkAccess,
+  storagePrivateEndpoint,
+  !empty(effectiveStoragePermittedIPs) || !empty(storageSubnetIds)
 )
 var storageIpRules = [for ip in effectiveStoragePermittedIPs: { value: ip, action: 'Allow' }]
-var storageVnetRules = [for id in storageServiceEndpointSubnetResourceIds: { id: id, action: 'Allow' }]
+var storageVnetRules = [for id in storageSubnetIds: { id: id, action: 'Allow' }]
 var storageNetworkAcls = {
   bypass: 'AzureServices'
   defaultAction: networkAccess.defaultAction
@@ -396,16 +393,16 @@ module assetsBlobContainer '../shared/modules/resourceModules/storage/storageAcc
   dependsOn: [assetsBlobService]
 }
 
-module assetsStoragePrivateEndpoint '../shared/modules/resourceModules/network/privateEndpoints/deploy.bicep' = if (deployArtifactsStorageAccount && storageNetworkAccess == 'PrivateEndpoint') {
+module assetsStoragePrivateEndpoint '../shared/modules/resourceModules/network/privateEndpoints/deploy.bicep' = if (deployArtifactsStorageAccount && storagePrivateEndpoint) {
   scope: az.resourceGroup(resourceGroupName)
   params: {
     name: privateEndpointName
     customNetworkInterfaceName: customNetworkInterfaceName
     location: location
-    subnetResourceId: privateEndpointSubnetResourceId
+    subnetResourceId: storagePrivateEndpointSubnetResourceId
     privateLinkServiceId: assetsStorageAccount!.outputs.resourceId
     groupId: 'blob'
-    privateDNSZoneIds: !empty(azureBlobPrivateDnsZoneResourceId) ? [azureBlobPrivateDnsZoneResourceId] : []
+    privateDNSZoneIds: !empty(blobPrivateDnsZoneResourceId) ? [blobPrivateDnsZoneResourceId] : []
     tags: tags[?'Microsoft.Network/privateEndpoints'] ?? {}
   }
 }
@@ -501,16 +498,16 @@ module logsStorageLifecyclePolicy '../shared/modules/resourceModules/storage/sto
   dependsOn: [logsStorageAccount]
 }
 
-module logsStoragePrivateEndpoint '../shared/modules/resourceModules/network/privateEndpoints/deploy.bicep' = if (deployBuildLogsStorageAccount && storageNetworkAccess == 'PrivateEndpoint') {
+module logsStoragePrivateEndpoint '../shared/modules/resourceModules/network/privateEndpoints/deploy.bicep' = if (deployBuildLogsStorageAccount && storagePrivateEndpoint) {
   scope: az.resourceGroup(resourceGroupName)
   params: {
     name: logsPrivateEndpointName
     customNetworkInterfaceName: logsCustomNetworkInterfaceName
     location: location
-    subnetResourceId: privateEndpointSubnetResourceId
+    subnetResourceId: storagePrivateEndpointSubnetResourceId
     privateLinkServiceId: logsStorageAccount!.outputs.resourceId
     groupId: 'blob'
-    privateDNSZoneIds: !empty(azureBlobPrivateDnsZoneResourceId) ? [azureBlobPrivateDnsZoneResourceId] : []
+    privateDNSZoneIds: !empty(blobPrivateDnsZoneResourceId) ? [blobPrivateDnsZoneResourceId] : []
     tags: tags[?'Microsoft.Network/privateEndpoints'] ?? {}
   }
 }

@@ -84,37 +84,37 @@ param createAzureBackupZone bool = false
 param azureRecoveryServicesGeoCode string = ''
 
 @description('Optional. The Resource Id of the existing Azure Backup Private DNS Zone.')
-param azureBackupZoneId string = ''
+param backupPrivateDnsZoneResourceId string = ''
 
 @description('Optional. Determines if the Azure Blob Storage private DNS zone should be created.')
 param createAzureBlobZone bool = false
 
 @description('Optional. The Resource Id of the existing Azure Blob Storage Private DNS Zone.')
-param azureBlobZoneId string = ''
+param blobPrivateDnsZoneResourceId string = ''
 
 @description('Optional. Determines if the Azure Files Storage private DNS zone should be created.')
 param createAzureFilesZone bool = false
 
 @description('Optional. The Resource Id of the existing Azure Files Storage Private DNS Zone.')
-param azureFilesZoneId string = ''
+param filePrivateDnsZoneResourceId string = ''
 
 @description('Optional. Determines if the Azure Queue Storage private DNS zone should be created.')
 param createAzureQueueZone bool = false
 
 @description('Optional. The Resource Id of the existing Azure Queue Storage Private DNS Zone.')
-param azureQueueZoneId string = ''
+param queuePrivateDnsZoneResourceId string = ''
 
 @description('Optional. Determines if the Azure Table Storage private DNS zone should be created.')
 param createAzureTableZone bool = false
 
 @description('Optional. The Resource Id of the existing Azure Table Storage Private DNS Zone.')
-param azureTableZoneId string = ''
+param tablePrivateDnsZoneResourceId string = ''
 
 @description('Optional. Determines if the Azure Key Vault private DNS zone should be created.')
 param createAzureKeyVaultZone bool = false
 
 @description('Optional. The Resource Id of the existing Azure Key Vault Private DNS Zone.')
-param azureKeyVaultZoneId string = ''
+param vaultPrivateDnsZoneResourceId string = ''
 
 @description('Optional. Determines if the AVD feed private DNS zone should be created.')
 param createAvdFeedZone bool = false
@@ -132,7 +132,7 @@ param avdGlobalFeedZoneId string = ''
 param createAzureWebAppZone bool = false
 
 @description('Optional. The Resource Id of the existing Azure Web App Private DNS Zone.')
-param azureWebAppZoneId string = ''
+param websitesPrivateDnsZoneResourceId string = ''
 
 @description('Optional. Determines if the private DNS zones should be linked to a new virtual network.')
 param linkPrivateDnsZonesToNewVnet bool = false
@@ -178,38 +178,38 @@ var privateDnsZoneSuffixes_Backup = {
 
 var backupPrivateDnsZone = createAzureBackupZone ? startsWith(cloud, 'us') ? 'privatelink.${recoveryServicesGeo}.backup.windowsazure.${cloudSuffix}' : 'privatelink.${recoveryServicesGeo}.backup.windowsazure.${privateDnsZoneSuffixes_Backup[environment().name]}' : ''
 var blobPrivateDnsZone = createAzureBlobZone ? 'privatelink.blob.${environment().suffixes.storage}' : ''
-var filesPrivateDnsZone = createAzureFilesZone ? 'privatelink.file.${environment().suffixes.storage}' : ''
+var filePrivateDnsZone = createAzureFilesZone ? 'privatelink.file.${environment().suffixes.storage}' : ''
 var queuePrivateDnsZone = createAzureQueueZone ? 'privatelink.queue.${environment().suffixes.storage}' : ''
 var tablePrivateDnsZone = createAzureTableZone ? 'privatelink.table.${environment().suffixes.storage}' : ''
-var keyVaultPrivateDnsZone = createAzureKeyVaultZone ? 'privatelink${replace(environment().suffixes.keyvaultDns, 'vault', 'vaultcore')}' : ''
+var vaultPrivateDnsZone = createAzureKeyVaultZone ? 'privatelink${replace(environment().suffixes.keyvaultDns, 'vault', 'vaultcore')}' : ''
 var avdFeedPrivateDnsZone = createAvdFeedZone ? startsWith(cloud, 'us') ? 'privatelink.wvd.${cloudSuffix}' : privateDnsZones_AzureVirtualDesktop[environment().name] : ''
 var avdGlobalFeedPrivateDnsZone = createAvdGlobalFeedZone ? startsWith(cloud, 'us') ? 'privatelink-global.wvd.${cloudSuffix}' : privateDnsZones_AzureVirtualDesktopGlobalFeed[environment().name] : ''
-var webAppPrivateDnsZone = createAzureWebAppZone ? startsWith(cloud, 'us') ? 'privatelink.azurewebsites.${cloudSuffix}' : 'privatelink.azurewebsites.${privateDnsZoneSuffixes_AzureWebApps[environment().name]}' : ''
+var websitesPrivateDnsZone = createAzureWebAppZone ? startsWith(cloud, 'us') ? 'privatelink.azurewebsites.${cloudSuffix}' : 'privatelink.azurewebsites.${privateDnsZoneSuffixes_AzureWebApps[environment().name]}' : ''
 
 var privateDnsZones = [
   backupPrivateDnsZone
   blobPrivateDnsZone
-  filesPrivateDnsZone
+  filePrivateDnsZone
   queuePrivateDnsZone
   tablePrivateDnsZone
-  keyVaultPrivateDnsZone
+  vaultPrivateDnsZone
   avdFeedPrivateDnsZone
   avdGlobalFeedPrivateDnsZone
-  webAppPrivateDnsZone
+  websitesPrivateDnsZone
 ]
 
 var dedupedPrivateDnsZones = union(privateDnsZones, privateDnsZones)
 
 var existingPrivateDnsZones = [
-  azureBackupZoneId
-  azureBlobZoneId
-  azureFilesZoneId
-  azureQueueZoneId
-  azureTableZoneId
-  azureKeyVaultZoneId
+  backupPrivateDnsZoneResourceId
+  blobPrivateDnsZoneResourceId
+  filePrivateDnsZoneResourceId
+  queuePrivateDnsZoneResourceId
+  tablePrivateDnsZoneResourceId
+  vaultPrivateDnsZoneResourceId
   avdFeedZoneId
   avdGlobalFeedZoneId
-  azureWebAppZoneId
+  websitesPrivateDnsZoneResourceId
 ]
 
 var dedupedExistingPrivateDnsZones = union(existingPrivateDnsZones, existingPrivateDnsZones)
@@ -265,13 +265,13 @@ output subnetResourceIds array = deployVnet ? vnetResources!.outputs.subnetResou
 
 @description('Effective private DNS zone resource IDs, whether zones were created by this deployment or supplied as existing resources.')
 output privateDnsZoneResourceIds object = {
-  azureBackup: createAzureBackupZone ? '/subscriptions/${privateDNSZonesSubscriptionId}/resourceGroups/${privateDNSZonesResourceGroupName}/providers/Microsoft.Network/privateDnsZones/${backupPrivateDnsZone}' : azureBackupZoneId
-  azureBlob: createAzureBlobZone ? '/subscriptions/${privateDNSZonesSubscriptionId}/resourceGroups/${privateDNSZonesResourceGroupName}/providers/Microsoft.Network/privateDnsZones/${blobPrivateDnsZone}' : azureBlobZoneId
-  azureFiles: createAzureFilesZone ? '/subscriptions/${privateDNSZonesSubscriptionId}/resourceGroups/${privateDNSZonesResourceGroupName}/providers/Microsoft.Network/privateDnsZones/${filesPrivateDnsZone}' : azureFilesZoneId
-  azureQueue: createAzureQueueZone ? '/subscriptions/${privateDNSZonesSubscriptionId}/resourceGroups/${privateDNSZonesResourceGroupName}/providers/Microsoft.Network/privateDnsZones/${queuePrivateDnsZone}' : azureQueueZoneId
-  azureTable: createAzureTableZone ? '/subscriptions/${privateDNSZonesSubscriptionId}/resourceGroups/${privateDNSZonesResourceGroupName}/providers/Microsoft.Network/privateDnsZones/${tablePrivateDnsZone}' : azureTableZoneId
-  azureKeyVault: createAzureKeyVaultZone ? '/subscriptions/${privateDNSZonesSubscriptionId}/resourceGroups/${privateDNSZonesResourceGroupName}/providers/Microsoft.Network/privateDnsZones/${keyVaultPrivateDnsZone}' : azureKeyVaultZoneId
+  backup: createAzureBackupZone ? '/subscriptions/${privateDNSZonesSubscriptionId}/resourceGroups/${privateDNSZonesResourceGroupName}/providers/Microsoft.Network/privateDnsZones/${backupPrivateDnsZone}' : backupPrivateDnsZoneResourceId
+  blob: createAzureBlobZone ? '/subscriptions/${privateDNSZonesSubscriptionId}/resourceGroups/${privateDNSZonesResourceGroupName}/providers/Microsoft.Network/privateDnsZones/${blobPrivateDnsZone}' : blobPrivateDnsZoneResourceId
+  file: createAzureFilesZone ? '/subscriptions/${privateDNSZonesSubscriptionId}/resourceGroups/${privateDNSZonesResourceGroupName}/providers/Microsoft.Network/privateDnsZones/${filePrivateDnsZone}' : filePrivateDnsZoneResourceId
+  queue: createAzureQueueZone ? '/subscriptions/${privateDNSZonesSubscriptionId}/resourceGroups/${privateDNSZonesResourceGroupName}/providers/Microsoft.Network/privateDnsZones/${queuePrivateDnsZone}' : queuePrivateDnsZoneResourceId
+  table: createAzureTableZone ? '/subscriptions/${privateDNSZonesSubscriptionId}/resourceGroups/${privateDNSZonesResourceGroupName}/providers/Microsoft.Network/privateDnsZones/${tablePrivateDnsZone}' : tablePrivateDnsZoneResourceId
+  vault: createAzureKeyVaultZone ? '/subscriptions/${privateDNSZonesSubscriptionId}/resourceGroups/${privateDNSZonesResourceGroupName}/providers/Microsoft.Network/privateDnsZones/${vaultPrivateDnsZone}' : vaultPrivateDnsZoneResourceId
   avdFeed: createAvdFeedZone ? '/subscriptions/${privateDNSZonesSubscriptionId}/resourceGroups/${privateDNSZonesResourceGroupName}/providers/Microsoft.Network/privateDnsZones/${avdFeedPrivateDnsZone}' : avdFeedZoneId
   avdGlobalFeed: createAvdGlobalFeedZone ? '/subscriptions/${privateDNSZonesSubscriptionId}/resourceGroups/${privateDNSZonesResourceGroupName}/providers/Microsoft.Network/privateDnsZones/${avdGlobalFeedPrivateDnsZone}' : avdGlobalFeedZoneId
-  azureWebApp: createAzureWebAppZone ? '/subscriptions/${privateDNSZonesSubscriptionId}/resourceGroups/${privateDNSZonesResourceGroupName}/providers/Microsoft.Network/privateDnsZones/${webAppPrivateDnsZone}' : azureWebAppZoneId
+  websites: createAzureWebAppZone ? '/subscriptions/${privateDNSZonesSubscriptionId}/resourceGroups/${privateDNSZonesResourceGroupName}/providers/Microsoft.Network/privateDnsZones/${websitesPrivateDnsZone}' : websitesPrivateDnsZoneResourceId
 }

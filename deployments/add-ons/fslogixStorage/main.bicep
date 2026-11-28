@@ -1,6 +1,6 @@
 targetScope = 'subscription'
 
-import { publicNetworkAccessMode } from '../../shared/modules/orchestration/networking/functions.bicep'
+import { servicePublicNetworkAccessMode } from '../../shared/modules/orchestration/networking/functions.bicep'
 import { entraGroupType } from '../../shared/modules/resourceModules/types/identityTypes.bicep'
 import { fslogixNames, sharedServicesNames, resourceNameForType, namingConventionConfig } from '../../shared/modules/orchestration/naming/naming.bicep'
 import { fslogixShareNames } from '../../shared/modules/orchestration/fslogix/fslogix.bicep'
@@ -193,14 +193,10 @@ param storageIndex int = 1
 @description('Optional. Resource ID recorded as the Cost Management parent tag on deployed resources.')
 param parentResourceId string = ''
 
-@description('Optional. Deploy private endpoints for Azure Files storage accounts.')
-param privateEndpoint bool = true
 
-@description('Optional. Resource ID of the subnet used by Azure Files private endpoints.')
-param privateEndpointSubnetResourceId string = ''
 
 @description('Optional. Resource ID of the Azure Files private DNS zone.')
-param azureFilePrivateDnsZoneResourceId string = ''
+param filePrivateDnsZoneResourceId string = ''
 
 @description('Required when privateEndpoint is true. Naming convention for private endpoints. Supports RESOURCE, SUBRESOURCE, and VNETID tokens.')
 param privateEndpointNameConvention string = ''
@@ -208,11 +204,10 @@ param privateEndpointNameConvention string = ''
 @description('Required when privateEndpoint is true. Naming convention for private endpoint NICs. Supports RESOURCE, SUBRESOURCE, and VNETID tokens.')
 param privateEndpointNicNameConvention string = ''
 
-@description('Optional. IP addresses or CIDR blocks permitted through the Azure Files firewall.')
-param permittedIPs string[] = []
 
-@description('Optional. Azure Files public-access mode. Auto preserves legacy private-endpoint/IP inference; does not alter existing resources, NetApp Files or backup vault access.')
-param paasPublicNetworkAccess publicNetworkAccessMode = 'Auto'
+@description('Optional. Allowed subnet IDs for new Azure Files accounts with existing Storage service endpoints. Does not modify existing storage or subnets.')
+param storageServiceEndpointSubnetResourceIds string[] = []
+
 
 @description('Optional. Resource ID of an existing Log Analytics workspace for storage diagnostics.')
 param logAnalyticsWorkspaceResourceId string = ''
@@ -304,6 +299,18 @@ param remoteNetAppVolumeResourceIds string[] = []
 
 @description('Optional. Tags keyed by Azure resource type, matching the host pool deployment tag contract.')
 param tags object = {}
+
+@description('Optional. Public endpoint policy for newly created storage resources. Independent of private endpoints and other service families.')
+param storagePublicNetworkAccess servicePublicNetworkAccessMode = 'Disabled'
+
+@description('Optional. Public IP addresses/CIDRs allowed for newly created storage resources. Retained in all access modes; does not grant authorization.')
+param storagePermittedIPs string[] = []
+
+@description('Optional. Deploy private endpoints for newly created storage resources. Does not set the public endpoint policy.')
+param storagePrivateEndpoint bool = true
+
+@description('Conditional. Existing private endpoint subnet resource ID; required when storagePrivateEndpoint is true. Does not modify the subnet.')
+param storagePrivateEndpointSubnetResourceId string = ''
 
 var storageSolution = fslogixStorageService
 var effectiveProfileStorageTier = storageSolution != 'AzureNetAppFiles' || (fslogixProfileStorageRedundancy == 'LocallyRedundant' && empty(fslogixProfileStorageAccountNamePrefix) && fslogixProfileStorageBillingModel == 'Legacy' && fslogixOfficeStorageBillingModel == 'Inherit' && fslogixProfileProvisionedIops == 0 && fslogixProfileProvisionedThroughputMiBps == 0 && fslogixOfficeProvisionedIops == 0 && fslogixOfficeProvisionedThroughputMiBps == 0 && fslogixOfficeStorageTier == 'Inherit' && fslogixOfficeStorageRedundancy == 'Inherit' && fslogixOfficeShareSizeInGB == 0)
@@ -530,7 +537,7 @@ module backupResourceGroup '../../shared/modules/resourceModules/resources/resou
 
 // Snapshot data remains in Azure Files; this metadata vault does not require a backup private endpoint.
 // Existing vaults and policies are never modified by this add-on.
-module fslogixBackupVault '../../shared/modules/resourceModules/recoveryServices/fslogixBackupVault.bicep' = if (createFSLogixBackupVault) {
+module fslogixBackupVault '../../shared/modules/orchestration/recoveryServices/fslogixBackupVault.bicep' = if (createFSLogixBackupVault) {
   params: {
     createVault: true
     manageBackupPolicy: true
@@ -538,6 +545,7 @@ module fslogixBackupVault '../../shared/modules/resourceModules/recoveryServices
     resourceGroupOperations: effectiveBackupResourceGroupName
     location: location
     logAnalyticsWorkspaceResourceId: logAnalyticsWorkspaceResourceId
+    publicNetworkAccess: 'Enabled'
     privateEndpoint: false
     privateEndpointNameConv: effectivePrivateEndpointNameConvention
     privateEndpointNICNameConv: effectivePrivateEndpointNicNameConvention
@@ -562,7 +570,7 @@ module fslogix '../../shared/modules/orchestration/fslogix/fslogix.bicep' = {
     createNetAppAccount: netAppDeploymentMode == 'CreateAll'
     createNetAppCapacityPool: netAppDeploymentMode != 'ExistingAccountAndPool'
     appUpdateUserAssignedIdentityResourceId: appUpdateUserAssignedIdentityResourceId
-    azureFilePrivateDnsZoneResourceId: azureFilePrivateDnsZoneResourceId
+    filePrivateDnsZoneResourceId: filePrivateDnsZoneResourceId
     deploymentUserAssignedIdentityClientId: !deploymentVirtualMachineRequired
       ? ''
       : externalDeploymentConfigurationIsValid
@@ -611,12 +619,13 @@ module fslogix '../../shared/modules/orchestration/fslogix/fslogix.bicep' = {
     netAppCapacityPoolName: effectiveNetAppCapacityPoolName
     netAppVolumesSubnetResourceId: netAppVolumesSubnetResourceId
     ouPath: organizationalUnitPath
-    permittedIPs: permittedIPs
-    paasPublicNetworkAccess: paasPublicNetworkAccess
-    privateEndpoint: privateEndpoint
+    storagePermittedIPs: storagePermittedIPs
+    storageServiceEndpointSubnetResourceIds: storageServiceEndpointSubnetResourceIds
+    storagePublicNetworkAccess: storagePublicNetworkAccess
+    storagePrivateEndpoint: storagePrivateEndpoint
     privateEndpointNameConv: effectivePrivateEndpointNameConvention
     privateEndpointNICNameConv: effectivePrivateEndpointNicNameConvention
-    privateEndpointSubnetResourceId: privateEndpointSubnetResourceId
+    storagePrivateEndpointSubnetResourceId: storagePrivateEndpointSubnetResourceId
     recoveryServicesVaultResourceId: effectiveRecoveryServicesVaultResourceId
     resourceGroupDeployment: effectiveDeploymentResourceGroupName
     resourceGroupStorage: effectiveStorageResourceGroupName

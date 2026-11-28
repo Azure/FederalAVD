@@ -3,7 +3,7 @@
 | Producer | Output | Consumer |
 | --- | --- | --- |
 | Networking | `subnetResourceIds` | Host Pool and add-on subnet parameters, selected by the output record's `purpose` property |
-| Networking | `privateDnsZoneResourceIds` | AVD Shared Services, Image Management, Host Pool, and add-on private DNS zone parameters |
+| Networking | `privateDnsZoneResourceIds` (`blob`, `file`, `queue`, `table`, `vault`, `websites`, `backup`) | Matching namespace-based `*PrivateDnsZoneResourceId` inputs in AVD Shared Services, Image Management, Host Pool, and add-ons; AVD feed/global-feed keys remain separate |
 | AVD Shared Services (`sharedServices`) | `secretsKeyVaultResourceId` | Standard Host Pool `existingCredentialsKeyVaultResourceId`; Automated Host Pool `credentialsKeyVaultResourceId` (required) |
 | AVD Shared Services (`sharedServices`) | `encryptionKeyVaultResourceId` | Image Management `encryptionKeyVaultResourceId`; Host Pool `existingEncryptionKeyVaultResourceId` |
 | AVD Shared Services (`sharedServices`) | `logAnalyticsWorkspaceResourceId` | Image Management `logAnalyticsWorkspaceResourceId`; Host Pool `existingLogAnalyticsWorkspaceResourceId` |

@@ -4,6 +4,18 @@ metadata description = 'The Image Validation add-on deploys an Azure Function Ap
 targetScope = 'subscription'
 
 import { artifactCustomizationType } from '../../shared/modules/orchestration/customizations/types.bicep'
+import { servicePublicNetworkAccessMode, resolveNetworkAccess, serviceEndpointSubnetIds } from '../../shared/modules/orchestration/networking/functions.bicep'
+
+
+
+@description('Optional. Allowed runtime-storage subnet IDs with existing Storage service endpoints. Does not modify subnets.')
+param storageServiceEndpointSubnetResourceIds string[] = []
+
+@description('Optional. Allowed encryption-vault subnet IDs with existing Microsoft.KeyVault service endpoints. Does not modify the consumed credentials vault or subnets.')
+param keyVaultServiceEndpointSubnetResourceIds string[] = []
+
+@description('Optional. Allowed Function App inbound subnet IDs with existing Microsoft.Web service endpoints. Independent of outbound VNet integration.')
+param functionAppServiceEndpointSubnetResourceIds string[] = []
 
 @description('Optional. Enable accelerated networking for the validation VM network interface.')
 param acceleratedNetworking bool = true
@@ -35,14 +47,14 @@ param artifactsContainerUri string = ''
 @description('Optional. Resource ID of the user-assigned identity used to access the customization artifacts.')
 param artifactsUserAssignedIdentityResourceId string = ''
 
-@description('Required for private mode. Existing target-cloud blob private DNS zone ID, linked to the integration VNet.')
-param azureBlobPrivateDnsZoneResourceId string = ''
+@description('Required when storagePrivateEndpoint is true. Existing target-cloud blob private DNS zone ID, linked to the integration VNet.')
+param blobPrivateDnsZoneResourceId string = ''
 
-@description('Required for private mode. Existing target-cloud Function App private DNS zone ID, linked to the integration VNet.')
-param azureFunctionAppPrivateDnsZoneResourceId string = ''
+@description('Required when functionAppPrivateEndpoint is true. Existing target-cloud Function App private DNS zone ID, linked to the integration VNet.')
+param websitesPrivateDnsZoneResourceId string = ''
 
-@description('Required for private mode. Existing target-cloud Key Vault private DNS zone ID, linked to the integration VNet.')
-param azureKeyVaultPrivateDnsZoneResourceId string = ''
+@description('Required when keyVaultPrivateEndpoint is true. Existing target-cloud Key Vault private DNS zone ID, linked to the integration VNet.')
+param vaultPrivateDnsZoneResourceId string = ''
 
 @description('Optional. Enable boot diagnostics for the validation VM.')
 param bootDiagnostics bool = true
@@ -84,13 +96,6 @@ param diskName string
 @description('Optional. Enable encryption at host for the validation VM.')
 param encryptionAtHost bool = true
 
-@description('Optional. Endpoint type for the PaaS services.')
-@allowed([
-  'private'
-  'public'
-  'service'
-])
-param endpointType string = 'private'
 
 @description('Required for private mode. Existing Microsoft.Web/serverFarms-delegated integration subnet in the app region, separate from the endpoint subnet.')
 param functionAppDelegatedSubnetResourceId string = ''
@@ -168,7 +173,7 @@ param storageAccountName string
 
 @description('Required. Existing subnet resource ID for the validation VM, separate from Function App integration networking.')
 @minLength(1)
-param subnetResourceId string
+param virtualMachineSubnetResourceId string
 
 @description('Optional. Tags applied to all resources that support tags.')
 param tags object = {}
@@ -207,18 +212,61 @@ param virtualMachineSize string
 @description('Optional. Enable vTPM for the validation VM.')
 param vTpm bool = true
 
-var integrationSubnetId = contains(['private', 'service'], endpointType) && empty(trim(functionAppDelegatedSubnetResourceId))
-  ? fail('Private and service modes require functionAppDelegatedSubnetResourceId.')
-  : functionAppDelegatedSubnetResourceId
-var blobDnsZoneId = endpointType == 'private' && empty(trim(azureBlobPrivateDnsZoneResourceId))
-  ? fail('Private mode requires azureBlobPrivateDnsZoneResourceId.')
-  : azureBlobPrivateDnsZoneResourceId
-var appDnsZoneId = endpointType == 'private' && empty(trim(azureFunctionAppPrivateDnsZoneResourceId))
-  ? fail('Private mode requires azureFunctionAppPrivateDnsZoneResourceId.')
-  : azureFunctionAppPrivateDnsZoneResourceId
-var vaultDnsZoneId = endpointType == 'private' && empty(trim(azureKeyVaultPrivateDnsZoneResourceId))
-  ? fail('Private mode requires azureKeyVaultPrivateDnsZoneResourceId.')
-  : azureKeyVaultPrivateDnsZoneResourceId
+@description('Optional. Public endpoint policy for newly created storage resources. Independent of private endpoints and other service families.')
+param storagePublicNetworkAccess servicePublicNetworkAccessMode = 'Disabled'
+
+@description('Optional. Public IP addresses/CIDRs allowed for newly created storage resources. Retained in all access modes; does not grant authorization.')
+param storagePermittedIPs string[] = []
+
+@description('Optional. Deploy private endpoints for newly created storage resources. Does not set the public endpoint policy.')
+param storagePrivateEndpoint bool = true
+
+@description('Conditional. Existing private endpoint subnet resource ID; required when storagePrivateEndpoint is true. Does not modify the subnet.')
+param storagePrivateEndpointSubnetResourceId string = ''
+
+@description('Optional. Public endpoint policy for newly created keyVault resources. Independent of private endpoints and other service families.')
+param keyVaultPublicNetworkAccess servicePublicNetworkAccessMode = 'Disabled'
+
+@description('Optional. Public IP addresses/CIDRs allowed for newly created keyVault resources. Retained in all access modes; does not grant authorization.')
+param keyVaultPermittedIPs string[] = []
+
+@description('Optional. Deploy private endpoints for newly created keyVault resources. Does not set the public endpoint policy.')
+param keyVaultPrivateEndpoint bool = true
+
+@description('Conditional. Existing private endpoint subnet resource ID; required when keyVaultPrivateEndpoint is true. Does not modify the subnet.')
+param keyVaultPrivateEndpointSubnetResourceId string = ''
+
+@description('Optional. Public endpoint policy for newly created functionApp resources. Independent of private endpoints and other service families.')
+param functionAppPublicNetworkAccess servicePublicNetworkAccessMode = 'Disabled'
+
+@description('Optional. Public IP addresses/CIDRs allowed for newly created functionApp resources. Retained in all access modes; does not grant authorization.')
+param functionAppPermittedIPs string[] = []
+
+@description('Optional. Deploy private endpoints for newly created functionApp resources. Does not set the public endpoint policy.')
+param functionAppPrivateEndpoint bool = true
+
+@description('Conditional. Existing private endpoint subnet resource ID; required when functionAppPrivateEndpoint is true. Does not modify the subnet.')
+param functionAppPrivateEndpointSubnetResourceId string = ''
+
+var integrationSubnetId = functionAppDelegatedSubnetResourceId
+var effectiveKeyVaultPermittedIPs = filter(keyVaultPermittedIPs, ip => !empty(trim(ip)))
+var keyVaultSubnetIds = serviceEndpointSubnetIds(keyVaultServiceEndpointSubnetResourceIds)
+var keyVaultNetworkAccess = resolveNetworkAccess(keyVaultPublicNetworkAccess, keyVaultPrivateEndpoint, !empty(effectiveKeyVaultPermittedIPs) || !empty(keyVaultSubnetIds))
+var keyVaultNetworkAcls = {
+  bypass: 'AzureServices'
+  defaultAction: keyVaultNetworkAccess.defaultAction
+  ipRules: map(effectiveKeyVaultPermittedIPs, ip => { value: endsWith(trim(ip), '/32') ? replace(trim(ip), '/32', '') : trim(ip) })
+  virtualNetworkRules: map(keyVaultSubnetIds, id => { id: id, ignoreMissingVnetServiceEndpoint: false })
+}
+var blobDnsZoneId = storagePrivateEndpoint && empty(trim(blobPrivateDnsZoneResourceId))
+  ? fail('storagePrivateEndpoint requires blobPrivateDnsZoneResourceId.')
+  : blobPrivateDnsZoneResourceId
+var appDnsZoneId = functionAppPrivateEndpoint && empty(trim(websitesPrivateDnsZoneResourceId))
+  ? fail('functionAppPrivateEndpoint requires websitesPrivateDnsZoneResourceId.')
+  : websitesPrivateDnsZoneResourceId
+var vaultDnsZoneId = keyVaultPrivateEndpoint && empty(trim(vaultPrivateDnsZoneResourceId))
+  ? fail('keyVaultPrivateEndpoint requires vaultPrivateDnsZoneResourceId.')
+  : vaultPrivateDnsZoneResourceId
 var integrityMonitoringValidation = integrityMonitoring && (!secureBoot || !vTpm) && securityType != 'Standard'
   ? fail('Integrity monitoring requires Secure Boot and vTPM to be enabled.')
   : integrityMonitoring
@@ -257,7 +305,7 @@ resource roleDefinition_subnetJoinAction 'Microsoft.Authorization/roleDefinition
     assignableScopes: union([
       subscription().id
     ], [
-      '/subscriptions/${split(subnetResourceId, '/')[2]}'
+      '/subscriptions/${split(virtualMachineSubnetResourceId, '/')[2]}'
     ])
     permissions: [
       {
@@ -275,7 +323,7 @@ module networkInterface '../../shared/modules/resourceModules/network/networkInt
     enableAcceleratedNetworking: acceleratedNetworking
     location: location
     name: networkInterfaceName
-    subnetResourceId: subnetResourceId
+    subnetResourceId: virtualMachineSubnetResourceId
     privateIPAddress: privateIPAddress
     privateIPAllocationMethod: 'Static'
     tags: tags[?'Microsoft.Network/networkInterfaces'] ?? {}
@@ -324,25 +372,13 @@ module keyVault '../../shared/modules/resourceModules/keyVault/vaults/deploy.bic
   params: {
     location: location
     name: keyVaultName
-    networkAcls: endpointType == 'service'
-      ? {
-          bypass: 'AzureServices'
-          defaultAction: 'Deny'
-          ipRules: []
-          virtualNetworkRules: [
-            {
-              id: subnetResourceId
-              ignoreMissingVnetServiceEndpoint: false
-            }
-          ]
-        }
-      : {}
-    publicNetworkAccess: endpointType == 'private' ? 'Disabled' : 'Enabled'
+    networkAcls: keyVaultNetworkAcls
+    publicNetworkAccess: keyVaultNetworkAccess.publicNetworkAccess
     tags: tags[?'Microsoft.KeyVault/vaults'] ?? {}
   }
 }
 
-module keyVaultPrivateEndpoint '../../shared/modules/resourceModules/network/privateEndpoints/deploy.bicep' = if (endpointType == 'private') {
+module keyVaultPrivateEndpointDeployment '../../shared/modules/resourceModules/network/privateEndpoints/deploy.bicep' = if (keyVaultPrivateEndpoint) {
   scope: rg
   params: {
     groupId: 'vault'
@@ -352,7 +388,7 @@ module keyVaultPrivateEndpoint '../../shared/modules/resourceModules/network/pri
       vaultDnsZoneId
     ]
     privateLinkServiceId: keyVault!.outputs.resourceId
-    subnetResourceId: subnetResourceId
+    subnetResourceId: keyVaultPrivateEndpointSubnetResourceId
     tags: tags[?'Microsoft.Network/privateEndpoints'] ?? {}
   }
 }
@@ -422,8 +458,8 @@ module functionApp '../../shared/modules/orchestration/functionApp/functionApp.b
   scope: rg
   params: {
     applicationInsightsName: applicationInsightsName
-    azureBlobPrivateDnsZoneResourceId: blobDnsZoneId
-    azureFunctionAppPrivateDnsZoneResourceId: appDnsZoneId
+    blobPrivateDnsZoneResourceId: blobDnsZoneId
+    websitesPrivateDnsZoneResourceId: appDnsZoneId
     enableApplicationInsights: !empty(logAnalyticsWorkspaceResourceId)
     enableQueueStorage: false
     enableTableStorage: false
@@ -516,7 +552,7 @@ module functionApp '../../shared/modules/orchestration/functionApp/functionApp.b
       }
       {
         name: 'subnetResourceId'
-        value: subnetResourceId
+        value: virtualMachineSubnetResourceId
       }
       {
         name: 'subscriptionId'
@@ -557,15 +593,18 @@ module functionApp '../../shared/modules/orchestration/functionApp/functionApp.b
     keyManagementStorageAccounts: 'CustomerManagedHSM'
     location: location
     logAnalyticsWorkspaceResourceId: logAnalyticsWorkspaceResourceId
-    paasPublicNetworkAccess: endpointType == 'private'
-      ? 'Disabled'
-      : endpointType == 'service'
-        ? 'EnabledWithRestrictions'
-        : 'Enabled'
-    privateEndpoint: endpointType == 'private' ? true : false
+    storagePublicNetworkAccess: storagePublicNetworkAccess
+    functionAppPublicNetworkAccess: functionAppPublicNetworkAccess
+    storagePermittedIPs: storagePermittedIPs
+    functionAppPermittedIPs: functionAppPermittedIPs
+    storageServiceEndpointSubnetResourceIds: storageServiceEndpointSubnetResourceIds
+    functionAppServiceEndpointSubnetResourceIds: functionAppServiceEndpointSubnetResourceIds
+    storagePrivateEndpoint: storagePrivateEndpoint
+    functionAppPrivateEndpoint: functionAppPrivateEndpoint
     privateEndpointNameConv: 'pe-RESOURCE-SUBRESOURCE'
     privateEndpointNICNameConv: 'nic-pe-RESOURCE-SUBRESOURCE'
-    privateEndpointSubnetResourceId: subnetResourceId
+    storagePrivateEndpointSubnetResourceId: storagePrivateEndpointSubnetResourceId
+    functionAppPrivateEndpointSubnetResourceId: functionAppPrivateEndpointSubnetResourceId
     privateLinkScopeResourceId: privateLinkScopeResourceId
     serverFarmId: empty(appServicePlanResourceId) ? serverFarm!.outputs.hostingPlanId : appServicePlanResourceId
     storageAccountName: storageAccountName
@@ -589,7 +628,7 @@ module resourceGroupRoleAssignment '../../shared/modules/resourceModules/authori
 
 // Role assignment gives the subnet join action to the function app to allow the addition of network interfaces to the virtual network (least privilege access)
 module virtualNetworkRoleAssignment '../../shared/modules/resourceModules/network/virtualNetworks/roleAssignment.bicep' = {
-  scope: resourceGroup(split(subnetResourceId, '/')[2], split(subnetResourceId, '/')[4])
+  scope: resourceGroup(split(virtualMachineSubnetResourceId, '/')[2], split(virtualMachineSubnetResourceId, '/')[4])
   params: {
     assignments: [
       {
@@ -598,7 +637,7 @@ module virtualNetworkRoleAssignment '../../shared/modules/resourceModules/networ
         roleDefinitionId: roleDefinition_subnetJoinAction.id
       }
     ]
-    virtualNetworkName: split(subnetResourceId, '/')[8]
+    virtualNetworkName: split(virtualMachineSubnetResourceId, '/')[8]
   }
 }
 

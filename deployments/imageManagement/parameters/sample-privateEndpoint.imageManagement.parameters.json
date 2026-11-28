@@ -8,20 +8,21 @@
     "deployBuildLogsStorageAccount": {
       "value": true
     },
-    "storageNetworkAccess": {
-      "value": "PrivateEndpoint"
-    },
-    "paasPublicNetworkAccess": {
-      "value": "Disabled"
+    "paasNetworking": {
+      "value": { "privateEndpoint": true, "publicNetworkAccess": "Disabled" }
     },
     "storageAllowSharedKeyAccess": {
       "value": false
     },
-    "privateEndpointSubnetResourceId": {
-      "value": "/subscriptions/<subscriptionId>/resourceGroups/<networkResourceGroup>/providers/Microsoft.Network/virtualNetworks/<vnetName>/subnets/<subnetName>"
+    "privateEndpointSubnetResourceIds": {
+      "value": {
+        "sharedResources": "/subscriptions/<subscriptionId>/resourceGroups/<networkResourceGroup>/providers/Microsoft.Network/virtualNetworks/<vnetName>/subnets/<subnetName>"
+      }
     },
-    "azureBlobPrivateDnsZoneResourceId": {
-      "value": "/subscriptions/<subscriptionId>/resourceGroups/<dnsResourceGroup>/providers/Microsoft.Network/privateDnsZones/privatelink.blob.core.usgovcloudapi.net"
+    "privateDnsZoneResourceIds": {
+      "value": {
+        "blob": "/subscriptions/<subscriptionId>/resourceGroups/<dnsResourceGroup>/providers/Microsoft.Network/privateDnsZones/privatelink.blob.core.usgovcloudapi.net"
+      }
     },
     "tags": {
       "value": {}

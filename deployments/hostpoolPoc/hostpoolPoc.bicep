@@ -3,6 +3,12 @@ targetScope = 'subscription'
 import { entraGroupType } from '../shared/modules/resourceModules/types/identityTypes.bicep'
 import { hostPoolNames } from '../shared/modules/orchestration/naming/naming.bicep'
 import { namingPolicy, resourceName } from '../shared/modules/orchestration/naming/internal.bicep'
+import { servicePublicNetworkAccessMode } from '../shared/modules/orchestration/networking/functions.bicep'
+
+
+
+@description('Optional. Additional allowed subnet IDs with existing Storage service endpoints. Restricted storage also enables the endpoint on the new PoC host subnet and allows it; existing subnets are not modified.')
+param storageServiceEndpointSubnetResourceIds string[] = []
 
 @maxLength(16)
 @description('Required. Short name identifying the disposable PoC deployment.')
@@ -53,10 +59,17 @@ param sessionHostSubnetAddressPrefix string = '10.250.0.0/24'
 @description('Optional. Key/value metadata applied to supported PoC resources.')
 param tags object = {}
 
+@description('Optional. Public endpoint policy for newly created storage resources. Independent of private endpoints and other service families.')
+param storagePublicNetworkAccess servicePublicNetworkAccessMode = 'Disabled'
+
+@description('Optional. Public IP addresses/CIDRs allowed for newly created storage resources. Retained in all access modes; does not grant authorization.')
+param storagePermittedIPs string[] = []
+
 var location = deployment().location
 var hpBaseName = toLower(identifier)
 var sessionHostCount = deployFSLogixStorage ? 2 : 1
 var fslogixFileShareNames = ['profile-containers']
+var configureStorageServiceEndpoint = deployFSLogixStorage && storagePublicNetworkAccess == 'EnabledWithRestrictions'
 
 var naming = hostPoolNames(namingPolicy.defaults, hpBaseName, {
   subscriptionId: subscription().subscriptionId
@@ -153,11 +166,11 @@ module network '../networking/modules/vnet-sub-module.bicep' = {
       virtualNetworkAddressPrefix
     ]
     subnets: [
-      {
+      union({
         name: sessionHostSubnetName
         addressPrefix: sessionHostSubnetAddressPrefix
         purpose: 'hosts'
-      }
+      }, configureStorageServiceEndpoint ? { serviceEndpoints: [{ service: 'Microsoft.Storage' }] } : {})
     ]
     defaultRouting: 'nat'
     includeAvdBypassRoutes: false
@@ -324,7 +337,7 @@ module fslogix '../shared/modules/orchestration/fslogix/fslogix.bicep' = if (dep
   params: {
     activeDirectoryConnection: false
     appUpdateUserAssignedIdentityResourceId: ''
-    azureFilePrivateDnsZoneResourceId: ''
+    filePrivateDnsZoneResourceId: ''
     deploymentUserAssignedIdentityClientId: ''
     deploymentVirtualMachineName: ''
     domainJoinUserPassword: ''
@@ -346,10 +359,10 @@ module fslogix '../shared/modules/orchestration/fslogix/fslogix.bicep' = if (dep
     netAppAccountName: naming.netAppAccountName
     netAppCapacityPoolName: naming.netAppCapacityPoolName
     ouPath: ''
-    privateEndpoint: false
+    storagePrivateEndpoint: false
     privateEndpointNameConv: naming.privateEndpointNameConv
     privateEndpointNICNameConv: naming.privateEndpointNICNameConv
-    privateEndpointSubnetResourceId: ''
+    storagePrivateEndpointSubnetResourceId: ''
     resourceGroupDeployment: ''
     resourceGroupStorage: resourceGroupName
     profileShareSizeInGB: 100
@@ -362,7 +375,9 @@ module fslogix '../shared/modules/orchestration/fslogix/fslogix.bicep' = if (dep
     profileStorageBillingModel: fslogixProfileStorageBillingModel
     profileStorageRedundancy: 'LocallyRedundant'
     storageSolution: 'AzureFiles'
-    permittedIPs: []
+    storagePermittedIPs: storagePermittedIPs
+    storagePublicNetworkAccess: storagePublicNetworkAccess
+    storageServiceEndpointSubnetResourceIds: union(storageServiceEndpointSubnetResourceIds, configureStorageServiceEndpoint ? [sessionHostSubnetResourceId] : [])
     tags: tags
     encryptionUserAssignedIdentityResourceId: ''
     fslogixSoftDeleteRetentionDays: 14
@@ -371,6 +386,7 @@ module fslogix '../shared/modules/orchestration/fslogix/fslogix.bicep' = if (dep
   }
   dependsOn: [
     resourceGroup
+    network
   ]
 }
 
@@ -454,11 +470,11 @@ module sessionHosts '../hostpools/modules/hosts/hosts.bicep' = {
     encryptionKeyVaultResourceId: ''
     encryptionKeyVaultUri: ''
     encryptionKeyName: ''
-    deployPrivateEndpoints: false
+    deployBackupPrivateEndpoints: false
     vaultPrivateEndpointSubnetResourceId: ''
-    azureBackupPrivateDnsZoneResourceId: ''
-    azureBlobPrivateDnsZoneResourceId: ''
-    azureQueuePrivateDnsZoneResourceId: ''
+    backupPrivateDnsZoneResourceId: ''
+    blobPrivateDnsZoneResourceId: ''
+    queuePrivateDnsZoneResourceId: ''
     privateEndpointNameConv: naming.privateEndpointNameConv
     privateEndpointNICNameConv: naming.privateEndpointNICNameConv
     logAnalyticsWorkspaceResourceId: logAnalyticsWorkspaceResourceId

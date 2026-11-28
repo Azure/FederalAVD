@@ -571,7 +571,7 @@ that composes only the lower-level modules required for its host-pool-specific d
 gallery image versions, because Image Management requires an existing encryption Key Vault.
 Also deploy Step 1 first whenever assigned policy requires a Log Analytics Workspace before
 diagnostic-enabled resources are created. See
-[Compliance — Log Analytics Workspace prerequisite](compliance.md#always-on-controls-no-configuration-required).
+[Compliance — Log Analytics Workspace prerequisite](compliance.md#built-in-and-default-security-capabilities).
 Use Step 1 by choice when multiple host pools or supporting components should share an AVD
 workspace, Key Vaults, monitoring, or the FSLogix Azure Files backup vault and policy under a
 separate lifecycle. Production does not require standalone Step 1 merely because those resources

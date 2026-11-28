@@ -31,7 +31,7 @@ Describe 'Image validation Portal form' {
         $outputs.imageVersionResourceId |
             Should -Be "[first(map(steps('virtualMachine').image.versionsApi.transformed.list, (item) => item.value))]"
         $outputs.keyVaultResourceId | Should -Be "[steps('virtualMachine').credentials.keyVault.id]"
-        $outputs.subnetResourceId | Should -Be "[steps('virtualMachine').network.subnet]"
+        $outputs.virtualMachineSubnetResourceId | Should -Be "[steps('virtualMachine').network.subnet]"
         $outputs.privateIPAddress | Should -Be "[steps('virtualMachine').network.privateIPAddress]"
         $outputs.virtualMachineSize | Should -Be "[steps('virtualMachine').general.size]"
         $outputs.integrityMonitoring |
@@ -51,38 +51,40 @@ Describe 'Image validation Portal form' {
         ($template.parameters.appServicePlanSku.allowedValues -contains 'P0v3') | Should -Be $true
     }
 
-    It 'uses the VM subnet for endpoints and selects integration for both private and service modes' {
+    It 'keeps outbound integration separate from service-specific private endpoints and DNS' {
         $network = $steps.functionApp.elements | Where-Object name -eq 'networkSettings'
-        $control = $network.elements | Where-Object name -eq 'networkAccess'
-        ($control.constraints.allowedValues.value -join ',') | Should -Be 'private,service,public'
-        $control.defaultValue | Should -Be 'Disable public access and use private access'
-        $form.view.outputs.parameters.endpointType | Should -Be "[steps('functionApp').networkSettings.networkAccess]"
+        $control = $network.elements | Where-Object name -eq 'enableVnetIntegration'
+        ($control.constraints.allowedValues.value -join ',') | Should -Be 'True,False'
+        $control.defaultValue | Should -Be 'Yes'
+        $form.view.outputs.parameters.PSObject.Properties.Name | Should -Not -Contain 'endpointType'
         $integration = $network.elements | Where-Object name -eq 'delegatedSubnet'
-        $integration.visible | Should -Be "[not(equals(steps('functionApp').networkSettings.networkAccess, 'public'))]"
+        $integration.visible | Should -Be "[steps('functionApp').networkSettings.enableVnetIntegration]"
         $integration.constraints.allowedValues | Should -Match 'microsoft.web/serverfarms'
         $form.view.outputs.parameters.functionAppDelegatedSubnetResourceId |
-            Should -Be "[if(not(equals(steps('functionApp').networkSettings.networkAccess, 'public')), steps('functionApp').networkSettings.delegatedSubnet, '')]"
+            Should -Be "[if(steps('functionApp').networkSettings.enableVnetIntegration, steps('functionApp').networkSettings.delegatedSubnet, '')]"
         ($form.view.outputs.parameters.PSObject.Properties.Name -contains 'privateEndpointSubnetResourceId') | Should -Be $false
-        $dns = $steps.functionApp.elements | Where-Object name -eq 'privateDnsZones'
-        $dns.visible | Should -Be "[equals(steps('functionApp').networkSettings.networkAccess, 'private')]"
         foreach ($binding in @(
-            @{ Parameter = 'azureBlobPrivateDnsZoneResourceId'; Control = 'azureBlobs' }
-            @{ Parameter = 'azureFunctionAppPrivateDnsZoneResourceId'; Control = 'azureFunctions' }
-            @{ Parameter = 'azureKeyVaultPrivateDnsZoneResourceId'; Control = 'keyVault' }
+            @{ Parameter = 'blobPrivateDnsZoneResourceId'; Control = 'blobPrivateDnsZone'; Family = 'storage' }
+            @{ Parameter = 'websitesPrivateDnsZoneResourceId'; Control = 'websitesPrivateDnsZone'; Family = 'functionApp' }
+            @{ Parameter = 'vaultPrivateDnsZoneResourceId'; Control = 'vaultPrivateDnsZone'; Family = 'keyVault' }
         )) {
+            $family = $binding.Family
+            $prefix = "steps('functionApp').${family}PrivateNetworking"
             $form.view.outputs.parameters.($binding.Parameter) |
-                Should -Be "[if(equals(steps('functionApp').networkSettings.networkAccess, 'private'), steps('functionApp').privateDnsZones.$($binding.Control), '')]"
+                Should -Be "[if(and(true, and($prefix.${family}PrivateEndpoint, $prefix.enablePrivateDNSIntegration)), $prefix.$($binding.Control), '')]"
+            $form.view.outputs.parameters."${family}PrivateEndpointSubnetResourceId" |
+                Should -Be "[if(and(true, $prefix.${family}PrivateEndpoint), $prefix.privateEndpointSubnet.id, '')]"
         }
     }
 
-    It 'clears disabled monitoring outputs and selects private monitoring only in private mode' {
+    It 'clears disabled monitoring outputs and gates private monitoring on outbound connectivity' {
         $form.view.outputs.parameters.logAnalyticsWorkspaceResourceId |
             Should -Be "[if(equals(steps('functionApp').monitoring.enableMonitoring, 'enabled'), steps('functionApp').monitoring.workspace.id, '')]"
         $form.view.outputs.parameters.privateLinkScopeResourceId |
-            Should -Be "[if(and(equals(steps('functionApp').monitoring.enableMonitoring, 'enabled'), equals(steps('functionApp').networkSettings.networkAccess, 'private')), steps('functionApp').monitoring.privateLinkScope.id, '')]"
+            Should -Be "[if(and(equals(steps('functionApp').monitoring.enableMonitoring, 'enabled'), steps('functionApp').networkSettings.enableVnetIntegration), steps('functionApp').monitoring.privateLinkScope.id, '')]"
         $monitoring = $steps.functionApp.elements | Where-Object name -eq 'monitoring'
         ($monitoring.elements | Where-Object name -eq 'privateLinkScope').visible |
-            Should -Be "[and(equals(steps('functionApp').monitoring.enableMonitoring, 'enabled'), equals(steps('functionApp').networkSettings.networkAccess, 'private'))]"
+            Should -Be "[and(equals(steps('functionApp').monitoring.enableMonitoring, 'enabled'), steps('functionApp').networkSettings.enableVnetIntegration)]"
     }
 
     It 'aligns artifact grid columns with the shared customization type and clears disabled customizations' {

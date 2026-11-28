@@ -8,16 +8,15 @@
     "deployBuildLogsStorageAccount": {
       "value": true
     },
-    "storageNetworkAccess": {
-      "value": "PublicEndpoint"
+    "paasNetworking": {
+      "value": {
+        "privateEndpoint": false,
+        "publicNetworkAccess": "EnabledWithRestrictions",
+        "storage": { "permittedIPs": ["<ipAddressOrCidr>"] }
+      }
     },
     "storageAllowSharedKeyAccess": {
       "value": false
-    },
-    "storagePermittedIPs": {
-      "value": [
-        "<ipAddressOrCidr>"
-      ]
     },
     "keyManagementStorageAccounts": {
       "value": "CustomerManaged"

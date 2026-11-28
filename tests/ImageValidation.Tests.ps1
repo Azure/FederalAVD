@@ -50,35 +50,40 @@ Describe 'Image validation infrastructure' {
         $app.serverFarmId | Should -Match "parameters\('appServicePlanResourceId'\)"
     }
 
-    It 'shares the VM subnet with endpoints while keeping outbound integration separate' {
-        $app.privateEndpointSubnetResourceId.value | Should -Be "[parameters('subnetResourceId')]"
+    It 'keeps the validation VM, family endpoints and outbound integration subnets independent' {
+        $template.resources.networkInterface.properties.parameters.subnetResourceId.value |
+            Should -Be "[parameters('virtualMachineSubnetResourceId')]"
+        $app.storagePrivateEndpointSubnetResourceId.value | Should -Be "[parameters('storagePrivateEndpointSubnetResourceId')]"
+        $app.functionAppPrivateEndpointSubnetResourceId.value | Should -Be "[parameters('functionAppPrivateEndpointSubnetResourceId')]"
         $app.functionAppDelegatedSubnetResourceId.value | Should -Be "[variables('integrationSubnetId')]"
-        $template.resources.keyVaultPrivateEndpoint.properties.parameters.subnetResourceId.value |
-            Should -Be "[parameters('subnetResourceId')]"
-        foreach ($variable in @('integrationSubnetId', 'blobDnsZoneId', 'appDnsZoneId', 'vaultDnsZoneId')) {
-            $template.variables.$variable | Should -Match "equals\(parameters\('endpointType'\), 'private'\)"
-            $template.variables.$variable | Should -Match "fail\('Private mode requires"
+        $template.resources.keyVaultPrivateEndpointDeployment.properties.parameters.subnetResourceId.value |
+            Should -Be "[parameters('keyVaultPrivateEndpointSubnetResourceId')]"
+        $template.variables.integrationSubnetId | Should -Be "[parameters('functionAppDelegatedSubnetResourceId')]"
+        foreach ($pair in @(
+            @{ Variable = 'blobDnsZoneId'; Family = 'storage' }
+            @{ Variable = 'appDnsZoneId'; Family = 'functionApp' }
+            @{ Variable = 'vaultDnsZoneId'; Family = 'keyVault' }
+        )) {
+            $template.variables.($pair.Variable) | Should -Match "parameters\('$($pair.Family)PrivateEndpoint'\)"
+            $template.variables.($pair.Variable) | Should -Match "fail\('$($pair.Family)PrivateEndpoint requires"
         }
     }
 
-    It 'distinguishes private, restricted service, and unrestricted public access' {
-        $app.paasPublicNetworkAccess |
-            Should -Be "[if(equals(parameters('endpointType'), 'private'), createObject('value', 'Disabled'), if(equals(parameters('endpointType'), 'service'), createObject('value', 'EnabledWithRestrictions'), createObject('value', 'Enabled')))]"
+    It 'passes explicit independent access policies and only explicit family subnet allowlists' {
+        $app.storagePublicNetworkAccess.value | Should -Be "[parameters('storagePublicNetworkAccess')]"
+        $app.functionAppPublicNetworkAccess.value | Should -Be "[parameters('functionAppPublicNetworkAccess')]"
         $network = $template.resources.functionApp.properties.template
-        $network.variables.permittedSubnetIds | Should -Match "equals\(parameters\('paasPublicNetworkAccess'\), 'EnabledWithRestrictions'\)"
-        foreach ($parameter in @('privateEndpointSubnetResourceId', 'functionAppDelegatedSubnetResourceId')) {
-            $network.variables.permittedSubnetIds | Should -Match "parameters\('$parameter'\)"
-        }
+        $network.variables.PSObject.Properties.Name | Should -Not -Contain 'permittedSubnetIds'
         $subnetRules = $network.variables.copy | Where-Object name -eq 'permittedSubnetRestrictions'
-        $subnetRules.input.vnetSubnetResourceId | Should -Match "variables\('permittedSubnetIds'\)"
+        $subnetRules.input.vnetSubnetResourceId | Should -Match "variables\('functionAppSubnetIds'\)"
         $subnetRules.input.action | Should -Be 'Allow'
         $network.variables.resolvedIpSecurityRestrictions | Should -Match "variables\('permittedSubnetRestrictions'\)"
         $storageRules = $network.resources.storageAccount.properties.networkAcls.copy |
             Where-Object name -eq 'virtualNetworkRules'
-        $storageRules.input.id | Should -Match "variables\('permittedSubnetIds'\)"
+        $storageRules.input.id | Should -Match "variables\('storageSubnetIds'\)"
         $storageRules.input.action | Should -Be 'Allow'
         $network.resources.storageAccount.properties.networkAcls.defaultAction |
-            Should -Be "[variables('networkAccess').defaultAction]"
+            Should -Be "[variables('storageNetworkAccess').defaultAction]"
     }
 
     It 'provisions the storage key and optional disk key before Function infrastructure' {

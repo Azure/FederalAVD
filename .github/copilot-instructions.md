@@ -1,27 +1,19 @@
 ﻿# GitHub Copilot Instructions — FederalAVD
 
-This file gives GitHub Copilot context about the FederalAVD repo so it can give you accurate,
-repo-aware answers in VS Code, github.com chat, and any other Copilot surface.
+This file gives GitHub Copilot context about the FederalAVD repo so it can give you accurate, repo-aware answers in VS Code, github.com chat, and any other Copilot surface.
 
 ---
 
 ## Contribution Workflow
 
-Before making repository changes, read [CONTRIBUTING.md](../CONTRIBUTING.md) and
-the applicable [task-specific skills](skills/). Follow their source-generation,
-cross-solution dependency, documentation, and validation requirements.
+Before making repository changes, read [CONTRIBUTING.md](../CONTRIBUTING.md) and the applicable [task-specific skills](skills/). Follow their source-generation, cross-solution dependency, documentation, and validation requirements.
+
 Preserve unrelated local changes and keep contributions focused. Report exact
-validation commands, results, and required live checks that remain; do not treat
-offline checks as proof of deployment success. Store reusable architectural
-decisions in the relevant repository documentation and link to them rather than
-relying on prior chat context or duplicating detailed rules here.
+validation commands, results, and required live checks that remain; do not treat offline checks as proof of deployment success. Store reusable architectural decisions in the relevant repository documentation and link to them rather than relying on prior chat context or duplicating detailed rules here.
 
 ## What This Repo Does
 
-FederalAVD provides enterprise-grade Azure Virtual Desktop (AVD) deployment automation for
-**Azure Commercial, Azure Government, Azure Government Secret, and Azure Government Top Secret**
-clouds. It handles the full lifecycle: networking → prerequisites → image management →
-custom image builds → host pool deployment → ongoing image refresh.
+FederalAVD provides enterprise-grade Azure Virtual Desktop (AVD) deployment automation for **Azure Commercial, Azure Government, Azure Government Secret, and Azure Government Top Secret** clouds. It handles the full lifecycle: networking → prerequisites → image management → custom image builds → host pool deployment → ongoing image refresh.
 
 ---
 

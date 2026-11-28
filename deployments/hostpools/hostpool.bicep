@@ -1,6 +1,6 @@
 targetScope = 'subscription'
 
-import { publicNetworkAccessMode } from '../shared/modules/orchestration/networking/functions.bicep'
+import { paasNetworkingType, privateEndpointSubnetResourceIdsType, privateDnsZoneResourceIdsType, resolvePaasNetworking, requirePrivateEndpointSubnet } from '../shared/modules/orchestration/networking/scenarios.bicep'
 import { artifactCustomizationType } from '../shared/modules/orchestration/customizations/types.bicep'
 import { entraGroupType } from '../shared/modules/resourceModules/types/identityTypes.bicep'
 import { scalingDayType } from '../shared/modules/resourceModules/desktopVirtualization/scalingPlans/types.bicep'
@@ -651,11 +651,6 @@ param keyManagementStorage string = 'PlatformManaged'
 @description('Optional. Key management mode for Recovery Services Vault encryption.')
 param keyManagementRecoveryServicesVault string = 'PlatformManaged'
 
-@description('Optional. Array of permitted IP addresses or CIDR blocks allowed through the firewall of all PaaS components (storage accounts, Key Vaults). Use when managing the deployment from a trusted workstation outside the Azure network boundary.')
-param permittedIPs string[] = []
-
-@description('Optional. Public-access mode shared by newly deployed Key Vaults and Azure Files storage. Auto preserves legacy behavior; existing resources and backup/monitoring access are unchanged.')
-param paasPublicNetworkAccess publicNetworkAccessMode = 'Auto'
 
 @description('Optional. Enable Azure Backup. Personal host pools protect session host VMs. Pooled host pools protect newly deployed FSLogix Azure Files shares through a shared Recovery Services vault and snapshot policy.')
 param recoveryServices bool = false
@@ -719,29 +714,17 @@ param existingDataCollectionEndpointResourceId string = ''
 
 // Zero Trust
 
-@description('Optional. Create private endpoints for all deployed management and storage resources where applicable.')
-param deployPrivateEndpoints bool = false
+// Private connectivity is the default for newly created PaaS resources, not AVD client routing.
+// Restricted-public callers explicitly disable private endpoints and configure separate family
+// allowlists. Existing resources and service endpoints on customer subnets are never reconfigured.
+@description('Optional. PaaS networking intent. Omitted fields default to private endpoints and Disabled public access. Storage/Key Vault allowlists and overrides are independent; Backup restricted-public intent requires an explicit supported public-access choice.')
+param paasNetworking paasNetworkingType = {}
 
-@description('Conditional. The Resource Id of the subnet on which to create private endpoints for operations resources (Key Vaults, Recovery Services Vault). Required when "deployPrivateEndpoints" = true and any operations resource is deployed inline.')
-param operationsPrivateEndpointSubnetResourceId string = ''
+@description('Conditional. Private endpoint placement by ownership: sharedResources for shared Key Vaults, FSLogix Backup and AVD feeds; hostPoolResources for FSLogix Storage, VM Backup, managed disks and AVD connections. Required only for applicable selected endpoints.')
+param privateEndpointSubnetResourceIds privateEndpointSubnetResourceIdsType = {}
 
-@description('Conditional. The Resource Id of the subnet on which to create the storage account and other resources private link. Required when "deployPrivateEndpoints" = true.')
-param hostPoolResourcesPrivateEndpointSubnetResourceId string = ''
-
-@description('Conditional. If using private endpoints with Azure files, input the Resource ID for the Private DNS Zone linked to your hub virtual network. Required when "deployPrivateEndpoints" is true.')
-param azureBackupPrivateDnsZoneResourceId string = ''
-
-@description('Conditional. If using private endpoints with Azure files, input the Resource ID for the Private DNS Zone linked to your hub virtual network. Required when "deployPrivateEndpoints" is true.')
-param azureBlobPrivateDnsZoneResourceId string = ''
-
-@description('Conditional. If using private endpoints with Azure files, input the Resource ID for the Private DNS Zone linked to your hub virtual network. Required when "deployPrivateEndpoints" is true.')
-param azureFilesPrivateDnsZoneResourceId string = ''
-
-@description('Conditional. The resource ID of the Azure Key Vault Private DNS Zone. Required when "deployPrivateEndpoints" is true and Key Vaults are deployed inline.')
-param azureKeyVaultPrivateDnsZoneResourceId string = ''
-
-@description('Conditional. If using private endpoints with Azure files, input the Resource ID for the Private DNS Zone linked to your hub virtual network. Required when "deployPrivateEndpoints" is true.')
-param azureQueuePrivateDnsZoneResourceId string = ''
+@description('Conditional. Existing DNS zone IDs by namespace: file, vault, backup, blob, queue, avdFeed and avdGlobalFeed. AVD routing remains independent of PaaS networking. DNS ownership and cloud-specific zone names remain caller-managed.')
+param privateDnsZoneResourceIds privateDnsZoneResourceIdsType = {}
 
 @description('Optional. The resource Id of the Azure Monitor Private Link Scope to which monitoring resources should be linked. There should only be one Azure Monitor Private Link Scope per network that shares the same DNS.')
 param azureMonitorPrivateLinkScopeResourceId string = ''
@@ -755,11 +738,7 @@ param azureMonitorPrivateLinkScopeResourceId string = ''
 @description('Optional. Determines if Azure Private Link with Azure Virtual Desktop is enabled. Selecting "None" disables AVD Private Link deployment. Selecting one of the other options enables deployment of the required endpoints.')
 param avdPrivateLinkPrivateRoutes string = 'None'
 
-@description('Conditional. The resource ID of the subnet where the hostpool private endpoint will be attached. Required when "avdPrivateLinkPrivateRoutes" is not equal to "None".')
-param hostpoolPrivateEndpointSubnetResourceId string = ''
 
-@description('Conditional. The resource Id of the AVD Private Link Private DNS Zone used for feed download and connections to host pools. Required when "avdPrivateLinkPrivateRoutes" is not equal to "None".')
-param avdPrivateDnsZoneResourceId string = ''
 
 @allowed([
   'Disabled'
@@ -774,8 +753,6 @@ param avdPrivateDnsZoneResourceId string = ''
 @description('Optional. Host-pool public access mode, applied when AVD Private Link routes are selected. Values distinguish full public, private-only, and client-only public access.')
 param hostPoolPublicNetworkAccess string = 'Enabled'
 
-@description('Conditional. The resource Id of the subnet where the workspace feed private endpoint will be attached. Required when "avdPrivateLinkPrivateRoutes" is set to "FeedAndHostPool" or "All".')
-param workspaceFeedPrivateEndpointSubnetResourceId string = ''
 
 @allowed([
   'Disabled'
@@ -790,12 +767,6 @@ param workspaceFeedPublicNetworkAccess string = 'Enabled'
 
 @description('Optional. The resource Id of the existing global feed workspace. If provided, then the global feed will not be deployed regardless of other AVD Private Link settings.')
 param existingGlobalFeedResourceId string = ''
-
-@description('Conditional. The resource Id of the AVD Private Link global feed Private DNS Zone. Required when the "avdPrivateLinkPrivateRoutes" is set to "All" and the "existingGlobalFeedResourceId" is not provided.')
-param globalFeedPrivateDnsZoneResourceId string = ''
-
-@description('Conditional. The resource Id of the subnet to which the global feed workspace private endpoint will be attached. Required when the "avdPrivateLinkPrivateRoutes" is set to "All" and the "existingGlobalFeedResourceId" is not provided.')
-param globalFeedPrivateEndpointSubnetResourceId string = ''
 
 // Tags
 
@@ -826,7 +797,40 @@ var deploySharedMonitoring = enableMonitoring && empty(existingLogAnalyticsWorks
 var deploySharedOperationsResourceGroup = deploySharedKeyVaults || deploySharedFilesBackup
 var sharedOperationsResourceGroupName = naming.sharedResourceGroupOperations
 var sharedMonitoringResourceGroupName = naming.sharedResourceGroupMonitoring
-var sharedPrivateEndpoint = deployPrivateEndpoints && (deploySharedKeyVaults || deploySharedFilesBackup)
+var storageCreated = deployFSLogixStorage && split(hostPoolType, ' ')[0] == 'Pooled' && fslogixStorageService == 'AzureFiles'
+var backupCreated = deploySharedFilesBackup || (deployRecoveryServices && empty(existingVmBackupVaultResourceId))
+var resolvedNetworking = resolvePaasNetworking(paasNetworking, storageCreated, deploySharedKeyVaults, backupCreated)
+var storagePublicNetworkAccess = resolvedNetworking.storage.publicNetworkAccess
+var storagePrivateEndpoint = resolvedNetworking.storage.privateEndpoint
+var storagePermittedIPs = resolvedNetworking.storage.permittedIPs
+var storageServiceEndpointSubnetResourceIds = resolvedNetworking.storage.serviceEndpointSubnetResourceIds
+var keyVaultPublicNetworkAccess = resolvedNetworking.keyVault.publicNetworkAccess
+var keyVaultPrivateEndpoint = resolvedNetworking.keyVault.privateEndpoint
+var keyVaultPermittedIPs = resolvedNetworking.keyVault.permittedIPs
+var keyVaultServiceEndpointSubnetResourceIds = resolvedNetworking.keyVault.serviceEndpointSubnetResourceIds
+var backupPublicNetworkAccess = resolvedNetworking.backup.publicNetworkAccess
+var backupPrivateEndpoint = resolvedNetworking.backup.privateEndpoint
+var diskPrivateEndpoint = resolvedNetworking.disk.privateEndpoint
+var sharedPrivateEndpoint = backupPrivateEndpoint && deploySharedFilesBackup
+var sharedResourcesPrivateEndpointSubnetResourceId = requirePrivateEndpointSubnet(
+  privateEndpointSubnetResourceIds.?sharedResources ?? '',
+  (deploySharedKeyVaults && keyVaultPrivateEndpoint) || sharedPrivateEndpoint || contains(['FeedAndHostPool', 'All'], avdPrivateLinkPrivateRoutes),
+  'sharedResources'
+)
+var hostPoolResourcesPrivateEndpointSubnetResourceId = requirePrivateEndpointSubnet(
+  privateEndpointSubnetResourceIds.?hostPoolResources ?? '',
+  (storageCreated && storagePrivateEndpoint) || (backupCreated && deployRecoveryServices && backupPrivateEndpoint) || deployDiskAccessResource || avdPrivateLinkPrivateRoutes != 'None',
+  'hostPoolResources'
+)
+var backupPrivateDnsZoneResourceId = backupCreated && backupPrivateEndpoint && empty(privateDnsZoneResourceIds.?backup ?? '')
+  ? fail('privateDnsZoneResourceIds.backup is required when creating a Backup private endpoint.')
+  : privateDnsZoneResourceIds.?backup ?? ''
+var blobPrivateDnsZoneResourceId = privateDnsZoneResourceIds.?blob ?? ''
+var filePrivateDnsZoneResourceId = privateDnsZoneResourceIds.?file ?? ''
+var vaultPrivateDnsZoneResourceId = privateDnsZoneResourceIds.?vault ?? ''
+var queuePrivateDnsZoneResourceId = privateDnsZoneResourceIds.?queue ?? ''
+var avdPrivateDnsZoneResourceId = privateDnsZoneResourceIds.?avdFeed ?? ''
+var globalFeedPrivateDnsZoneResourceId = privateDnsZoneResourceIds.?avdGlobalFeed ?? ''
 
 module sharedMonitoring '../shared/modules/orchestration/monitoring/monitoring.bicep' = if (deploySharedMonitoring) {
   scope: subscription(effectiveMonitoringSubscription)
@@ -874,13 +878,14 @@ module sharedKeyVaults '../shared/modules/orchestration/keyVaults/keyVaults.bice
     deployEncryptionKeyVault: deploySharedEncryptionKeyVault
     encryptionKeyVaultName: naming.sharedKeyVaultNameEncryption
     encryptionKeyVaultRetentionInDays: encryptionKeyVaultRetentionInDays
-    privateEndpoint: sharedPrivateEndpoint
-    privateEndpointSubnetResourceId: operationsPrivateEndpointSubnetResourceId
-    azureKeyVaultPrivateDnsZoneResourceId: azureKeyVaultPrivateDnsZoneResourceId
+    keyVaultPrivateEndpoint: keyVaultPrivateEndpoint
+    keyVaultPrivateEndpointSubnetResourceId: sharedResourcesPrivateEndpointSubnetResourceId
+    vaultPrivateDnsZoneResourceId: vaultPrivateDnsZoneResourceId
     privateEndpointNameConv: naming.privateEndpointNameConv
     privateEndpointNICNameConv: naming.privateEndpointNICNameConv
-    permittedIPs: permittedIPs
-    paasPublicNetworkAccess: paasPublicNetworkAccess
+    keyVaultPermittedIPs: keyVaultPermittedIPs
+    keyVaultServiceEndpointSubnetResourceIds: keyVaultServiceEndpointSubnetResourceIds
+    keyVaultPublicNetworkAccess: keyVaultPublicNetworkAccess
     logAnalyticsWorkspaceResourceId: sharedLogAnalyticsWorkspaceResourceId
     tags: tags
   }
@@ -909,7 +914,7 @@ module sharedAvdWorkspace '../shared/modules/orchestration/avdWorkspace/avdWorks
     workspaceFriendlyName: workspaceFriendlyName
     workspacePublicNetworkAccess: workspaceFeedPublicNetworkAccess
     workspaceFeedPrivateEndpointSubnetResourceId: contains(['FeedAndHostPool', 'All'], avdPrivateLinkPrivateRoutes)
-      ? workspaceFeedPrivateEndpointSubnetResourceId
+      ? sharedResourcesPrivateEndpointSubnetResourceId
       : ''
     avdPrivateDnsZoneResourceId: avdPrivateDnsZoneResourceId
     logAnalyticsWorkspaceResourceId: sharedLogAnalyticsWorkspaceResourceId
@@ -918,7 +923,7 @@ module sharedAvdWorkspace '../shared/modules/orchestration/avdWorkspace/avdWorks
     globalWorkspaceName: naming.globalFeedWorkspaceName
     globalWorkspaceResourceId: existingGlobalFeedResourceId
     globalWorkspaceResourceGroupName: naming.globalFeedResourceGroupName
-    globalFeedPrivateEndpointSubnetResourceId: globalFeedPrivateEndpointSubnetResourceId
+    globalFeedPrivateEndpointSubnetResourceId: sharedResourcesPrivateEndpointSubnetResourceId
     globalFeedPrivateDnsZoneResourceId: globalFeedPrivateDnsZoneResourceId
     privateEndpointNameConv: naming.privateEndpointNameConv
     privateEndpointNICNameConv: naming.privateEndpointNICNameConv
@@ -933,7 +938,7 @@ var sharedWorkspaceResourceId = manageFeedWorkspace
   ? sharedAvdWorkspace!.outputs.workspaceResourceId
   : existingFeedWorkspaceResourceId
 
-module sharedFilesBackup '../shared/modules/resourceModules/recoveryServices/fslogixBackupVault.bicep' = if (deploySharedFilesBackup) {
+module sharedFilesBackup '../shared/modules/orchestration/recoveryServices/fslogixBackupVault.bicep' = if (deploySharedFilesBackup) {
   scope: subscription(effectiveControlPlaneSubscription)
   params: {
     createVault: true
@@ -942,11 +947,12 @@ module sharedFilesBackup '../shared/modules/resourceModules/recoveryServices/fsl
     resourceGroupOperations: sharedOperationsResourceGroupName
     location: virtualMachinesLocation
     logAnalyticsWorkspaceResourceId: sharedLogAnalyticsWorkspaceResourceId
+    publicNetworkAccess: backupPublicNetworkAccess
     privateEndpoint: sharedPrivateEndpoint
-    privateEndpointSubnetResourceId: operationsPrivateEndpointSubnetResourceId
-    azureBackupPrivateDnsZoneResourceId: azureBackupPrivateDnsZoneResourceId
-    azureBlobPrivateDnsZoneResourceId: azureBlobPrivateDnsZoneResourceId
-    azureQueuePrivateDnsZoneResourceId: azureQueuePrivateDnsZoneResourceId
+    privateEndpointSubnetResourceId: sharedResourcesPrivateEndpointSubnetResourceId
+    backupPrivateDnsZoneResourceId: backupPrivateDnsZoneResourceId
+    blobPrivateDnsZoneResourceId: blobPrivateDnsZoneResourceId
+    queuePrivateDnsZoneResourceId: queuePrivateDnsZoneResourceId
     privateEndpointNameConv: naming.privateEndpointNameConv
     privateEndpointNICNameConv: naming.privateEndpointNICNameConv
     tags: tags
@@ -989,7 +995,7 @@ var deployRecoveryServicesAzureFiles = recoveryServices && !contains(hostPoolTyp
 // does not support key release policies. The DES is then created by the shared CMK module with skipKeyCreation=true.
 var deployCvmDiskCmk = confidentialVMOSDiskEncryption
 
-var deployDiskAccessResource = contains(hostPoolType, 'Personal') && recoveryServices && deployPrivateEndpoints
+var deployDiskAccessResource = contains(hostPoolType, 'Personal') && recoveryServices && diskPrivateEndpoint
 
 var effectiveDiskAccessId = deployDiskAccessResource ? diskAccess!.outputs.diskAccessId : ''
 
@@ -1666,7 +1672,7 @@ module controlPlane 'modules/control-plane/controlPlane.bicep' = {
     })
     hostPoolMaxSessionLimit: hostPoolMaxSessionLimit
     hostPoolName: naming.hostPoolName
-    hostPoolPrivateEndpointSubnetResourceId: hostpoolPrivateEndpointSubnetResourceId
+    hostPoolPrivateEndpointSubnetResourceId: hostPoolResourcesPrivateEndpointSubnetResourceId
     hostPoolPublicNetworkAccess: hostPoolPublicNetworkAccess
     hostPoolRDPProperties: hostPoolRDPProperties
     hostPoolType: hostPoolType
@@ -1708,7 +1714,7 @@ module fslogix '../shared/modules/orchestration/fslogix/fslogix.bicep' = if (dep
   params: {
     activeDirectoryConnection: existingSharedActiveDirectoryConnection
     appUpdateUserAssignedIdentityResourceId: fslogixAppUpdateUserAssignedIdentityResourceId
-    azureFilePrivateDnsZoneResourceId: azureFilesPrivateDnsZoneResourceId
+    filePrivateDnsZoneResourceId: filePrivateDnsZoneResourceId
     deploymentUserAssignedIdentityClientId: createDeploymentVm
       ? deploymentHelper!.outputs.deploymentUserAssignedIdentityClientId
       : ''
@@ -1742,10 +1748,10 @@ module fslogix '../shared/modules/orchestration/fslogix/fslogix.bicep' = if (dep
     netAppAccountName: naming.netAppAccountName
     netAppCapacityPoolName: naming.netAppCapacityPoolName
     ouPath: empty(fslogixOUPath) ? vmOUPath : fslogixOUPath
-    privateEndpoint: deployPrivateEndpoints
+    storagePrivateEndpoint: storagePrivateEndpoint
     privateEndpointNameConv: naming.privateEndpointNameConv
     privateEndpointNICNameConv: naming.privateEndpointNICNameConv
-    privateEndpointSubnetResourceId: hostPoolResourcesPrivateEndpointSubnetResourceId
+    storagePrivateEndpointSubnetResourceId: hostPoolResourcesPrivateEndpointSubnetResourceId
     resourceGroupDeployment: naming.resourceGroupDeployment
     resourceGroupStorage: effectiveStorageResourceGroup
     profileShareSizeInGB: fslogixProfileShareSizeInGB
@@ -1767,8 +1773,9 @@ module fslogix '../shared/modules/orchestration/fslogix/fslogix.bicep' = if (dep
     profileStorageRedundancy: fslogixProfileStorageRedundancy
     netAppServiceLevel: fslogixNetAppServiceLevel
     storageSolution: fslogixStorageService
-    permittedIPs: permittedIPs
-    paasPublicNetworkAccess: paasPublicNetworkAccess
+    storagePermittedIPs: storagePermittedIPs
+    storageServiceEndpointSubnetResourceIds: storageServiceEndpointSubnetResourceIds
+    storagePublicNetworkAccess: storagePublicNetworkAccess
     tags: tags
     encryptionUserAssignedIdentityResourceId: deployStorageCmk ? storageCmk!.outputs.storageEncryptionIdentityResourceId : ''
     fslogixSoftDeleteRetentionDays: fslogixSoftDeleteRetentionDays
@@ -1788,11 +1795,11 @@ module diskAccess 'modules/hosts/modules/diskAccess.bicep' = if (deployDiskAcces
     location: virtualMachinesLocation
     hostPoolResourceId: controlPlane!.outputs.hostPoolResourceId
     tags: tags
-    deployPrivateEndpoint: deployPrivateEndpoints
+    deployPrivateEndpoint: diskPrivateEndpoint
     privateEndpointSubnetResourceId: hostPoolResourcesPrivateEndpointSubnetResourceId
     privateEndpointNameConv: naming.privateEndpointNameConv
     privateEndpointNICNameConv: naming.privateEndpointNICNameConv
-    azureBlobPrivateDnsZoneResourceId: azureBlobPrivateDnsZoneResourceId
+    blobPrivateDnsZoneResourceId: blobPrivateDnsZoneResourceId
   }
 }
 
@@ -1900,11 +1907,12 @@ module sessionHosts 'modules/hosts/hosts.bicep' = {
     encryptionKeyVaultResourceId: effectiveEncryptionKeyVaultResourceId
     encryptionKeyVaultUri: effectiveEncryptionKeyVaultUri
     encryptionKeyName: naming.encryptionKeyNameRecoveryServices
-    deployPrivateEndpoints: deployPrivateEndpoints
+    vaultPublicNetworkAccess: backupPublicNetworkAccess
+    deployBackupPrivateEndpoints: backupPrivateEndpoint
     vaultPrivateEndpointSubnetResourceId: hostPoolResourcesPrivateEndpointSubnetResourceId
-    azureBackupPrivateDnsZoneResourceId: azureBackupPrivateDnsZoneResourceId
-    azureBlobPrivateDnsZoneResourceId: azureBlobPrivateDnsZoneResourceId
-    azureQueuePrivateDnsZoneResourceId: azureQueuePrivateDnsZoneResourceId
+    backupPrivateDnsZoneResourceId: backupPrivateDnsZoneResourceId
+    blobPrivateDnsZoneResourceId: blobPrivateDnsZoneResourceId
+    queuePrivateDnsZoneResourceId: queuePrivateDnsZoneResourceId
     privateEndpointNameConv: naming.privateEndpointNameConv
     privateEndpointNICNameConv: naming.privateEndpointNICNameConv
     logAnalyticsWorkspaceResourceId: effectiveLogAnalyticsWorkspaceResourceId

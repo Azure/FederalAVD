@@ -54,7 +54,7 @@ This solution is designed to align with Microsoft's Zero Trust security principl
 
 When deploying with Zero Trust principles:
 
-1. **Disable Public Access**: Set `deployPrivateEndpoints = true` for storage accounts and Key Vaults, and ensure session hosts have no public IP addresses
+1. **Disable Public Access**: Set `storagePublicNetworkAccess` and `keyVaultPublicNetworkAccess` to `Disabled`; independently enable `storagePrivateEndpoint` and `keyVaultPrivateEndpoint` with reachable subnets and DNS. Session hosts have no public IP addresses.
 2. **Use Managed Identities**: Configure `artifactsUserAssignedIdentityResourceId` for artifact downloads instead of storage account keys
 3. **Implement Network Segmentation**: Deploy session hosts to dedicated subnets with restrictive NSG rules
 4. **Enable Monitoring**: Configure Log Analytics workspace for all diagnostic logs and performance data
@@ -1051,7 +1051,7 @@ For IL5 environments, CMK with HSM protection is required. See [IL5 Isolation](#
 - System-Assigned Managed Identity (for Recovery Services Vault CMK — SAI is always used; Azure also requires it when the vault has a private endpoint)
 - Disk Encryption Set (for disk and gallery image version CMK)
 
-> **Recovery Services Vault CMK with private endpoints:** CMK on the personal host pool VM backup vault is fully compatible with `deployPrivateEndpoints = true`. Azure Backup is a [trusted Microsoft service](https://learn.microsoft.com/azure/key-vault/general/overview-vnet-service-endpoints#trusted-services) and accesses the encryption Key Vault via the Key Vault firewall bypass even when `publicNetworkAccess` is `Disabled`. SC-28 (CMK on RSV) and SC-7 (private-only KV) are satisfied simultaneously — no trade-off is required. See [Personal Host Pool VM Backup](bcdr.md#personal-host-pool-vm-backup) in the BCDR guide for full details.
+> **Recovery Services Vault CMK with private endpoints:** CMK on the personal host pool VM backup vault is fully compatible with `deployBackupAndDiskPrivateEndpoints = true`. Azure Backup is a [trusted Microsoft service](https://learn.microsoft.com/azure/key-vault/general/overview-vnet-service-endpoints#trusted-services) and accesses the encryption Key Vault via the Key Vault firewall bypass even when `publicNetworkAccess` is `Disabled`. SC-28 (CMK on RSV) and SC-7 (private-only KV) are satisfied simultaneously — no trade-off is required. See [Personal Host Pool VM Backup](bcdr.md#personal-host-pool-vm-backup) in the BCDR guide for full details.
 
 ## SMB Multichannel
 

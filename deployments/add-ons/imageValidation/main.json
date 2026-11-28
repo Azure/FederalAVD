@@ -6,12 +6,27 @@
     "_generator": {
       "name": "bicep",
       "version": "0.49.2.45890",
-      "templateHash": "11370957826427476126"
+      "templateHash": "2601232857238513155"
     },
     "name": "Image Validation Add-On",
     "description": "The Image Validation add-on deploys an Azure Function App and supporting infrastructure to deploy and ensure the validation virtual machine is always using the latest image. This enables the security team to scan and validate your image before its release."
   },
   "definitions": {
+    "_1.publicNetworkAccessMode": {
+      "type": "string",
+      "allowedValues": [
+        "Auto",
+        "Disabled",
+        "Enabled",
+        "EnabledWithRestrictions"
+      ],
+      "metadata": {
+        "description": "Public endpoint mode. Auto preserves legacy private-endpoint/firewall inference and is not offered in Portal forms.",
+        "__bicep_imported_from!": {
+          "sourceTemplate": "../../shared/modules/orchestration/networking/functions.bicep"
+        }
+      }
+    },
     "artifactCustomizationType": {
       "type": "object",
       "properties": {
@@ -48,9 +63,113 @@
           "sourceTemplate": "../../shared/modules/orchestration/customizations/types.bicep"
         }
       }
+    },
+    "servicePublicNetworkAccessMode": {
+      "type": "string",
+      "allowedValues": [
+        "Disabled",
+        "Enabled",
+        "EnabledWithRestrictions"
+      ],
+      "metadata": {
+        "description": "Explicit service-family public endpoint policy. Independent of private endpoints and allowlists.",
+        "__bicep_imported_from!": {
+          "sourceTemplate": "../../shared/modules/orchestration/networking/functions.bicep"
+        }
+      }
     }
   },
+  "functions": [
+    {
+      "namespace": "__bicep",
+      "members": {
+        "resolveNetworkAccess": {
+          "parameters": [
+            {
+              "$ref": "#/definitions/_1.publicNetworkAccessMode",
+              "name": "mode"
+            },
+            {
+              "type": "bool",
+              "name": "privateEndpoint"
+            },
+            {
+              "type": "bool",
+              "name": "hasRules"
+            }
+          ],
+          "output": {
+            "type": "object",
+            "value": {
+              "publicNetworkAccess": "[if(or(equals(parameters('mode'), 'Disabled'), and(and(equals(parameters('mode'), 'Auto'), parameters('privateEndpoint')), not(parameters('hasRules')))), 'Disabled', 'Enabled')]",
+              "defaultAction": "[if(or(equals(parameters('mode'), 'Enabled'), and(and(equals(parameters('mode'), 'Auto'), not(parameters('privateEndpoint'))), not(parameters('hasRules')))), 'Allow', 'Deny')]"
+            }
+          },
+          "metadata": {
+            "description": "Resolves publicNetworkAccess and firewall defaultAction without modifying configured rules or service exceptions.",
+            "__bicep_imported_from!": {
+              "sourceTemplate": "../../shared/modules/orchestration/networking/functions.bicep"
+            }
+          }
+        },
+        "serviceEndpointSubnetIds": {
+          "parameters": [
+            {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "name": "ids"
+            }
+          ],
+          "output": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "value": "[union(map(parameters('ids'), lambda('id', if(and(and(and(and(and(and(and(and(and(and(equals(length(split(trim(lambdaVariables('id')), '/')), 11), startsWith(toLower(trim(lambdaVariables('id'))), '/subscriptions/')), equals(toLower(coalesce(tryGet(split(trim(lambdaVariables('id')), '/'), 3), '')), 'resourcegroups')), equals(toLower(coalesce(tryGet(split(trim(lambdaVariables('id')), '/'), 5), '')), 'providers')), equals(toLower(coalesce(tryGet(split(trim(lambdaVariables('id')), '/'), 6), '')), 'microsoft.network')), equals(toLower(coalesce(tryGet(split(trim(lambdaVariables('id')), '/'), 7), '')), 'virtualnetworks')), equals(toLower(coalesce(tryGet(split(trim(lambdaVariables('id')), '/'), 9), '')), 'subnets')), not(empty(coalesce(tryGet(split(trim(lambdaVariables('id')), '/'), 2), '')))), not(empty(coalesce(tryGet(split(trim(lambdaVariables('id')), '/'), 4), '')))), not(empty(coalesce(tryGet(split(trim(lambdaVariables('id')), '/'), 8), '')))), not(empty(coalesce(tryGet(split(trim(lambdaVariables('id')), '/'), 10), '')))), toLower(trim(lambdaVariables('id'))), fail('Service endpoint allowlists require complete Microsoft.Network/virtualNetworks/subnets resource IDs.')))), createArray())]"
+          },
+          "metadata": {
+            "description": "Validates subnet resource IDs and deduplicates them case-insensitively. Does not enable service endpoints or change subnets.",
+            "__bicep_imported_from!": {
+              "sourceTemplate": "../../shared/modules/orchestration/networking/functions.bicep"
+            }
+          }
+        }
+      }
+    }
+  ],
   "parameters": {
+    "storageServiceEndpointSubnetResourceIds": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "defaultValue": [],
+      "metadata": {
+        "description": "Optional. Allowed runtime-storage subnet IDs with existing Storage service endpoints. Does not modify subnets."
+      }
+    },
+    "keyVaultServiceEndpointSubnetResourceIds": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "defaultValue": [],
+      "metadata": {
+        "description": "Optional. Allowed encryption-vault subnet IDs with existing Microsoft.KeyVault service endpoints. Does not modify the consumed credentials vault or subnets."
+      }
+    },
+    "functionAppServiceEndpointSubnetResourceIds": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "defaultValue": [],
+      "metadata": {
+        "description": "Optional. Allowed Function App inbound subnet IDs with existing Microsoft.Web service endpoints. Independent of outbound VNet integration."
+      }
+    },
     "acceleratedNetworking": {
       "type": "bool",
       "defaultValue": true,
@@ -108,25 +227,25 @@
         "description": "Optional. Resource ID of the user-assigned identity used to access the customization artifacts."
       }
     },
-    "azureBlobPrivateDnsZoneResourceId": {
+    "blobPrivateDnsZoneResourceId": {
       "type": "string",
       "defaultValue": "",
       "metadata": {
-        "description": "Required for private mode. Existing target-cloud blob private DNS zone ID, linked to the integration VNet."
+        "description": "Required when storagePrivateEndpoint is true. Existing target-cloud blob private DNS zone ID, linked to the integration VNet."
       }
     },
-    "azureFunctionAppPrivateDnsZoneResourceId": {
+    "websitesPrivateDnsZoneResourceId": {
       "type": "string",
       "defaultValue": "",
       "metadata": {
-        "description": "Required for private mode. Existing target-cloud Function App private DNS zone ID, linked to the integration VNet."
+        "description": "Required when functionAppPrivateEndpoint is true. Existing target-cloud Function App private DNS zone ID, linked to the integration VNet."
       }
     },
-    "azureKeyVaultPrivateDnsZoneResourceId": {
+    "vaultPrivateDnsZoneResourceId": {
       "type": "string",
       "defaultValue": "",
       "metadata": {
-        "description": "Required for private mode. Existing target-cloud Key Vault private DNS zone ID, linked to the integration VNet."
+        "description": "Required when keyVaultPrivateEndpoint is true. Existing target-cloud Key Vault private DNS zone ID, linked to the integration VNet."
       }
     },
     "bootDiagnostics": {
@@ -179,18 +298,6 @@
       "defaultValue": true,
       "metadata": {
         "description": "Optional. Enable encryption at host for the validation VM."
-      }
-    },
-    "endpointType": {
-      "type": "string",
-      "defaultValue": "private",
-      "allowedValues": [
-        "private",
-        "public",
-        "service"
-      ],
-      "metadata": {
-        "description": "Optional. Endpoint type for the PaaS services."
       }
     },
     "functionAppDelegatedSubnetResourceId": {
@@ -327,7 +434,7 @@
         "description": "Required. Complete runtime storage name, also useful when generated storage names exceed 24 characters."
       }
     },
-    "subnetResourceId": {
+    "virtualMachineSubnetResourceId": {
       "type": "string",
       "minLength": 1,
       "metadata": {
@@ -400,6 +507,99 @@
       "defaultValue": true,
       "metadata": {
         "description": "Optional. Enable vTPM for the validation VM."
+      }
+    },
+    "storagePublicNetworkAccess": {
+      "$ref": "#/definitions/servicePublicNetworkAccessMode",
+      "defaultValue": "Disabled",
+      "metadata": {
+        "description": "Optional. Public endpoint policy for newly created storage resources. Independent of private endpoints and other service families."
+      }
+    },
+    "storagePermittedIPs": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "defaultValue": [],
+      "metadata": {
+        "description": "Optional. Public IP addresses/CIDRs allowed for newly created storage resources. Retained in all access modes; does not grant authorization."
+      }
+    },
+    "storagePrivateEndpoint": {
+      "type": "bool",
+      "defaultValue": true,
+      "metadata": {
+        "description": "Optional. Deploy private endpoints for newly created storage resources. Does not set the public endpoint policy."
+      }
+    },
+    "storagePrivateEndpointSubnetResourceId": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Conditional. Existing private endpoint subnet resource ID; required when storagePrivateEndpoint is true. Does not modify the subnet."
+      }
+    },
+    "keyVaultPublicNetworkAccess": {
+      "$ref": "#/definitions/servicePublicNetworkAccessMode",
+      "defaultValue": "Disabled",
+      "metadata": {
+        "description": "Optional. Public endpoint policy for newly created keyVault resources. Independent of private endpoints and other service families."
+      }
+    },
+    "keyVaultPermittedIPs": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "defaultValue": [],
+      "metadata": {
+        "description": "Optional. Public IP addresses/CIDRs allowed for newly created keyVault resources. Retained in all access modes; does not grant authorization."
+      }
+    },
+    "keyVaultPrivateEndpoint": {
+      "type": "bool",
+      "defaultValue": true,
+      "metadata": {
+        "description": "Optional. Deploy private endpoints for newly created keyVault resources. Does not set the public endpoint policy."
+      }
+    },
+    "keyVaultPrivateEndpointSubnetResourceId": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Conditional. Existing private endpoint subnet resource ID; required when keyVaultPrivateEndpoint is true. Does not modify the subnet."
+      }
+    },
+    "functionAppPublicNetworkAccess": {
+      "$ref": "#/definitions/servicePublicNetworkAccessMode",
+      "defaultValue": "Disabled",
+      "metadata": {
+        "description": "Optional. Public endpoint policy for newly created functionApp resources. Independent of private endpoints and other service families."
+      }
+    },
+    "functionAppPermittedIPs": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "defaultValue": [],
+      "metadata": {
+        "description": "Optional. Public IP addresses/CIDRs allowed for newly created functionApp resources. Retained in all access modes; does not grant authorization."
+      }
+    },
+    "functionAppPrivateEndpoint": {
+      "type": "bool",
+      "defaultValue": true,
+      "metadata": {
+        "description": "Optional. Deploy private endpoints for newly created functionApp resources. Does not set the public endpoint policy."
+      }
+    },
+    "functionAppPrivateEndpointSubnetResourceId": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Conditional. Existing private endpoint subnet resource ID; required when functionAppPrivateEndpoint is true. Does not modify the subnet."
       }
     }
   },
@@ -1450,10 +1650,19 @@
     "$fxv#1": "# This file enables modules to be automatically managed by the Functions service.\r\n# See https://aka.ms/functionsmanageddependency for additional information.\r\n#\r\n@{\r\n    # For latest supported version, go to 'https://www.powershellgallery.com/packages/Az'. \r\n    # To use the Az module in your function app, please uncomment the line below.\r\n    # 'Az' = '7.*'\r\n}",
     "$fxv#2": "param($Timer)\r\n\r\n$ErrorActionPreference = 'Stop'\r\n\r\n[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12\r\n\r\n# Fix the resource manager URI since only AzureCloud contains a trailing slash\r\n$ResourceManagerUriFixed = $env:ResourceManagerUri.TrimEnd('/')\r\n\r\n\r\n# Azure Authentication\r\n$AccessToken = $null\r\ntry {\r\n    $TokenAuthURI = $env:IDENTITY_ENDPOINT + '?resource=' + $ResourceManagerUriFixed + '&api-version=2019-08-01'\r\n    $TokenResponse = Invoke-RestMethod -Method Get -Headers @{\"X-IDENTITY-HEADER\" = \"$env:IDENTITY_HEADER\" } -Uri $TokenAuthURI\r\n    $AccessToken = $TokenResponse.access_token\r\n    $Header = @{\r\n        'Content-Type'  = 'application/json'\r\n        'Authorization' = 'Bearer ' + $AccessToken\r\n    }\r\n\r\n    Write-Output 'Successfully authenticated to Azure'\r\n}\r\ncatch {\r\n    throw [System.Exception]::new('Failed to authenticate Azure with application ID, tenant ID, subscription ID', $PSItem.Exception)\r\n}\r\n\r\n# Get latest compute gallery image version\r\n$ImageDefinitionVersionsPath = ($env:imageVersionResourceId.Split('/') | Select-Object -SkipLast 1) -join '/'\r\n$ComputeGalleryImageVersions = @()\r\n$ComputeGalleryImageVersionsApi = Invoke-RestMethod `\r\n    -Headers $Header `\r\n    -Method 'Get' `\r\n    -Uri $($ResourceManagerUriFixed + $ImageDefinitionVersionsPath + '?api-version=2024-03-03')\r\n\r\n$ComputeGalleryImageVersions += $ComputeGalleryImageVersionsApi.value\r\n\r\nwhile ($ComputeGalleryImageVersionsApi.nextLink) {\r\n    $ComputeGalleryImageVersionsApi = Invoke-RestMethod `\r\n        -Headers $Header `\r\n        -Method 'GET' `\r\n        -Uri $($ComputeGalleryImageVersionsApi.nextLink)\r\n    \r\n    $ComputeGalleryImageVersions += $ComputeGalleryImageVersionsApi.value\r\n}\r\n\r\n$LatestComputeGalleryImageVersion = $ComputeGalleryImageVersions | Sort-Object { [version]$_.name } -Descending | Select-Object -First 1\r\nWrite-Output \"Latest compute gallery image version: $($LatestComputeGalleryImageVersion.name)\"\r\n\r\n# Check if the latest compute gallery image version is available and ready\r\n$AggregatedState = ''\r\n$ProvisioningState = ''\r\n$StateCounter = 0\r\n\r\nwhile ($AggregatedState -ne 'Completed' -or $ProvisioningState -ne 'Succeeded') {\r\n    $ComputeGalleryImageVersion = Invoke-RestMethod `\r\n        -Headers $Header `\r\n        -Method 'Get' `\r\n        -Uri $($ResourceManagerUriFixed + $LatestComputeGalleryImageVersion.id + '?api-version=2024-03-03&$expand=ReplicationStatus')\r\n\r\n    $AggregatedState = $ComputeGalleryImageVersion.properties.replicationStatus.aggregatedState\r\n    $ProvisioningState = $ComputeGalleryImageVersion.properties.provisioningState\r\n    Start-Sleep -Seconds 30\r\n    $StateCounter++\r\n    if ($StateCounter -ge 60 -and ($AggregatedState -ne 'Completed' -or $ProvisioningState -ne 'Succeeded')) {\r\n        throw [System.Exception]::new('Timeout waiting for compute gallery image version to be ready')\r\n    }\r\n    elseif ($AggregatedState -eq 'Failed' -or $ProvisioningState -eq 'Failed') {\r\n        throw [System.Exception]::new('Compute gallery image version failed to be ready')\r\n    }\r\n}\r\n\r\n# Get virtual machine\r\n$StatusCode = $null\r\ntry {\r\n    $VirtualMachine = Invoke-RestMethod `\r\n        -Headers $Header `\r\n        -Method 'Get' `\r\n        -Uri $($ResourceManagerUriFixed + '/subscriptions/' + $env:subscriptionId + '/resourceGroups/' + $env:resourceGroupName + '/providers/Microsoft.Compute/virtualMachines/' + $env:virtualMachineName + '?api-version=2024-07-01') `\r\n        -StatusCodeVariable StatusCode\r\n\r\n    Write-Output \"Deployed compute gallery image version: $($VirtualMachine.properties.storageProfile.imageReference.id.Split('/')[-1])\"\r\n}\r\ncatch {\r\n    if ([int]$PSItem.Exception.Response.StatusCode -eq 404) {\r\n        Write-Output \"Virtual machine does not exist. No deletion necessary.\"\r\n    }\r\n    else {\r\n        throw [System.Exception]::new('Failed to get virtual machine', $PSItem.Exception)\r\n    }\r\n}\r\n\r\n# Delete the virtual machine\r\nif ($StatusCode -eq 200) {\r\n    if ($VirtualMachine.properties.storageProfile.imageReference.id -ne $LatestComputeGalleryImageVersion.id) {\r\n        Invoke-RestMethod `\r\n            -Headers $Header `\r\n            -Method 'Delete' `\r\n            -Uri $($ResourceManagerUriFixed + '/subscriptions/' + $env:subscriptionId + '/resourceGroups/' + $env:resourceGroupName + '/providers/Microsoft.Compute/virtualMachines/' + $env:virtualMachineName + '?forceDeletion=true&api-version=2024-07-01') | Out-Null\r\n\r\n        $StatusCode = $null\r\n        $StatusCounter = 0\r\n        while ($StatusCode -ne 404) {\r\n            # Get virtual machine\r\n            try {\r\n                $VirtualMachine = Invoke-RestMethod `\r\n                    -Headers $Header `\r\n                    -Method 'Get' `\r\n                    -Uri $($ResourceManagerUriFixed + '/subscriptions/' + $env:subscriptionId + '/resourceGroups/' + $env:resourceGroupName + '/providers/Microsoft.Compute/virtualMachines/' + $env:virtualMachineName + '?api-version=2024-07-01') `\r\n                    -StatusCodeVariable StatusCode\r\n            }\r\n            catch {\r\n                if ([int]$PSItem.Exception.Response.StatusCode -eq 404) {\r\n                    break\r\n                }\r\n                else {\r\n                    throw [System.Exception]::new('Failed to get virtual machine', $PSItem.Exception)\r\n                }\r\n            }\r\n\r\n            Start-Sleep -Seconds 30\r\n            $StatusCounter++\r\n            if ($StatusCounter -ge 60) {\r\n                throw [System.Exception]::new('Timeout waiting for virtual machine to be deleted')\r\n            }\r\n        }\r\n\r\n        Write-Output 'Virtual machine was using an outdated image and has been deleted.'\r\n    }\r\n    else {\r\n        Write-Output 'Virtual machine is using the latest image. No deletion and redeployment necessary.'\r\n        return\r\n    }\r\n}\r\n\r\n$Timestamp = Get-Date -Format 'yyyyMMddHHmmss'\r\n\r\n$Body = @{\r\n    properties = @{\r\n        mode         = 'Incremental'\r\n        parameters   = @{\r\n            acceleratedNetworking                   = @{ value = [bool]::Parse($env:acceleratedNetworking) }\r\n            artifactsContainerUri                   = @{ value = $env:artifactsContainerUri }\r\n            artifactsUserAssignedIdentityResourceId = @{ value = $env:artifactsUserAssignedIdentityResourceId }\r\n            bootDiagnostics                         = @{ value = [bool]::Parse($env:bootDiagnostics) }\r\n            diskAccessResourceId                    = @{ value = $env:diskAccessResourceId }\r\n            diskControllerType                      = @{ value = $env:diskControllerType }\r\n            diskEncryptionSetResourceId             = @{ value = $env:diskEncryptionSetResourceId }\r\n            diskName                                = @{ value = $env:diskName }\r\n            diskNetworkAccess                       = @{ value = $env:diskNetworkAccess }\r\n            encryptionAtHost                        = @{ value = [bool]::Parse($env:encryptionAtHost) }\r\n            hibernation                             = @{ value = $false }\r\n            imageVersionResourceId                  = @{ value = $LatestComputeGalleryImageVersion.id }\r\n            integrityMonitoring                     = @{ value = [bool]::Parse($env:integrityMonitoring) }\r\n            keyVaultResourceId                      = @{ value = $env:keyVaultResourceId }\r\n            licenseType                             = @{ value = $env:licenseType }\r\n            location                                = @{ value = $env:location }\r\n            networkInterfaceName                    = @{ value = $env:networkInterfaceName }\r\n            privateIPAddress                        = @{ value = $env:privateIPAddress }\r\n            secureBoot                              = @{ value = [bool]::Parse($env:secureBoot) }\r\n            securityType                            = @{ value = $env:securityType }\r\n            subnetResourceId                        = @{ value = $env:subnetResourceId }\r\n            tags                                    = @{ value = ($env:tags | ConvertFrom-Json -Depth 5) }\r\n            virtualMachineName                      = @{ value = $env:virtualMachineName }\r\n            virtualMachineSize                      = @{ value = $env:virtualMachineSize }\r\n            vmCustomizations                        = @{ value = ($env:vmCustomizations | ConvertFrom-Json -Depth 5) }\r\n            vTpm                                    = @{ value = [bool]::Parse($env:vTpm) }\r\n        }\r\n        templateLink = @{\r\n            id = $env:templateSpecResourceId\r\n        }\r\n    }\r\n} | ConvertTo-Json -Depth 20\r\n\r\nInvoke-RestMethod `\r\n    -Headers $Header `\r\n    -Method 'PUT' `\r\n    -Body $Body `\r\n    -Uri $($ResourceManagerUriFixed + '/subscriptions/' + $env:subscriptionId + '/resourcegroups/' + $env:resourceGroupName + '/providers/Microsoft.Resources/deployments/ImageValidation-' + $Timestamp + '?api-version=2020-10-01') | Out-Null\r\n\r\nWrite-Output \"Deployment submitted for new image validation virtual machine. Check deployment status in the portal for more details. Deployment name is: ImageValidation-$Timestamp\"\r\n",
     "$fxv#3": "# Authentication is provided in the script",
-    "integrationSubnetId": "[if(and(contains(createArray('private', 'service'), parameters('endpointType')), empty(trim(parameters('functionAppDelegatedSubnetResourceId')))), fail('Private and service modes require functionAppDelegatedSubnetResourceId.'), parameters('functionAppDelegatedSubnetResourceId'))]",
-    "blobDnsZoneId": "[if(and(equals(parameters('endpointType'), 'private'), empty(trim(parameters('azureBlobPrivateDnsZoneResourceId')))), fail('Private mode requires azureBlobPrivateDnsZoneResourceId.'), parameters('azureBlobPrivateDnsZoneResourceId'))]",
-    "appDnsZoneId": "[if(and(equals(parameters('endpointType'), 'private'), empty(trim(parameters('azureFunctionAppPrivateDnsZoneResourceId')))), fail('Private mode requires azureFunctionAppPrivateDnsZoneResourceId.'), parameters('azureFunctionAppPrivateDnsZoneResourceId'))]",
-    "vaultDnsZoneId": "[if(and(equals(parameters('endpointType'), 'private'), empty(trim(parameters('azureKeyVaultPrivateDnsZoneResourceId')))), fail('Private mode requires azureKeyVaultPrivateDnsZoneResourceId.'), parameters('azureKeyVaultPrivateDnsZoneResourceId'))]",
+    "integrationSubnetId": "[parameters('functionAppDelegatedSubnetResourceId')]",
+    "effectiveKeyVaultPermittedIPs": "[filter(parameters('keyVaultPermittedIPs'), lambda('ip', not(empty(trim(lambdaVariables('ip'))))))]",
+    "keyVaultSubnetIds": "[__bicep.serviceEndpointSubnetIds(parameters('keyVaultServiceEndpointSubnetResourceIds'))]",
+    "keyVaultNetworkAccess": "[__bicep.resolveNetworkAccess(parameters('keyVaultPublicNetworkAccess'), parameters('keyVaultPrivateEndpoint'), or(not(empty(variables('effectiveKeyVaultPermittedIPs'))), not(empty(variables('keyVaultSubnetIds')))))]",
+    "keyVaultNetworkAcls": {
+      "bypass": "AzureServices",
+      "defaultAction": "[variables('keyVaultNetworkAccess').defaultAction]",
+      "ipRules": "[map(variables('effectiveKeyVaultPermittedIPs'), lambda('ip', createObject('value', if(endsWith(trim(lambdaVariables('ip')), '/32'), replace(trim(lambdaVariables('ip')), '/32', ''), trim(lambdaVariables('ip'))))))]",
+      "virtualNetworkRules": "[map(variables('keyVaultSubnetIds'), lambda('id', createObject('id', lambdaVariables('id'), 'ignoreMissingVnetServiceEndpoint', false())))]"
+    },
+    "blobDnsZoneId": "[if(and(parameters('storagePrivateEndpoint'), empty(trim(parameters('blobPrivateDnsZoneResourceId')))), fail('storagePrivateEndpoint requires blobPrivateDnsZoneResourceId.'), parameters('blobPrivateDnsZoneResourceId'))]",
+    "appDnsZoneId": "[if(and(parameters('functionAppPrivateEndpoint'), empty(trim(parameters('websitesPrivateDnsZoneResourceId')))), fail('functionAppPrivateEndpoint requires websitesPrivateDnsZoneResourceId.'), parameters('websitesPrivateDnsZoneResourceId'))]",
+    "vaultDnsZoneId": "[if(and(parameters('keyVaultPrivateEndpoint'), empty(trim(parameters('vaultPrivateDnsZoneResourceId')))), fail('keyVaultPrivateEndpoint requires vaultPrivateDnsZoneResourceId.'), parameters('vaultPrivateDnsZoneResourceId'))]",
     "integrityMonitoringValidation": "[if(and(and(parameters('integrityMonitoring'), or(not(parameters('secureBoot')), not(parameters('vTpm')))), not(equals(parameters('securityType'), 'Standard'))), fail('Integrity monitoring requires Secure Boot and vTPM to be enabled.'), parameters('integrityMonitoring'))]"
   },
   "resources": {
@@ -1488,7 +1697,7 @@
       "properties": {
         "roleName": "[format('SubnetJoinAction_{0}', subscription().subscriptionId)]",
         "description": "Allows a principal to join subnets for an ARM template deployment.",
-        "assignableScopes": "[union(createArray(subscription().id), createArray(format('/subscriptions/{0}', split(parameters('subnetResourceId'), '/')[2])))]",
+        "assignableScopes": "[union(createArray(subscription().id), createArray(format('/subscriptions/{0}', split(parameters('virtualMachineSubnetResourceId'), '/')[2])))]",
         "permissions": [
           {
             "actions": [
@@ -1519,7 +1728,7 @@
             "value": "[parameters('networkInterfaceName')]"
           },
           "subnetResourceId": {
-            "value": "[parameters('subnetResourceId')]"
+            "value": "[parameters('virtualMachineSubnetResourceId')]"
           },
           "privateIPAddress": {
             "value": "[parameters('privateIPAddress')]"
@@ -1821,8 +2030,12 @@
           "name": {
             "value": "[parameters('keyVaultName')]"
           },
-          "networkAcls": "[if(equals(parameters('endpointType'), 'service'), createObject('value', createObject('bypass', 'AzureServices', 'defaultAction', 'Deny', 'ipRules', createArray(), 'virtualNetworkRules', createArray(createObject('id', parameters('subnetResourceId'), 'ignoreMissingVnetServiceEndpoint', false())))), createObject('value', createObject()))]",
-          "publicNetworkAccess": "[if(equals(parameters('endpointType'), 'private'), createObject('value', 'Disabled'), createObject('value', 'Enabled'))]",
+          "networkAcls": {
+            "value": "[variables('keyVaultNetworkAcls')]"
+          },
+          "publicNetworkAccess": {
+            "value": "[variables('keyVaultNetworkAccess').publicNetworkAccess]"
+          },
           "tags": {
             "value": "[coalesce(tryGet(parameters('tags'), 'Microsoft.KeyVault/vaults'), createObject())]"
           }
@@ -2130,11 +2343,11 @@
         "rg"
       ]
     },
-    "keyVaultPrivateEndpoint": {
-      "condition": "[equals(parameters('endpointType'), 'private')]",
+    "keyVaultPrivateEndpointDeployment": {
+      "condition": "[parameters('keyVaultPrivateEndpoint')]",
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2025-04-01",
-      "name": "[format('keyVaultPrivateEndpoint-{0}', uniqueString('keyVaultPrivateEndpoint', deployment().name))]",
+      "name": "[format('keyVaultPrivateEndpointDeployment-{0}', uniqueString('keyVaultPrivateEndpointDeployment', deployment().name))]",
       "resourceGroup": "[parameters('resourceGroupName')]",
       "properties": {
         "expressionEvaluationOptions": {
@@ -2160,7 +2373,7 @@
             "value": "[reference('keyVault').outputs.resourceId.value]"
           },
           "subnetResourceId": {
-            "value": "[parameters('subnetResourceId')]"
+            "value": "[parameters('keyVaultPrivateEndpointSubnetResourceId')]"
           },
           "tags": {
             "value": "[coalesce(tryGet(parameters('tags'), 'Microsoft.Network/privateEndpoints'), createObject())]"
@@ -4140,10 +4353,10 @@
           "applicationInsightsName": {
             "value": "[parameters('applicationInsightsName')]"
           },
-          "azureBlobPrivateDnsZoneResourceId": {
+          "blobPrivateDnsZoneResourceId": {
             "value": "[variables('blobDnsZoneId')]"
           },
-          "azureFunctionAppPrivateDnsZoneResourceId": {
+          "websitesPrivateDnsZoneResourceId": {
             "value": "[variables('appDnsZoneId')]"
           },
           "enableApplicationInsights": {
@@ -4162,7 +4375,7 @@
             "value": "[reference('keyVault').outputs.resourceId.value]"
           },
           "functionAppAppSettings": {
-            "value": "[concat(createArray(createObject('name', 'acceleratedNetworking', 'value', string(parameters('acceleratedNetworking'))), createObject('name', 'artifactsContainerUri', 'value', parameters('artifactsContainerUri')), createObject('name', 'artifactsUserAssignedIdentityResourceId', 'value', parameters('artifactsUserAssignedIdentityResourceId')), createObject('name', 'AzureFunctionsJobHost__functionTimeout', 'value', '01:30:00'), createObject('name', 'bootDiagnostics', 'value', string(parameters('bootDiagnostics'))), createObject('name', 'diskAccessResourceId', 'value', ''), createObject('name', 'diskControllerType', 'value', parameters('diskControllerType')), createObject('name', 'diskEncryptionSetResourceId', 'value', if(empty(parameters('diskEncryptionSetName')), '', reference('diskEncryptionSet').outputs.resourceId.value)), createObject('name', 'diskName', 'value', parameters('diskName')), createObject('name', 'diskNetworkAccess', 'value', 'AllowAll'), createObject('name', 'encryptionAtHost', 'value', string(parameters('encryptionAtHost'))), createObject('name', 'imageVersionResourceId', 'value', parameters('imageVersionResourceId')), createObject('name', 'integrityMonitoring', 'value', string(variables('integrityMonitoringValidation'))), createObject('name', 'keyVaultResourceId', 'value', parameters('keyVaultResourceId')), createObject('name', 'licenseType', 'value', parameters('imageLicenseType')), createObject('name', 'location', 'value', parameters('location')), createObject('name', 'networkInterfaceName', 'value', parameters('networkInterfaceName')), createObject('name', 'privateIPAddress', 'value', parameters('privateIPAddress')), createObject('name', 'resourceGroupName', 'value', parameters('resourceGroupName')), createObject('name', 'secureBoot', 'value', string(parameters('secureBoot'))), createObject('name', 'securityType', 'value', parameters('securityType')), createObject('name', 'subnetResourceId', 'value', parameters('subnetResourceId')), createObject('name', 'subscriptionId', 'value', subscription().subscriptionId), createObject('name', 'tags', 'value', string(coalesce(tryGet(parameters('tags'), 'Microsoft.Compute/virtualMachines'), createObject()))), createObject('name', 'templateSpecResourceId', 'value', reference('templateSpec').outputs.versionResourceId.value), createObject('name', 'virtualMachineName', 'value', parameters('virtualMachineName')), createObject('name', 'virtualMachineSize', 'value', parameters('virtualMachineSize')), createObject('name', 'vmCustomizations', 'value', string(parameters('virtualMachineCustomizations'))), createObject('name', 'vTpm', 'value', string(parameters('vTpm'))), createObject('name', 'WEBSITE_TIME_ZONE', 'value', parameters('timeZone'))))]"
+            "value": "[concat(createArray(createObject('name', 'acceleratedNetworking', 'value', string(parameters('acceleratedNetworking'))), createObject('name', 'artifactsContainerUri', 'value', parameters('artifactsContainerUri')), createObject('name', 'artifactsUserAssignedIdentityResourceId', 'value', parameters('artifactsUserAssignedIdentityResourceId')), createObject('name', 'AzureFunctionsJobHost__functionTimeout', 'value', '01:30:00'), createObject('name', 'bootDiagnostics', 'value', string(parameters('bootDiagnostics'))), createObject('name', 'diskAccessResourceId', 'value', ''), createObject('name', 'diskControllerType', 'value', parameters('diskControllerType')), createObject('name', 'diskEncryptionSetResourceId', 'value', if(empty(parameters('diskEncryptionSetName')), '', reference('diskEncryptionSet').outputs.resourceId.value)), createObject('name', 'diskName', 'value', parameters('diskName')), createObject('name', 'diskNetworkAccess', 'value', 'AllowAll'), createObject('name', 'encryptionAtHost', 'value', string(parameters('encryptionAtHost'))), createObject('name', 'imageVersionResourceId', 'value', parameters('imageVersionResourceId')), createObject('name', 'integrityMonitoring', 'value', string(variables('integrityMonitoringValidation'))), createObject('name', 'keyVaultResourceId', 'value', parameters('keyVaultResourceId')), createObject('name', 'licenseType', 'value', parameters('imageLicenseType')), createObject('name', 'location', 'value', parameters('location')), createObject('name', 'networkInterfaceName', 'value', parameters('networkInterfaceName')), createObject('name', 'privateIPAddress', 'value', parameters('privateIPAddress')), createObject('name', 'resourceGroupName', 'value', parameters('resourceGroupName')), createObject('name', 'secureBoot', 'value', string(parameters('secureBoot'))), createObject('name', 'securityType', 'value', parameters('securityType')), createObject('name', 'subnetResourceId', 'value', parameters('virtualMachineSubnetResourceId')), createObject('name', 'subscriptionId', 'value', subscription().subscriptionId), createObject('name', 'tags', 'value', string(coalesce(tryGet(parameters('tags'), 'Microsoft.Compute/virtualMachines'), createObject()))), createObject('name', 'templateSpecResourceId', 'value', reference('templateSpec').outputs.versionResourceId.value), createObject('name', 'virtualMachineName', 'value', parameters('virtualMachineName')), createObject('name', 'virtualMachineSize', 'value', parameters('virtualMachineSize')), createObject('name', 'vmCustomizations', 'value', string(parameters('virtualMachineCustomizations'))), createObject('name', 'vTpm', 'value', string(parameters('vTpm'))), createObject('name', 'WEBSITE_TIME_ZONE', 'value', parameters('timeZone'))))]"
           },
           "functionAppDelegatedSubnetResourceId": {
             "value": "[variables('integrationSubnetId')]"
@@ -4182,16 +4395,41 @@
           "logAnalyticsWorkspaceResourceId": {
             "value": "[parameters('logAnalyticsWorkspaceResourceId')]"
           },
-          "paasPublicNetworkAccess": "[if(equals(parameters('endpointType'), 'private'), createObject('value', 'Disabled'), if(equals(parameters('endpointType'), 'service'), createObject('value', 'EnabledWithRestrictions'), createObject('value', 'Enabled')))]",
-          "privateEndpoint": "[if(equals(parameters('endpointType'), 'private'), createObject('value', true()), createObject('value', false()))]",
+          "storagePublicNetworkAccess": {
+            "value": "[parameters('storagePublicNetworkAccess')]"
+          },
+          "functionAppPublicNetworkAccess": {
+            "value": "[parameters('functionAppPublicNetworkAccess')]"
+          },
+          "storagePermittedIPs": {
+            "value": "[parameters('storagePermittedIPs')]"
+          },
+          "functionAppPermittedIPs": {
+            "value": "[parameters('functionAppPermittedIPs')]"
+          },
+          "storageServiceEndpointSubnetResourceIds": {
+            "value": "[parameters('storageServiceEndpointSubnetResourceIds')]"
+          },
+          "functionAppServiceEndpointSubnetResourceIds": {
+            "value": "[parameters('functionAppServiceEndpointSubnetResourceIds')]"
+          },
+          "storagePrivateEndpoint": {
+            "value": "[parameters('storagePrivateEndpoint')]"
+          },
+          "functionAppPrivateEndpoint": {
+            "value": "[parameters('functionAppPrivateEndpoint')]"
+          },
           "privateEndpointNameConv": {
             "value": "pe-RESOURCE-SUBRESOURCE"
           },
           "privateEndpointNICNameConv": {
             "value": "nic-pe-RESOURCE-SUBRESOURCE"
           },
-          "privateEndpointSubnetResourceId": {
-            "value": "[parameters('subnetResourceId')]"
+          "storagePrivateEndpointSubnetResourceId": {
+            "value": "[parameters('storagePrivateEndpointSubnetResourceId')]"
+          },
+          "functionAppPrivateEndpointSubnetResourceId": {
+            "value": "[parameters('functionAppPrivateEndpointSubnetResourceId')]"
           },
           "privateLinkScopeResourceId": {
             "value": "[parameters('privateLinkScopeResourceId')]"
@@ -4215,13 +4453,13 @@
             "_generator": {
               "name": "bicep",
               "version": "0.49.2.45890",
-              "templateHash": "9300818740397884166"
+              "templateHash": "14687497668891890431"
             },
             "name": "Function App infrastructure",
             "description": "Deploys Windows PowerShell Function App infrastructure, runtime storage, storage RBAC, and optional monitoring/private endpoints. Plan, code, and storage CMK provisioning remain caller-owned."
           },
           "definitions": {
-            "publicNetworkAccessMode": {
+            "_2.publicNetworkAccessMode": {
               "type": "string",
               "allowedValues": [
                 "Auto",
@@ -4231,6 +4469,20 @@
               ],
               "metadata": {
                 "description": "Public endpoint mode. Auto preserves legacy private-endpoint/firewall inference and is not offered in Portal forms.",
+                "__bicep_imported_from!": {
+                  "sourceTemplate": "../networking/functions.bicep"
+                }
+              }
+            },
+            "servicePublicNetworkAccessMode": {
+              "type": "string",
+              "allowedValues": [
+                "Disabled",
+                "Enabled",
+                "EnabledWithRestrictions"
+              ],
+              "metadata": {
+                "description": "Explicit service-family public endpoint policy. Independent of private endpoints and allowlists.",
                 "__bicep_imported_from!": {
                   "sourceTemplate": "../networking/functions.bicep"
                 }
@@ -4274,7 +4526,7 @@
                 "resolveNetworkAccess": {
                   "parameters": [
                     {
-                      "$ref": "#/definitions/publicNetworkAccessMode",
+                      "$ref": "#/definitions/_2.publicNetworkAccessMode",
                       "name": "mode"
                     },
                     {
@@ -4295,6 +4547,30 @@
                   },
                   "metadata": {
                     "description": "Resolves publicNetworkAccess and firewall defaultAction without modifying configured rules or service exceptions.",
+                    "__bicep_imported_from!": {
+                      "sourceTemplate": "../networking/functions.bicep"
+                    }
+                  }
+                },
+                "serviceEndpointSubnetIds": {
+                  "parameters": [
+                    {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      },
+                      "name": "ids"
+                    }
+                  ],
+                  "output": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "value": "[union(map(parameters('ids'), lambda('id', if(and(and(and(and(and(and(and(and(and(and(equals(length(split(trim(lambdaVariables('id')), '/')), 11), startsWith(toLower(trim(lambdaVariables('id'))), '/subscriptions/')), equals(toLower(coalesce(tryGet(split(trim(lambdaVariables('id')), '/'), 3), '')), 'resourcegroups')), equals(toLower(coalesce(tryGet(split(trim(lambdaVariables('id')), '/'), 5), '')), 'providers')), equals(toLower(coalesce(tryGet(split(trim(lambdaVariables('id')), '/'), 6), '')), 'microsoft.network')), equals(toLower(coalesce(tryGet(split(trim(lambdaVariables('id')), '/'), 7), '')), 'virtualnetworks')), equals(toLower(coalesce(tryGet(split(trim(lambdaVariables('id')), '/'), 9), '')), 'subnets')), not(empty(coalesce(tryGet(split(trim(lambdaVariables('id')), '/'), 2), '')))), not(empty(coalesce(tryGet(split(trim(lambdaVariables('id')), '/'), 4), '')))), not(empty(coalesce(tryGet(split(trim(lambdaVariables('id')), '/'), 8), '')))), not(empty(coalesce(tryGet(split(trim(lambdaVariables('id')), '/'), 10), '')))), toLower(trim(lambdaVariables('id'))), fail('Service endpoint allowlists require complete Microsoft.Network/virtualNetworks/subnets resource IDs.')))), createArray())]"
+                  },
+                  "metadata": {
+                    "description": "Validates subnet resource IDs and deduplicates them case-insensitively. Does not enable service endpoints or change subnets.",
                     "__bicep_imported_from!": {
                       "sourceTemplate": "../networking/functions.bicep"
                     }
@@ -4334,26 +4610,26 @@
                 "description": "Optional. Name of the Application Insights resource to create when enableApplicationInsights is true."
               }
             },
-            "azureBlobPrivateDnsZoneResourceId": {
+            "blobPrivateDnsZoneResourceId": {
               "type": "string",
               "metadata": {
-                "description": "Required input; may be empty when blob private DNS integration is not selected. Resource ID of the target-cloud blob private DNS zone. Zone groups are created only when privateEndpoint is true."
+                "description": "Required input; may be empty when blob private DNS integration is not selected. Resource ID of the target-cloud blob private DNS zone. Used only with storagePrivateEndpoint."
               }
             },
-            "azureFunctionAppPrivateDnsZoneResourceId": {
+            "websitesPrivateDnsZoneResourceId": {
               "type": "string",
               "metadata": {
-                "description": "Required input; may be empty when Function App private DNS integration is not selected. Resource ID of the target-cloud Function App private DNS zone. Zone groups are created only when privateEndpoint is true."
+                "description": "Required input; may be empty when Function App private DNS integration is not selected. Resource ID of the target-cloud Function App private DNS zone. Used only with functionAppPrivateEndpoint."
               }
             },
-            "azureQueuePrivateDnsZoneResourceId": {
+            "queuePrivateDnsZoneResourceId": {
               "type": "string",
               "defaultValue": "",
               "metadata": {
                 "description": "Optional. Resource ID of the private DNS zone for queue endpoints (typically privatelink.queue.core.windows.net)."
               }
             },
-            "azureTablePrivateDnsZoneResourceId": {
+            "tablePrivateDnsZoneResourceId": {
               "type": "string",
               "defaultValue": "",
               "metadata": {
@@ -4462,10 +4738,18 @@
                 "description": "Optional. Log Analytics workspace resource ID used for Application Insights workspace-based mode."
               }
             },
-            "privateEndpoint": {
+            "storagePrivateEndpoint": {
               "type": "bool",
+              "defaultValue": false,
               "metadata": {
-                "description": "Required. Creates storage and Function App private endpoints when true. Public access is controlled separately by paasPublicNetworkAccess."
+                "description": "Optional. Creates private endpoints for runtime storage, independently of app inbound access."
+              }
+            },
+            "functionAppPrivateEndpoint": {
+              "type": "bool",
+              "defaultValue": false,
+              "metadata": {
+                "description": "Optional. Creates the Function App inbound private endpoint, independently of runtime storage."
               }
             },
             "privateEndpointNameConv": {
@@ -4480,10 +4764,18 @@
                 "description": "Required. Naming convention template for private endpoint NIC resources (supports RESOURCE/SUBRESOURCE/VNETID placeholders)."
               }
             },
-            "privateEndpointSubnetResourceId": {
+            "storagePrivateEndpointSubnetResourceId": {
               "type": "string",
+              "defaultValue": "",
               "metadata": {
-                "description": "Required when privateEndpoint is true. Subnet resource ID used by private endpoints."
+                "description": "Required when storagePrivateEndpoint is true. Subnet resource ID for runtime storage private endpoints."
+              }
+            },
+            "functionAppPrivateEndpointSubnetResourceId": {
+              "type": "string",
+              "defaultValue": "",
+              "metadata": {
+                "description": "Required when functionAppPrivateEndpoint is true. Subnet resource ID for the app inbound private endpoint."
               }
             },
             "privateLinkScopeResourceId": {
@@ -4519,18 +4811,52 @@
                 "description": "Required. Name of the storage account used by the Function App runtime."
               }
             },
-            "permittedIPs": {
+            "storagePermittedIPs": {
               "type": "array",
               "defaultValue": [],
               "metadata": {
-                "description": "Optional. Allowed app/storage public IPs/CIDRs, retained in all access modes. AzureCloud/AzureServices exceptions also apply; reachability does not grant authorization."
+                "description": "Optional. Allowed runtime-storage public IPs/CIDRs, retained in all access modes. AzureServices bypass also applies."
               }
             },
-            "paasPublicNetworkAccess": {
-              "$ref": "#/definitions/publicNetworkAccessMode",
-              "defaultValue": "Auto",
+            "functionAppPermittedIPs": {
+              "type": "array",
+              "defaultValue": [],
               "metadata": {
-                "description": "Optional. Shared app/storage public-access mode. Auto preserves legacy private-endpoint/IP inference. Monitoring access remains separately configured."
+                "description": "Optional. Allowed app inbound public IPs/CIDRs, retained in all access modes. AzureCloud service-tag exception also applies."
+              }
+            },
+            "storageServiceEndpointSubnetResourceIds": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "defaultValue": [],
+              "metadata": {
+                "description": "Optional. Allowed runtime-storage subnet IDs with existing Storage service endpoints. Does not modify subnets or consumed profile storage."
+              }
+            },
+            "functionAppServiceEndpointSubnetResourceIds": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "defaultValue": [],
+              "metadata": {
+                "description": "Optional. Allowed inbound client subnet IDs with existing Microsoft.Web service endpoints. Independent of outbound VNet integration."
+              }
+            },
+            "storagePublicNetworkAccess": {
+              "$ref": "#/definitions/servicePublicNetworkAccessMode",
+              "defaultValue": "Disabled",
+              "metadata": {
+                "description": "Optional. Runtime-storage public endpoint policy, independent of app inbound access and private endpoints."
+              }
+            },
+            "functionAppPublicNetworkAccess": {
+              "$ref": "#/definitions/servicePublicNetworkAccessMode",
+              "defaultValue": "Disabled",
+              "metadata": {
+                "description": "Optional. App inbound public endpoint policy, independent of outbound integration and runtime storage."
               }
             },
             "tags": {
@@ -4544,28 +4870,28 @@
           "variables": {
             "copy": [
               {
-                "name": "storagePermittedIPs",
-                "count": "[length(variables('effectivePermittedIPs'))]",
-                "input": "[if(endsWith(trim(variables('effectivePermittedIPs')[copyIndex('storagePermittedIPs')]), '/32'), replace(trim(variables('effectivePermittedIPs')[copyIndex('storagePermittedIPs')]), '/32', ''), trim(variables('effectivePermittedIPs')[copyIndex('storagePermittedIPs')]))]"
+                "name": "normalizedStoragePermittedIPs",
+                "count": "[length(variables('effectiveStoragePermittedIPs'))]",
+                "input": "[if(endsWith(trim(variables('effectiveStoragePermittedIPs')[copyIndex('normalizedStoragePermittedIPs')]), '/32'), replace(trim(variables('effectiveStoragePermittedIPs')[copyIndex('normalizedStoragePermittedIPs')]), '/32', ''), trim(variables('effectiveStoragePermittedIPs')[copyIndex('normalizedStoragePermittedIPs')]))]"
               },
               {
-                "name": "functionAppPermittedIPs",
-                "count": "[length(variables('effectivePermittedIPs'))]",
-                "input": "[if(contains(trim(variables('effectivePermittedIPs')[copyIndex('functionAppPermittedIPs')]), '/'), trim(variables('effectivePermittedIPs')[copyIndex('functionAppPermittedIPs')]), format('{0}/32', trim(variables('effectivePermittedIPs')[copyIndex('functionAppPermittedIPs')])))]"
+                "name": "normalizedFunctionAppPermittedIPs",
+                "count": "[length(variables('effectiveFunctionAppPermittedIPs'))]",
+                "input": "[if(contains(trim(variables('effectiveFunctionAppPermittedIPs')[copyIndex('normalizedFunctionAppPermittedIPs')]), '/'), trim(variables('effectiveFunctionAppPermittedIPs')[copyIndex('normalizedFunctionAppPermittedIPs')]), format('{0}/32', trim(variables('effectiveFunctionAppPermittedIPs')[copyIndex('normalizedFunctionAppPermittedIPs')])))]"
               },
               {
                 "name": "storageIpRules",
-                "count": "[length(variables('storagePermittedIPs'))]",
+                "count": "[length(variables('normalizedStoragePermittedIPs'))]",
                 "input": {
-                  "value": "[variables('storagePermittedIPs')[copyIndex('storageIpRules')]]",
+                  "value": "[variables('normalizedStoragePermittedIPs')[copyIndex('storageIpRules')]]",
                   "action": "Allow"
                 }
               },
               {
                 "name": "permittedIPRestrictions",
-                "count": "[length(variables('functionAppPermittedIPs'))]",
+                "count": "[length(variables('normalizedFunctionAppPermittedIPs'))]",
                 "input": {
-                  "ipAddress": "[variables('functionAppPermittedIPs')[copyIndex('permittedIPRestrictions')]]",
+                  "ipAddress": "[variables('normalizedFunctionAppPermittedIPs')[copyIndex('permittedIPRestrictions')]]",
                   "action": "Allow",
                   "priority": "[add(100, copyIndex('permittedIPRestrictions'))]",
                   "name": "[format('PermittedIP-{0}', copyIndex('permittedIPRestrictions'))]"
@@ -4573,9 +4899,9 @@
               },
               {
                 "name": "permittedSubnetRestrictions",
-                "count": "[length(variables('permittedSubnetIds'))]",
+                "count": "[length(variables('functionAppSubnetIds'))]",
                 "input": {
-                  "vnetSubnetResourceId": "[variables('permittedSubnetIds')[copyIndex('permittedSubnetRestrictions')]]",
+                  "vnetSubnetResourceId": "[variables('functionAppSubnetIds')[copyIndex('permittedSubnetRestrictions')]]",
                   "action": "Allow",
                   "priority": "[add(300, copyIndex('permittedSubnetRestrictions'))]",
                   "name": "[format('PermittedSubnet-{0}', copyIndex('permittedSubnetRestrictions'))]"
@@ -4584,13 +4910,18 @@
               {
                 "name": "storagePrivateEndpointNames",
                 "count": "[length(variables('storageSubResources'))]",
-                "input": "[__bicep.privateEndpointName(parameters('privateEndpointNameConv'), parameters('storageAccountName'), variables('storageSubResources')[copyIndex('storagePrivateEndpointNames')], variables('privateEndpointVnetName'))]"
+                "input": "[__bicep.privateEndpointName(parameters('privateEndpointNameConv'), parameters('storageAccountName'), variables('storageSubResources')[copyIndex('storagePrivateEndpointNames')], variables('storagePrivateEndpointVnetName'))]"
               }
             ],
             "cloudSuffix": "[replace(replace(environment().resourceManager, 'https://management.', ''), '/', '')]",
-            "privateEndpointVnetName": "[if(and(not(empty(parameters('privateEndpointSubnetResourceId'))), parameters('privateEndpoint')), split(parameters('privateEndpointSubnetResourceId'), '/')[8], '')]",
-            "effectivePermittedIPs": "[filter(parameters('permittedIPs'), lambda('ip', not(empty(trim(lambdaVariables('ip'))))))]",
-            "networkAccess": "[__bicep.resolveNetworkAccess(parameters('paasPublicNetworkAccess'), parameters('privateEndpoint'), not(empty(variables('effectivePermittedIPs'))))]",
+            "storagePrivateEndpointVnetName": "[if(and(not(empty(parameters('storagePrivateEndpointSubnetResourceId'))), parameters('storagePrivateEndpoint')), split(parameters('storagePrivateEndpointSubnetResourceId'), '/')[8], '')]",
+            "functionAppPrivateEndpointVnetName": "[if(and(not(empty(parameters('functionAppPrivateEndpointSubnetResourceId'))), parameters('functionAppPrivateEndpoint')), split(parameters('functionAppPrivateEndpointSubnetResourceId'), '/')[8], '')]",
+            "effectiveStoragePermittedIPs": "[filter(parameters('storagePermittedIPs'), lambda('ip', not(empty(trim(lambdaVariables('ip'))))))]",
+            "effectiveFunctionAppPermittedIPs": "[filter(parameters('functionAppPermittedIPs'), lambda('ip', not(empty(trim(lambdaVariables('ip'))))))]",
+            "storageSubnetIds": "[__bicep.serviceEndpointSubnetIds(parameters('storageServiceEndpointSubnetResourceIds'))]",
+            "functionAppSubnetIds": "[__bicep.serviceEndpointSubnetIds(parameters('functionAppServiceEndpointSubnetResourceIds'))]",
+            "networkAccess": "[__bicep.resolveNetworkAccess(parameters('functionAppPublicNetworkAccess'), parameters('functionAppPrivateEndpoint'), or(not(empty(variables('effectiveFunctionAppPermittedIPs'))), not(empty(variables('functionAppSubnetIds')))))]",
+            "storageNetworkAccess": "[__bicep.resolveNetworkAccess(parameters('storagePublicNetworkAccess'), parameters('storagePrivateEndpoint'), or(not(empty(variables('effectiveStoragePermittedIPs'))), not(empty(variables('storageSubnetIds')))))]",
             "parentTag": "[if(empty(parameters('hostPoolResourceId')), createObject(), createObject('cm-resource-parent', parameters('hostPoolResourceId')))]",
             "restrictPublicAccess": "[equals(variables('networkAccess').defaultAction, 'Deny')]",
             "azureCloudRestriction": [
@@ -4609,10 +4940,9 @@
                 "description": "Deny all access"
               }
             ],
-            "permittedSubnetIds": "[if(and(equals(parameters('paasPublicNetworkAccess'), 'EnabledWithRestrictions'), not(parameters('privateEndpoint'))), filter(union(createArray(parameters('privateEndpointSubnetResourceId')), createArray(parameters('functionAppDelegatedSubnetResourceId'))), lambda('id', not(empty(lambdaVariables('id'))))), createArray())]",
-            "resolvedIpSecurityRestrictions": "[if(or(variables('restrictPublicAccess'), not(empty(variables('effectivePermittedIPs')))), union(variables('permittedIPRestrictions'), variables('permittedSubnetRestrictions'), if(variables('restrictPublicAccess'), variables('azureCloudRestriction'), createArray(variables('azureCloudRestriction')[0]))), null())]",
+            "resolvedIpSecurityRestrictions": "[if(or(or(variables('restrictPublicAccess'), not(empty(variables('effectiveFunctionAppPermittedIPs')))), not(empty(variables('functionAppSubnetIds')))), union(variables('permittedIPRestrictions'), variables('permittedSubnetRestrictions'), if(variables('restrictPublicAccess'), variables('azureCloudRestriction'), createArray(variables('azureCloudRestriction')[0]))), null())]",
             "storageSubResources": "[union(createArray('blob'), if(parameters('enableQueueStorage'), createArray('queue'), createArray()), if(parameters('enableTableStorage'), createArray('table'), createArray()))]",
-            "azureStoragePrivateDnsZoneResourceIds": "[concat(createArray(parameters('azureBlobPrivateDnsZoneResourceId')), if(parameters('enableQueueStorage'), createArray(parameters('azureQueuePrivateDnsZoneResourceId')), createArray()), if(parameters('enableTableStorage'), createArray(parameters('azureTablePrivateDnsZoneResourceId')), createArray()))]",
+            "azureStoragePrivateDnsZoneResourceIds": "[concat(createArray(parameters('blobPrivateDnsZoneResourceId')), if(parameters('enableQueueStorage'), createArray(parameters('queuePrivateDnsZoneResourceId')), createArray()), if(parameters('enableTableStorage'), createArray(parameters('tablePrivateDnsZoneResourceId')), createArray()))]",
             "useCmk": "[not(equals(parameters('keyManagementStorageAccounts'), 'PlatformManaged'))]",
             "storageEncryptionUaiResourceId": "[if(variables('useCmk'), resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', parameters('storageEncryptionIdentityName')), '')]",
             "cmkUaiResourceId": "[if(variables('useCmk'), variables('storageEncryptionUaiResourceId'), '')]",
@@ -4660,7 +4990,7 @@
                 "accessTier": "Hot",
                 "allowBlobPublicAccess": false,
                 "allowCrossTenantReplication": false,
-                "allowedCopyScope": "[if(parameters('privateEndpoint'), 'PrivateLink', 'AAD')]",
+                "allowedCopyScope": "[if(parameters('storagePrivateEndpoint'), 'PrivateLink', 'AAD')]",
                 "allowSharedKeyAccess": false,
                 "defaultToOAuthAuthentication": true,
                 "dnsEndpointType": "Standard",
@@ -4676,18 +5006,18 @@
                   "copy": [
                     {
                       "name": "virtualNetworkRules",
-                      "count": "[length(variables('permittedSubnetIds'))]",
+                      "count": "[length(variables('storageSubnetIds'))]",
                       "input": {
-                        "id": "[variables('permittedSubnetIds')[copyIndex('virtualNetworkRules')]]",
+                        "id": "[variables('storageSubnetIds')[copyIndex('virtualNetworkRules')]]",
                         "action": "Allow"
                       }
                     }
                   ],
                   "bypass": "AzureServices",
                   "ipRules": "[variables('storageIpRules')]",
-                  "defaultAction": "[variables('networkAccess').defaultAction]"
+                  "defaultAction": "[variables('storageNetworkAccess').defaultAction]"
                 },
-                "publicNetworkAccess": "[variables('networkAccess').publicNetworkAccess]",
+                "publicNetworkAccess": "[variables('storageNetworkAccess').publicNetworkAccess]",
                 "sasPolicy": {
                   "expirationAction": "Log",
                   "sasExpirationPeriod": "180.00:00:00"
@@ -4703,13 +5033,13 @@
                 "name": "privateEndpoints_storage",
                 "count": "[length(variables('storageSubResources'))]"
               },
-              "condition": "[parameters('privateEndpoint')]",
+              "condition": "[parameters('storagePrivateEndpoint')]",
               "type": "Microsoft.Network/privateEndpoints",
               "apiVersion": "2023-04-01",
               "name": "[variables('storagePrivateEndpointNames')[copyIndex()]]",
               "location": "[parameters('location')]",
               "properties": {
-                "customNetworkInterfaceName": "[__bicep.privateEndpointName(parameters('privateEndpointNICNameConv'), parameters('storageAccountName'), variables('storageSubResources')[copyIndex()], variables('privateEndpointVnetName'))]",
+                "customNetworkInterfaceName": "[__bicep.privateEndpointName(parameters('privateEndpointNICNameConv'), parameters('storageAccountName'), variables('storageSubResources')[copyIndex()], variables('storagePrivateEndpointVnetName'))]",
                 "privateLinkServiceConnections": [
                   {
                     "name": "[variables('storagePrivateEndpointNames')[copyIndex()]]",
@@ -4722,7 +5052,7 @@
                   }
                 ],
                 "subnet": {
-                  "id": "[parameters('privateEndpointSubnetResourceId')]"
+                  "id": "[parameters('storagePrivateEndpointSubnetResourceId')]"
                 }
               },
               "tags": "[union(variables('parentTag'), coalesce(tryGet(parameters('tags'), 'Microsoft.Network/privateEndpoints'), createObject()))]",
@@ -4735,7 +5065,7 @@
                 "name": "privateDnsZoneGroups_storage",
                 "count": "[length(range(0, length(variables('azureStoragePrivateDnsZoneResourceIds'))))]"
               },
-              "condition": "[and(parameters('privateEndpoint'), not(empty(variables('azureStoragePrivateDnsZoneResourceIds')[range(0, length(variables('azureStoragePrivateDnsZoneResourceIds')))[copyIndex()]])))]",
+              "condition": "[and(parameters('storagePrivateEndpoint'), not(empty(variables('azureStoragePrivateDnsZoneResourceIds')[range(0, length(variables('azureStoragePrivateDnsZoneResourceIds')))[copyIndex()]])))]",
               "type": "Microsoft.Network/privateEndpoints/privateDnsZoneGroups",
               "apiVersion": "2021-08-01",
               "name": "[format('{0}/{1}', variables('storagePrivateEndpointNames')[range(0, length(variables('azureStoragePrivateDnsZoneResourceIds')))[copyIndex()]], 'default')]",
@@ -4799,10 +5129,10 @@
                   "netFrameworkVersion": "v10.0",
                   "powerShellVersion": "[parameters('powerShellVersion')]",
                   "ipSecurityRestrictions": "[variables('resolvedIpSecurityRestrictions')]",
-                  "ipSecurityRestrictionsDefaultAction": "[if(or(not(equals(parameters('paasPublicNetworkAccess'), 'Auto')), variables('restrictPublicAccess')), variables('networkAccess').defaultAction, null())]",
+                  "ipSecurityRestrictionsDefaultAction": "[variables('networkAccess').defaultAction]",
                   "scmIpSecurityRestrictions": "[if(variables('restrictPublicAccess'), createArray(createObject('ipAddress', 'Any', 'action', 'Deny', 'priority', 2147483647, 'name', 'Deny all', 'description', 'Deny all access')), null())]",
-                  "scmIpSecurityRestrictionsDefaultAction": "[if(or(not(equals(parameters('paasPublicNetworkAccess'), 'Auto')), variables('restrictPublicAccess')), variables('networkAccess').defaultAction, null())]",
-                  "scmIpSecurityRestrictionsUseMain": "[if(or(not(equals(parameters('paasPublicNetworkAccess'), 'Auto')), variables('restrictPublicAccess')), true(), null())]",
+                  "scmIpSecurityRestrictionsDefaultAction": "[variables('networkAccess').defaultAction]",
+                  "scmIpSecurityRestrictionsUseMain": true,
                   "publicNetworkAccess": "[variables('networkAccess').publicNetworkAccess]",
                   "use32BitWorkerProcess": false
                 },
@@ -4835,16 +5165,16 @@
               ]
             },
             "privateEndpoint_functionApp": {
-              "condition": "[parameters('privateEndpoint')]",
+              "condition": "[parameters('functionAppPrivateEndpoint')]",
               "type": "Microsoft.Network/privateEndpoints",
               "apiVersion": "2023-04-01",
-              "name": "[__bicep.privateEndpointName(parameters('privateEndpointNameConv'), parameters('functionAppName'), 'sites', variables('privateEndpointVnetName'))]",
+              "name": "[__bicep.privateEndpointName(parameters('privateEndpointNameConv'), parameters('functionAppName'), 'sites', variables('functionAppPrivateEndpointVnetName'))]",
               "location": "[parameters('location')]",
               "properties": {
-                "customNetworkInterfaceName": "[__bicep.privateEndpointName(parameters('privateEndpointNICNameConv'), parameters('functionAppName'), 'sites', variables('privateEndpointVnetName'))]",
+                "customNetworkInterfaceName": "[__bicep.privateEndpointName(parameters('privateEndpointNICNameConv'), parameters('functionAppName'), 'sites', variables('functionAppPrivateEndpointVnetName'))]",
                 "privateLinkServiceConnections": [
                   {
-                    "name": "[__bicep.privateEndpointName(parameters('privateEndpointNameConv'), parameters('functionAppName'), 'sites', variables('privateEndpointVnetName'))]",
+                    "name": "[__bicep.privateEndpointName(parameters('privateEndpointNameConv'), parameters('functionAppName'), 'sites', variables('functionAppPrivateEndpointVnetName'))]",
                     "properties": {
                       "privateLinkServiceId": "[resourceId('Microsoft.Web/sites', parameters('functionAppName'))]",
                       "groupIds": [
@@ -4854,7 +5184,7 @@
                   }
                 ],
                 "subnet": {
-                  "id": "[parameters('privateEndpointSubnetResourceId')]"
+                  "id": "[parameters('functionAppPrivateEndpointSubnetResourceId')]"
                 }
               },
               "tags": "[union(variables('parentTag'), coalesce(tryGet(parameters('tags'), 'Microsoft.Network/privateEndpoints'), createObject()))]",
@@ -4863,16 +5193,16 @@
               ]
             },
             "privateDnsZoneGroup_functionApp": {
-              "condition": "[and(parameters('privateEndpoint'), not(empty(parameters('azureFunctionAppPrivateDnsZoneResourceId'))))]",
+              "condition": "[and(parameters('functionAppPrivateEndpoint'), not(empty(parameters('websitesPrivateDnsZoneResourceId'))))]",
               "type": "Microsoft.Network/privateEndpoints/privateDnsZoneGroups",
               "apiVersion": "2021-08-01",
-              "name": "[format('{0}/{1}', __bicep.privateEndpointName(parameters('privateEndpointNameConv'), parameters('functionAppName'), 'sites', variables('privateEndpointVnetName')), 'default')]",
+              "name": "[format('{0}/{1}', __bicep.privateEndpointName(parameters('privateEndpointNameConv'), parameters('functionAppName'), 'sites', variables('functionAppPrivateEndpointVnetName')), 'default')]",
               "properties": {
                 "privateDnsZoneConfigs": [
                   {
-                    "name": "[replace(last(split(parameters('azureFunctionAppPrivateDnsZoneResourceId'), '/')), '.', '-')]",
+                    "name": "[replace(last(split(parameters('websitesPrivateDnsZoneResourceId'), '/')), '.', '-')]",
                     "properties": {
-                      "privateDnsZoneId": "[parameters('azureFunctionAppPrivateDnsZoneResourceId')]"
+                      "privateDnsZoneId": "[parameters('websitesPrivateDnsZoneResourceId')]"
                     }
                   }
                 ]
@@ -5293,8 +5623,8 @@
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2025-04-01",
       "name": "[format('virtualNetworkRoleAssignment-{0}', uniqueString('virtualNetworkRoleAssignment', deployment().name))]",
-      "subscriptionId": "[split(parameters('subnetResourceId'), '/')[2]]",
-      "resourceGroup": "[split(parameters('subnetResourceId'), '/')[4]]",
+      "subscriptionId": "[split(parameters('virtualMachineSubnetResourceId'), '/')[2]]",
+      "resourceGroup": "[split(parameters('virtualMachineSubnetResourceId'), '/')[4]]",
       "properties": {
         "expressionEvaluationOptions": {
           "scope": "inner"
@@ -5311,7 +5641,7 @@
             ]
           },
           "virtualNetworkName": {
-            "value": "[split(parameters('subnetResourceId'), '/')[8]]"
+            "value": "[split(parameters('virtualMachineSubnetResourceId'), '/')[8]]"
           }
         },
         "template": {

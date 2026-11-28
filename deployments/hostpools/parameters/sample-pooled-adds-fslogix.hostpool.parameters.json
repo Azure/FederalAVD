@@ -147,6 +147,23 @@
             ]
         },
 
+        // Private connectivity is the default for the new Azure Files account and Backup vault.
+        // Replace <geo> with the region code of your existing Azure Backup private DNS zone.
+        "privateEndpointSubnetResourceIds": {
+            "value": {
+                "sharedResources": "/subscriptions/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/resourceGroups/rg-avd-networking-eus2/providers/Microsoft.Network/virtualNetworks/vnet-avd-eus2/subnets/snet-avd-privateendpoints",
+                "hostPoolResources": "/subscriptions/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/resourceGroups/rg-avd-networking-eus2/providers/Microsoft.Network/virtualNetworks/vnet-avd-eus2/subnets/snet-avd-privateendpoints"
+            }
+        },
+        "privateDnsZoneResourceIds": {
+            "value": {
+                "file": "/subscriptions/xxxxxxxx-xxxx-xxxx-xxxxxxxxxxxx/resourceGroups/rg-avd-networking-eus2/providers/Microsoft.Network/privateDnsZones/privatelink.file.core.windows.net",
+                "backup": "/subscriptions/xxxxxxxx-xxxx-xxxx-xxxxxxxxxxxx/resourceGroups/rg-avd-networking-eus2/providers/Microsoft.Network/privateDnsZones/privatelink.<geo>.backup.windowsazure.com",
+                "blob": "/subscriptions/xxxxxxxx-xxxx-xxxx-xxxxxxxxxxxx/resourceGroups/rg-avd-networking-eus2/providers/Microsoft.Network/privateDnsZones/privatelink.blob.core.windows.net",
+                "queue": "/subscriptions/xxxxxxxx-xxxx-xxxx-xxxxxxxxxxxx/resourceGroups/rg-avd-networking-eus2/providers/Microsoft.Network/privateDnsZones/privatelink.queue.core.windows.net"
+            }
+        },
+
         // ── Monitoring ─────────────────────────────────────────────────────────
         "enableMonitoring": {
             "value": true

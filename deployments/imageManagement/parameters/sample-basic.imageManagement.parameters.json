@@ -8,8 +8,8 @@
     "deployBuildLogsStorageAccount": {
       "value": false
     },
-    "storageNetworkAccess": {
-      "value": "PublicEndpoint"
+    "paasNetworking": {
+      "value": { "privateEndpoint": false, "publicNetworkAccess": "Enabled" }
     },
     "storageAllowSharedKeyAccess": {
       "value": false

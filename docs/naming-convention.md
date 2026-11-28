@@ -167,10 +167,10 @@ param logAnalyticsWorkspaceResourceId string
 param privateLinkScopeResourceId string
 param functionAppDelegatedSubnetResourceId string
 param privateEndpointSubnetResourceId string
-param azureBlobPrivateDnsZoneResourceId string
-param azureQueuePrivateDnsZoneResourceId string
-param azureTablePrivateDnsZoneResourceId string
-param azureFunctionAppPrivateDnsZoneResourceId string
+param blobPrivateDnsZoneResourceId string
+param queuePrivateDnsZoneResourceId string
+param tablePrivateDnsZoneResourceId string
+param websitesPrivateDnsZoneResourceId string
 
 @description('Optional. Complete Function App name. Leave empty to generate.')
 param functionAppNameOverride string = ''
@@ -199,13 +199,16 @@ module app '../../shared/modules/orchestration/functionApp/functionApp.bicep' = 
     enableApplicationInsights: true
     privateLinkScopeResourceId: privateLinkScopeResourceId
     functionAppDelegatedSubnetResourceId: functionAppDelegatedSubnetResourceId
-    privateEndpoint: true
-    privateEndpointSubnetResourceId: privateEndpointSubnetResourceId
-    azureBlobPrivateDnsZoneResourceId: azureBlobPrivateDnsZoneResourceId
-    azureQueuePrivateDnsZoneResourceId: azureQueuePrivateDnsZoneResourceId
-    azureTablePrivateDnsZoneResourceId: azureTablePrivateDnsZoneResourceId
-    azureFunctionAppPrivateDnsZoneResourceId: azureFunctionAppPrivateDnsZoneResourceId
-    paasPublicNetworkAccess: 'Disabled'
+    storagePrivateEndpoint: true
+    functionAppPrivateEndpoint: true
+    storagePrivateEndpointSubnetResourceId: storagePrivateEndpointSubnetResourceId
+    functionAppPrivateEndpointSubnetResourceId: functionAppPrivateEndpointSubnetResourceId
+    blobPrivateDnsZoneResourceId: blobPrivateDnsZoneResourceId
+    queuePrivateDnsZoneResourceId: queuePrivateDnsZoneResourceId
+    tablePrivateDnsZoneResourceId: tablePrivateDnsZoneResourceId
+    websitesPrivateDnsZoneResourceId: websitesPrivateDnsZoneResourceId
+    storagePublicNetworkAccess: 'Disabled'
+    functionAppPublicNetworkAccess: 'Disabled'
     keyManagementStorageAccounts: 'PlatformManaged'
     encryptionKeyName: ''
     encryptionKeyVaultResourceId: ''
